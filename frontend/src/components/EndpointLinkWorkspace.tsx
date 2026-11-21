@@ -1,3 +1,4 @@
+import { isMountKind } from '../topology/hardwareModules';
 import { useEffect, useState } from 'react';
 import { useI18n } from '../i18n';
 import { applyBulkNames, blueprintMarkers, bulkNamePreview, spatialOrderedKeys, reorderOrderedKeys, pairwiseContinuityPreview, applyPairwiseContinuity, internalLinkPairKey, type BlueprintEditorState } from '../blueprints/editorModel';
@@ -6,6 +7,7 @@ const markerKinds = {
   CONNECTION_POINT: { label: 'blueprint.endpoint.connectionPoint', glyph: '●' },
   NETWORK_PORT: { label: 'blueprint.endpoint.networkPort', glyph: '▣' },
   MODULE_PORT: { label: 'blueprint.endpoint.modulePort', glyph: '◆' },
+  MODULE_BAY: { label: 'blueprint.endpoint.moduleBay', glyph: '◆' },
 } as const;
 
 export function presentedLinks(state: BlueprintEditorState, sides: { panel: string; order: string[] }[], all: boolean) {
@@ -60,7 +62,7 @@ export function EndpointLinkWorkspace({ state, onChange, onClose, initialSelecte
   const [status, setStatus] = useState('');
   const patch = (index: number, value: Partial<typeof sides[number]>) => setSides(old => old.map((s, i) => i === index ? { ...s, ...value } : s));
   const keys = sides.map(side => side.order.filter(key => side.selected.includes(key)));
-  const [left, right] = keys.map(side => side.filter(key => markersByKey.get(key)?.kind !== 'MODULE_PORT'));
+  const [left, right] = keys.map(side => side.filter(key => !isMountKind(markersByKey.get(key)?.kind)));
   const hasSelectedModules = keys[0].length !== left.length || keys[1].length !== right.length;
   const preview = pairwiseContinuityPreview(state, left, right, false);
   const label = (key: string) => { const slot = state.slots.find(s => s.key === key); return slot ? `${slot.display_name} · ${state.panels.find(p => p.panel_key === slot.panel_key)?.display_name}` : key; };
@@ -89,7 +91,7 @@ export function EndpointLinkWorkspace({ state, onChange, onClose, initialSelecte
           <label><input type="checkbox" checked={side.selected.includes(key)} onChange={e => patch(index, { selected: e.target.checked ? [...side.selected, key] : side.selected.filter(k => k !== key) })} /><span title={slot.display_name}>{slot.display_name}</span></label>
           <span className="endpoint-workspace__kind" role="img" aria-label={t(kind.label)} title={t(kind.label)}>{kind.glyph}</span>
           <span className="endpoint-workspace__name-preview" title={names?.find(n => n.key === key)?.display_name}>{names?.find(n => n.key === key)?.display_name && `→ ${names.find(n => n.key === key)!.display_name}`}</span>
-          <span className="endpoint-workspace__connections" title={links.map(l => label(l.from_slot_key === key ? l.to_slot_key : l.from_slot_key)).join(', ')}>{slot.kind !== 'MODULE_PORT' && <>↔ {links.length ? links.map(l => label(l.from_slot_key === key ? l.to_slot_key : l.from_slot_key)).join(', ') : '—'}</>}</span>
+          <span className="endpoint-workspace__connections" title={links.map(l => label(l.from_slot_key === key ? l.to_slot_key : l.from_slot_key)).join(', ')}>{!isMountKind(slot.kind) && <>↔ {links.length ? links.map(l => label(l.from_slot_key === key ? l.to_slot_key : l.from_slot_key)).join(', ') : '—'}</>}</span>
           {side.mode === 'manual' && <><button type="button" aria-label={t('blueprint.order.up', { index: row + 1 })} disabled={!row} onClick={() => patch(index, { order: reorderOrderedKeys(side.order, row, -1) })}>↑</button>
           <button type="button" aria-label={t('blueprint.order.down', { index: row + 1 })} disabled={row === side.order.length - 1} onClick={() => patch(index, { order: reorderOrderedKeys(side.order, row, 1) })}>↓</button></>}
         </div>; })}</div>

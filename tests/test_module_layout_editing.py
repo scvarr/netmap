@@ -98,7 +98,7 @@ def test_locked_concurrent_change_refuses_stale_writer(change):
             else:
                 old = session.get(m.ModuleTemplateRevision, row.module_revision_id)
                 new = m.ModuleTemplateRevision(template_id=old.template_id, version_number=old.version_number+1,
-                    name=old.name, module_port_type_id=old.module_port_type_id, geometry=old.geometry)
+                    name=old.name, mount_kind=old.mount_kind, module_port_type_id=old.module_port_type_id, module_bay_type_id=old.module_bay_type_id, geometry=old.geometry)
                 session.add(new); session.flush(); row.module_revision_id = new.id
             future = executor.submit(writer)
             assert started.wait(3)

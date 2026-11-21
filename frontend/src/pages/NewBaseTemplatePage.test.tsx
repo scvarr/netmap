@@ -13,7 +13,7 @@ function fixture() {
  let s = newBlueprintEditorState(); s.name = 'Source'; s = addPanel(s, 'right');
  s = addEndpoints(s, 'NETWORK_PORT', 24, s.activePanelKey, 'archived');
  s.individualLinks = [{from_slot_key:s.slots[0].key,to_slot_key:s.slots[23].key}];
- s.bays = [{kind:'LOGICAL',bay_key:'logical',display_name:'Logical',module_port_type_id:'X',panel_key:s.activePanelKey}, {kind:'PLACED',bay_key:'placed',display_name:'Placed',module_port_type_id:'X',panel_key:s.activePanelKey,x:0,y:0,width:0.2,height:0.2}];
+ s.bays = [{kind:'LOGICAL',bay_key:'logical',display_name:'Logical',mount_kind: 'MODULE_PORT' as const, module_port_type_id:'X',panel_key:s.activePanelKey}, {kind:'PLACED',bay_key:'placed',display_name:'Placed',mount_kind: 'MODULE_PORT' as const, module_port_type_id:'X',panel_key:s.activePanelKey,x:0,y:0,width:0.2,height:0.2}];
  const document = {...createBlueprintRequest(s).request!,schema_version:'2.0',blueprint_ref:{entity_id:'source'},version_ref:{entity_id:'published'},version_number:2,next_panel_number:3} as BaseTemplateRevisionDocument;
  const api = {loadBaseTemplateRevision:vi.fn().mockResolvedValue(document),createBaseTemplate:vi.fn().mockResolvedValue({})} as unknown as BaseTemplateDataSource;
  return {document,api};

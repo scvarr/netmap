@@ -1,33 +1,35 @@
-import { ModulePortTypeSelect, modulePortTypeName, type ModulePortType } from './ModulePortTypeSelect';
+import { moduleMount, mountTypeId, type ModuleMount } from '../topology/hardwareModules';
+import { ModuleMountFields, mountKindLabels, mountTypeName, type MountCatalogs } from './ModulePortTypeSelect';
 import { useState, type FormEvent } from 'react';
 import { useI18n } from '../i18n';
 import type { BlueprintEditorState } from '../blueprints/editorModel';
 import type { LogicalModuleBay, ModuleBay } from '../topology/hardwareModules';
 
 interface Props {
-  types?: ModulePortType[];
+  catalogs: MountCatalogs;
   panels: BlueprintEditorState['panels'];
   activePanelKey: string;
   bays: ModuleBay[];
   onChange: (bays: ModuleBay[]) => void;
 }
 
-const groupKey = (panel: string, module_port_type_id: string) => JSON.stringify([panel, module_port_type_id]);
+const groupKey = (panel: string, mount: ModuleMount) => JSON.stringify([panel, mount.mount_kind, mountTypeId(mount)]);
 const MAX_LOGICAL_PLACES_PER_GROUP = 1024;
 
-export function LogicalModulePlacesEditor({ types, panels, activePanelKey, bays, onChange }: Props) {
+export function LogicalModulePlacesEditor({ catalogs, panels, activePanelKey, bays, onChange }: Props) {
   const { t } = useI18n();
+  const [newMount, setNewMount] = useState<ModuleMount>(moduleMount('MODULE_PORT', ''));
   const [error, setError] = useState<string>();
   const groups = new Map<string, LogicalModuleBay[]>();
   for (const bay of bays) {
     if (bay.kind !== 'LOGICAL') continue;
-    const key = groupKey(bay.panel_key, bay.module_port_type_id);
+    const key = groupKey(bay.panel_key, bay);
     const group = groups.get(key);
     if (group) group.push(bay);
     else groups.set(key, [bay]);
   }
 
-  const apply = (panel: string, module_port_type_id: string, rawCount: string, creating = false) => {
+  const apply = (panel: string, mount: ModuleMount, rawCount: string, creating = false) => {
     const count = Number(rawCount);
     if (/^\d+$/.test(rawCount) && count > MAX_LOGICAL_PLACES_PER_GROUP) {
       setError(t('logicalPlaces.countLimit', { max: MAX_LOGICAL_PLACES_PER_GROUP }));
@@ -41,8 +43,8 @@ export function LogicalModulePlacesEditor({ types, panels, activePanelKey, bays,
       setError(t('logicalPlaces.invalidPanel'));
       return false;
     }
-    const existing = groups.get(groupKey(panel, module_port_type_id)) ?? [];
-    if (count > existing.length && !types?.some(type => type.id === module_port_type_id && type.is_active)) {
+    const existing = groups.get(groupKey(panel, mount)) ?? [];
+    if (count > existing.length && !catalogs[mount.mount_kind].types?.some(type => type.id === mountTypeId(mount) && type.is_active)) {
       setError(t('logicalPlaces.invalidCompatibility'));
       return false;
     }
@@ -66,7 +68,7 @@ export function LogicalModulePlacesEditor({ types, panels, activePanelKey, bays,
         let display_name = t('logicalPlaces.placeName', { number: number++ });
         while (names.has(display_name)) display_name = t('logicalPlaces.placeName', { number: number++ });
         names.add(display_name);
-        next.push({ bay_key, display_name, panel_key: panel, module_port_type_id, kind: 'LOGICAL', x: null, y: null, width: null, height: null });
+        next.push({ bay_key, display_name, panel_key: panel, ...moduleMount(mount.mount_kind, mountTypeId(mount)), kind: 'LOGICAL', x: null, y: null, width: null, height: null });
       }
       onChange(next);
     }
@@ -77,7 +79,10 @@ export function LogicalModulePlacesEditor({ types, panels, activePanelKey, bays,
     event.preventDefault();
     const form = event.currentTarget;
     const fields = new FormData(form);
-    if (apply(String(fields.get('panel')), String(fields.get('module_port_type_id') ?? ''), String(fields.get('count')), true)) form.reset();
+    if (apply(String(fields.get('panel')), newMount, String(fields.get('count')), true)) {
+      form.reset();
+      setNewMount(moduleMount(newMount.mount_kind, ''));
+    }
   };
 
   return <details className="blueprint-composer__section">
@@ -85,17 +90,18 @@ export function LogicalModulePlacesEditor({ types, panels, activePanelKey, bays,
     <p>{t('logicalPlaces.updateNotice')}</p>
     {error && <p role="alert" className="blueprint-editor__error">{error}</p>}
     {[...groups].map(([key, group]) => {
-      const { panel_key, module_port_type_id } = group[0];
+      const mount = group[0];
+      const { panel_key } = mount;
       const panel = panels.find(item => item.panel_key === panel_key);
       return <form key={key} onSubmit={event => {
         event.preventDefault();
-        apply(panel_key, module_port_type_id, String(new FormData(event.currentTarget).get('count')));
+        apply(panel_key, mount, String(new FormData(event.currentTarget).get('count')));
       }}>
         <fieldset>
-          <legend>{panel?.panel_number} · {panel?.display_name} / <code style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{modulePortTypeName(types, module_port_type_id)}</code></legend>
+          <legend>{panel?.panel_number} · {panel?.display_name} / <code style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{t(mountKindLabels[mount.mount_kind])} · {mountTypeName(catalogs, mount)}</code></legend>
           <label>{t('logicalPlaces.count')}<input key={group.length} name="count" inputMode="numeric" defaultValue={group.length} /></label>
           <button type="submit" className="secondary-action">{t('logicalPlaces.apply')}</button>{' '}
-          <button type="button" className="text-action" onClick={() => apply(panel_key, module_port_type_id, '0')}>{t('logicalPlaces.remove')}</button>
+          <button type="button" className="text-action" onClick={() => apply(panel_key, mount, '0')}>{t('logicalPlaces.remove')}</button>
         </fieldset>
       </form>;
     })}
@@ -105,7 +111,7 @@ export function LogicalModulePlacesEditor({ types, panels, activePanelKey, bays,
         <label>{t('hardware.panel')}<select key={JSON.stringify(panels.map(panel => panel.panel_key))} name="panel" defaultValue={activePanelKey}>
           {panels.map(panel => <option key={panel.panel_key} value={panel.panel_key}>{panel.panel_number} · {panel.display_name}</option>)}
         </select></label>
-        <ModulePortTypeSelect types={types} name="module_port_type_id" />
+        <ModuleMountFields catalogs={catalogs} mount={newMount} onChange={setNewMount} />
         <label>{t('logicalPlaces.count')}<input name="count" inputMode="numeric" defaultValue="1" /></label>
         <button type="submit" className="secondary-action">{t('logicalPlaces.create')}</button>
       </fieldset>

@@ -594,6 +594,11 @@ class BuiltInEndpointMapping(Base):
 class ModuleBay(Base):
     __tablename__ = "module_bays"
     __table_args__ = (
+        CheckConstraint(
+            "(mount_kind = 'MODULE_PORT' AND module_port_type_id IS NOT NULL AND module_bay_type_id IS NULL) OR "
+            "(mount_kind = 'MODULE_BAY' AND module_bay_type_id IS NOT NULL AND module_port_type_id IS NULL)",
+            name="mount_type",
+        ),
         UniqueConstraint("base_revision_id", "bay_key"),
         ForeignKeyConstraint(["base_revision_id", "panel_key"], ["presentation_panels.base_revision_id", "presentation_panels.panel_key"], ondelete="RESTRICT"),
         CheckConstraint("(kind = 'LOGICAL' AND x IS NULL AND y IS NULL AND width IS NULL AND height IS NULL) OR (kind = 'PLACED' AND x BETWEEN 0 AND 1 AND y BETWEEN 0 AND 1 AND x IS NOT NULL AND y IS NOT NULL AND (width IS NULL) = (height IS NULL))", name="bay_representation"),
@@ -604,8 +609,12 @@ class ModuleBay(Base):
     base_revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("base_template_revisions.id", ondelete="RESTRICT"), nullable=False)
     bay_key: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    module_port_type_id: Mapped[uuid.UUID] = mapped_column(
+    mount_kind: Mapped[str] = mapped_column(String(11))
+    module_port_type_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("module_port_types.id", ondelete="RESTRICT"), index=True,
+    )
+    module_bay_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("module_bay_types.id", ondelete="RESTRICT"), index=True,
     )
     panel_key: Mapped[str] = mapped_column(String(255), nullable=False)
     kind: Mapped[str] = mapped_column(String(16), nullable=False, default="PLACED", server_default="PLACED")
@@ -625,6 +634,11 @@ class ModuleTemplate(Base):
 class ModuleTemplateRevision(Base):
     __tablename__ = "module_template_revisions"
     __table_args__ = (
+        CheckConstraint(
+            "(mount_kind = 'MODULE_PORT' AND module_port_type_id IS NOT NULL AND module_bay_type_id IS NULL) OR "
+            "(mount_kind = 'MODULE_BAY' AND module_bay_type_id IS NOT NULL AND module_port_type_id IS NULL)",
+            name="mount_type",
+        ),
         UniqueConstraint("template_id", "version_number"),
         CheckConstraint("version_number > 0", name="revision_valid"),
     )
@@ -632,11 +646,15 @@ class ModuleTemplateRevision(Base):
     template_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_templates.id", ondelete="RESTRICT"), nullable=False)
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    module_port_type_id: Mapped[uuid.UUID] = mapped_column(
+    mount_kind: Mapped[str] = mapped_column(String(11))
+    module_port_type_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("module_port_types.id", ondelete="RESTRICT"), index=True,
     )
+    module_bay_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("module_bay_types.id", ondelete="RESTRICT"), index=True,
+    )
     geometry: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    module_ports: Mapped[list[dict]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    module_places: Mapped[list[dict]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
 
 
 class ModuleTemplateDraft(Base):
@@ -1371,6 +1389,18 @@ class ModulePortType(Base):
     __tablename__ = "module_port_types"
     __table_args__ = (
         Index("uq_module_port_types_normalized_name", func.lower(sa.text("name")), unique=True),
+        CheckConstraint("char_length(btrim(name)) > 0", name="nonempty_name"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(nullable=False)
+
+
+class ModuleBayType(Base):
+    __tablename__ = "module_bay_types"
+    __table_args__ = (
+        Index("uq_module_bay_types_normalized_name", func.lower(sa.text("name")), unique=True),
         CheckConstraint("char_length(btrim(name)) > 0", name="nonempty_name"),
     )
 

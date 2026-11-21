@@ -5,7 +5,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.port_types import validate_port_type_assignments
-from app.module_port_types import base_assignments, module_assignments, validate_module_port_types
+from app.module_port_types import MOUNT_FIELDS, base_assignments, module_assignments, row_mount, validate_mount_types
 from app.module_layout import initial_layout, validate_layout, endpoint_position
 from app.device_catalog import DISPLAY_ALIAS_KEY, PHYSICAL_OBJECT_CLASS_KEY
 from app.errors import ModelError, ValidationError
@@ -93,7 +93,7 @@ class HardwareCatalog:
         query = CreateBaseTemplateRequest.model_validate(query.model_dump())
         definition = query.model_dump(mode="json")
         validate_port_type_assignments(self.session, definition["slots"])
-        validate_module_port_types(self.session, base_assignments(definition))
+        validate_mount_types(self.session, base_assignments(definition))
         blueprint = BaseTemplate(name=query.name)
         self.session.add(blueprint)
         self.session.flush()
@@ -371,7 +371,7 @@ class HardwareCatalog:
     def create_module(self, query):
         definition = query.model_dump(mode="json")
         validate_port_type_assignments(self.session, definition["endpoints"])
-        validate_module_port_types(self.session, module_assignments(definition))
+        validate_mount_types(self.session, module_assignments(definition))
         template = ModuleTemplate(name=query.name)
         self.session.add(template)
         self.session.flush()
@@ -379,8 +379,9 @@ class HardwareCatalog:
         return self.module_document(template, revision)
 
     def _create_module_revision(self, template_id, version_number, query):
-        revision = ModuleTemplateRevision(template_id=template_id, name=query.name, version_number=version_number, module_port_type_id=query.module_port_type_id, geometry=query.geometry.model_dump(mode="json"))
-        revision.module_ports = [port.model_dump(mode="json", exclude_none=True) for port in query.module_ports]
+        revision = ModuleTemplateRevision(template_id=template_id, name=query.name, version_number=version_number, geometry=query.geometry.model_dump(mode="json"),
+            **{key: getattr(query, key) for key in MOUNT_FIELDS})
+        revision.module_places = [port.model_dump(mode="json", exclude_none=True) for port in query.module_places]
         self.session.add(revision)
         self.session.flush()
         for index, endpoint in enumerate(query.endpoints):
@@ -393,7 +394,7 @@ class HardwareCatalog:
         return revision
 
     def module_document(self, template, revision):
-        return {"template_id": str(template.id), "revision_id": str(revision.id), "name": revision.name, "module_port_type_id": str(revision.module_port_type_id), "geometry": revision.geometry, "module_ports": revision.module_ports, "endpoints": [{"key": e.definition_key, "display_name": e.display_name, "kind": e.kind, "port_type_id": str(e.port_type_id)} for e in self.session.scalars(select(ModuleEndpointDefinition).where(ModuleEndpointDefinition.module_revision_id == revision.id).order_by(ModuleEndpointDefinition.order_index))]}
+        return {"template_id": str(template.id), "revision_id": str(revision.id), "name": revision.name, **row_mount(revision), "geometry": revision.geometry, "module_places": revision.module_places, "endpoints": [{"key": e.definition_key, "display_name": e.display_name, "kind": e.kind, "port_type_id": str(e.port_type_id)} for e in self.session.scalars(select(ModuleEndpointDefinition).where(ModuleEndpointDefinition.module_revision_id == revision.id).order_by(ModuleEndpointDefinition.order_index))]}
 
     def list_modules(self):
         latest = select(ModuleTemplateRevision.id).where(ModuleTemplateRevision.template_id == ModuleTemplate.id).order_by(ModuleTemplateRevision.version_number.desc()).limit(1).correlate(ModuleTemplate).scalar_subquery()
@@ -438,11 +439,11 @@ class HardwareCatalog:
         revision = self.session.scalar(select(ModuleTemplateRevision).where(ModuleTemplateRevision.template_id == query.module_template_id).order_by(ModuleTemplateRevision.version_number.desc()).limit(1))
         if revision is None:
             raise ValidationError("Module template was not found")
-        if revision.module_ports:
+        if revision.module_places:
             raise ModelError("Установка модуля с вложенными модульными портами пока не поддерживается",
                              {"reason": "NESTED_MODULE_PORTS_UNSUPPORTED"})
-        if revision.module_port_type_id != bay.module_port_type_id:
-            raise ModelError("Module port type must match the bay")
+        if row_mount(revision) != row_mount(bay):
+            raise ModelError("Module mount kind and type must match the placement")
         panel = self.session.scalar(select(PresentationPanel).where(PresentationPanel.base_revision_id == config.base_revision_id, PresentationPanel.panel_key == bay.panel_key))
         places = [{k: getattr(b, k) for k in ("kind", "bay_key", "panel_key")}
                   for b in self.session.scalars(select(ModuleBay).where(ModuleBay.base_revision_id == config.base_revision_id))]
@@ -494,7 +495,7 @@ class HardwareCatalog:
                     x, y = endpoint_position(installation.layout, revision.geometry["endpoints"][definition.definition_key], installation.orientation)
                     endpoints.append({"key": definition.definition_key, "kind": definition.kind, "port_type_id": str(definition.port_type_id), **contexts[str(mapping.connection_point_id)], "x": x, "y": y})
                 installed = {"id": str(installation.id), "module_template_id": str(template.id), "module_revision_id": str(revision.id), "name": revision.name, "orientation": installation.orientation, "layout": installation.layout, "fill_color": revision.geometry["fill_color"], "initial_layout": initial_layout({k: getattr(bay, k) for k in ("kind", "bay_key", "panel_key", "x", "y", "width", "height")}, revision.geometry, installation.orientation, {"width": panel_rows[bay.panel_key].width, "height": panel_rows[bay.panel_key].height}, places), "endpoints": endpoints}
-            bays.append({"bay_key": bay.bay_key, "display_name": bay.display_name, "module_port_type_id": str(bay.module_port_type_id), "panel_key": bay.panel_key, "kind": bay.kind, "x": bay.x, "y": bay.y, "width": bay.width, "height": bay.height, "installation": installed})
+            bays.append({"bay_key": bay.bay_key, "display_name": bay.display_name, **row_mount(bay), "panel_key": bay.panel_key, "kind": bay.kind, "x": bay.x, "y": bay.y, "width": bay.width, "height": bay.height, "installation": installed})
         panels = [{k: getattr(p, k) for k in ("panel_key", "display_name", "width", "height")} for p in panel_rows.values()]
         return {"configuration_id": str(config.id), "base_revision_id": str(config.base_revision_id), "panels": panels, "bays": bays}
 

@@ -54,7 +54,7 @@ def test_port_type_workspace_round_trip_and_invalid_import():
     archived = create_port({"name": "Optical", "color": "#abcdef",
                                       "description": "SFP+", "is_active": False}).json()
     before = snapshot()
-    assert before["format_version"] == 12
+    assert before["format_version"] == 13
     assert {item["id"]: item for item in before["settings"]["PortType"]} == {
         item["id"]: {k: v for k, v in item.items() if k != "cardinality"} for item in (active, archived)
     }
@@ -87,7 +87,7 @@ def test_assignment_lifecycle_and_workspace_round_trip(template_kind, section):
         for endpoint in (first, second):
             endpoint.update(panel_key="panel-1", rendered_position={"x": .5, "y": .5})
     else:
-        definition.update(module_port_type_id=ensure_module_port_type_id("OCP3"), geometry=initial_geometry(("first", "second")))
+        definition.update(mount_kind="MODULE_PORT", module_port_type_id=ensure_module_port_type_id("OCP3"), geometry=initial_geometry(("first", "second")))
 
     assert client.post(library, json=definition).status_code == 422
     for endpoint in (first, second):
@@ -150,7 +150,7 @@ def test_assignment_lifecycle_and_workspace_round_trip(template_kind, section):
     assert update_port(original_url, {"name": "Twisted pair", "color": "#112233", "members": ["X"]}).status_code == 409
 
     before = snapshot()
-    assert before["format_version"] == 12
+    assert before["format_version"] == 13
     assert client.delete("/v1/workspace/dataset").status_code == 204
     malformed = copy.deepcopy(before)
     draft_record, = malformed["authoring"][f"{template_kind.capitalize()}TemplateDraft"]
@@ -207,7 +207,7 @@ def test_connected_retained_endpoint_type_is_immutable(template_kind, replacemen
         impact_section = "objects"
     else:
         endpoint = {"key": "port", "kind": "NETWORK_PORT", "display_name": "P1", "port_type_id": original["id"]}
-        created = client.post(library, json={"name": "Module", "module_port_type_id": ensure_module_port_type_id("OCP3"), "endpoints": [endpoint],
+        created = client.post(library, json={"name": "Module", "mount_kind": "MODULE_PORT", "module_port_type_id": ensure_module_port_type_id("OCP3"), "endpoints": [endpoint],
                                             "geometry": initial_geometry([endpoint["key"]])})
         assert created.status_code == 201, created.text
         template_id, section = created.json()["template_id"], "endpoints"
@@ -383,7 +383,7 @@ def test_multimember_module_materializes_passive_point_but_rejects_network_port(
 
     port = create_port({"name": "Duplex", "medium": "FIBER", "members": ["A", "B"], "color": "#123456"}).json()
     endpoint = {"key": "duplex", "display_name": "Duplex", "kind": "NETWORK_PORT", "port_type_id": port["id"]}
-    definition = {"name": "Passive", "module_port_type_id": ensure_module_port_type_id("OCP3"), "endpoints": [endpoint],
+    definition = {"name": "Passive", "mount_kind": "MODULE_PORT", "module_port_type_id": ensure_module_port_type_id("OCP3"), "endpoints": [endpoint],
                   "geometry": initial_geometry([endpoint["key"]])}
     library = "/v1/library/module-templates"
     assert client.post(library, json=definition).status_code == 422

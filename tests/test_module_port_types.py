@@ -1,7 +1,8 @@
 import copy
+import json
 import os
 import subprocess
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 import sqlalchemy as sa
@@ -11,58 +12,89 @@ from tests.test_hardware_configuration import base_payload, client, create_base,
 
 
 CATALOG = "/v1/module-port-types"
+BAY_CATALOG = "/v1/module-bay-types"
 PACKAGE = "/v1/workspace/package"
 SEED = {
     "SFP", "SFP+", "SFP28", "SFP56", "QSFP+", "QSFP28", "QSFP56", "QSFP112",
-    "QSFP-DD", "OSFP", "XFP", "PCIe x1", "PCIe x4", "PCIe x8", "PCIe x16",
+    "QSFP-DD", "OSFP", "XFP",
 }
 
 
-def test_catalog_rename_archive_installation_and_workspace_roundtrip():
-    response = client.post(CATALOG, json={"name": "Line card slot"})
+@pytest.mark.parametrize("catalog,kind,field,entity", [
+    (CATALOG, "MODULE_PORT", "module_port_type_id", "ModulePortType"),
+    (BAY_CATALOG, "MODULE_BAY", "module_bay_type_id", "ModuleBayType"),
+])
+def test_catalog_rename_archive_installation_and_workspace_roundtrip(catalog, kind, field, entity):
+    from app.module_geometry import initial_geometry
+
+    response = client.post(catalog, json={"name": "Line card slot"})
     assert response.status_code == 201, response.text
     item = response.json()
-    assert client.post(CATALOG, json={"name": "line card slot"}).status_code == 409
-    item_url = f"{CATALOG}/{item['id']}"
+    assert client.post(catalog, json={"name": "line card slot"}).status_code == 409
+    item_url = f"{catalog}/{item['id']}"
     assert client.get(item_url).json() == item
 
     payload = base_payload()
     bay = payload["bays"][0]
-    bay["module_port_type_id"] = item["id"]
+    bay.pop("module_port_type_id")
+    bay.update(mount_kind=kind, **{field: item["id"]})
     base, _ = create_base(payload)
-    module = create_module("Line card slot")
-    wrong = create_module("Similar line card slot")
+    def module(type_id, mount_kind=kind, type_field=field):
+        response = client.post("/v1/library/module-templates", json={
+            "name": "Module", "geometry": initial_geometry([]), "endpoints": [],
+            "mount_kind": mount_kind, type_field: type_id,
+        })
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    compatible = module(item["id"])
+    different = client.post(catalog, json={"name": "Similar line card slot"}).json()
+    wrong = module(different["id"])
+    # The UUID alone cannot authorize a cross-kind installation, even when present in both catalogs.
+    from app.database import SessionLocal
+    from app.models import ModuleBayType, ModulePortType
+    cross_model, cross_kind, cross_field = (
+        (ModuleBayType, "MODULE_BAY", "module_bay_type_id") if kind == "MODULE_PORT"
+        else (ModulePortType, "MODULE_PORT", "module_port_type_id")
+    )
+    with SessionLocal.begin() as session:
+        session.add(cross_model(id=UUID(item["id"]), name="Same UUID", is_active=True))
+    cross = module(item["id"], cross_kind, cross_field)
     object_id = create_object(base)["physical_object_ref"]["entity_id"]
     renamed = client.put(item_url, json={"name": "Renamed line card slot"})
     assert renamed.json() == {**item, "name": "Renamed line card slot"}
     assert install(object_id, wrong["template_id"], bay["bay_key"]).status_code == 409
-    installed = install(object_id, module["template_id"], bay["bay_key"])
+    assert install(object_id, cross["template_id"], bay["bay_key"]).status_code == 409
+    installed = install(object_id, compatible["template_id"], bay["bay_key"])
     assert installed.status_code == 201, installed.text
 
     assert client.put(item_url, json={"name": "Renamed line card slot", "is_active": False}).status_code == 200
     assert client.delete(item_url).status_code == 409
     assert client.post("/v1/library/base-templates", json=payload).status_code == 422
     assert client.get(f"/v1/topology/physical-objects/{object_id}/configuration").json() == installed.json()
-    draft_url = f"/v1/library/module-templates/{module['template_id']}/draft"
+    draft_url = f"/v1/library/module-templates/{compatible['template_id']}/draft"
     draft = client.get(draft_url).json()
     saved = client.put(f"{draft_url}?expected_generation={draft['generation']}",
                        json={**draft["definition"], "name": "Edited module"})
     assert saved.status_code == 200, saved.text
-    assert saved.json()["definition"]["module_port_type_id"] == item["id"]
+    assert saved.json()["definition"][field] == item["id"]
 
     packaged = client.get(PACKAGE).json()
-    assert {"id": item["id"], "name": "Renamed line card slot", "is_active": False} in packaged["settings"]["ModulePortType"]
+    assert {"id": item["id"], "name": "Renamed line card slot", "is_active": False} in packaged["settings"][entity]
     assert client.delete("/v1/workspace/dataset").status_code == 204
     empty = client.get(PACKAGE).json()
     broken = copy.deepcopy(packaged)
-    broken["authoring"]["ModuleTemplateDraft"][0]["definition"]["module_port_type_id"] = str(uuid4())
+    broken["authoring"]["ModuleTemplateDraft"][0]["definition"][field] = str(uuid4())
     assert client.post(PACKAGE, json=broken).status_code == 422
+    wrong_mount = copy.deepcopy(packaged)
+    wrong_mount["authoring"]["ModuleTemplateDraft"][0]["definition"].update(mount_kind=cross_kind)
+    assert client.post(PACKAGE, json=wrong_mount).status_code == 422
     assert client.get(PACKAGE).json() == empty
     assert client.post(PACKAGE, json=packaged).status_code == 204
     assert client.get(PACKAGE).json() == packaged
 
-    spare = client.post(CATALOG, json={"name": "Unused", "is_active": False}).json()
-    assert client.delete(f"{CATALOG}/{spare['id']}").status_code == 204
+    spare = client.post(catalog, json={"name": "Unused", "is_active": False}).json()
+    assert client.delete(f"{catalog}/{spare['id']}").status_code == 204
 
 
 def test_archived_type_in_frozen_candidate_is_protected():
@@ -75,8 +107,8 @@ def test_archived_type_in_frozen_candidate_is_protected():
     draft = open_draft(template_id)
     definition = {
         **draft["definition"],
-        "module_ports": [{"key": "child", "display_name": "Child", "x": .3, "y": .4,
-                          "module_port_type_id": item["id"]}],
+        "module_places": [{"key": "child", "display_name": "Child", "x": .3, "y": .4,
+                          "mount_kind": "MODULE_PORT", "module_port_type_id": item["id"]}],
     }
     checked = check(template_id, save(template_id, draft, definition))
     assert client.put(item_url, json={"name": item["name"], "is_active": False}).status_code == 200
@@ -100,8 +132,12 @@ def legacy_database():
     isolated = sa.create_engine(url)
     env = {**os.environ, "DATABASE_URL": url.render_as_string(hide_password=False)}
 
-    def upgrade(target="head"):
-        return subprocess.run(["alembic", "upgrade", target], env=env, capture_output=True, text=True)
+    def upgrade(target="head", mapping=None):
+        migration_env = dict(env)
+        migration_env.pop("NETMAP_CAT_D_05_MOUNT_KINDS", None)
+        if mapping is not None:
+            migration_env["NETMAP_CAT_D_05_MOUNT_KINDS"] = json.dumps(mapping)
+        return subprocess.run(["alembic", "upgrade", target], env=migration_env, capture_output=True, text=True)
 
     try:
         initial = upgrade("mod01_module_port_markers")
@@ -182,9 +218,25 @@ def _legacy_installation(db, compatibility):
                 "connection_points": point, "network_interfaces": interface, "cables": cable}
 
 
-def test_forward_migration_preserves_installation_and_seed(legacy_database):
+@pytest.mark.parametrize("previously_applied", [False, True])
+def test_forward_migration_preserves_installation_and_seed(legacy_database, previously_applied):
     db, upgrade = legacy_database
-    ids = _legacy_installation(db, " Vendor / custom ")
+    compatibility = " Vendor / custom " if previously_applied else "PCIe x16"
+    ids = _legacy_installation(db, compatibility)
+    mapping = None
+    if previously_applied:
+        old_upgrade = upgrade("catd05_module_port_types")
+        assert old_upgrade.returncode == 0, old_upgrade.stderr
+        with db.begin() as conn:
+            custom = conn.scalar(sa.text("SELECT id FROM module_port_types WHERE name = :name"), {"name": compatibility})
+            conn.execute(sa.text("UPDATE module_port_types SET is_active = false WHERE id = :id"), {"id": custom})
+            renamed_seed = conn.scalar(sa.text("UPDATE module_port_types SET name = 'Renamed slot' WHERE name = 'PCIe x16' RETURNING id"))
+        rejected = upgrade()
+        assert rejected.returncode != 0 and str(custom) in rejected.stderr
+        with db.connect() as conn:
+            assert conn.scalar(sa.text("SELECT version_num FROM alembic_version")) == "catd05_module_port_types"
+            assert conn.scalar(sa.text("SELECT module_port_type_id FROM module_bays")) == custom
+        mapping = {str(custom): "MODULE_BAY"}
     stable_tables = ("module_installations", "module_endpoint_mappings", "connection_points",
                      "network_interfaces", "interface_physical_bindings", "connections", "connection_members", "cables")
 
@@ -193,25 +245,36 @@ def test_forward_migration_preserves_installation_and_seed(legacy_database):
             return {table: conn.execute(sa.text(f"SELECT * FROM {table} ORDER BY id")).all() for table in stable_tables}
 
     before = snapshot()
-    result = upgrade()
+    result = upgrade(mapping=mapping)
     assert result.returncode == 0, result.stderr
     assert snapshot() == before
     with db.connect() as conn:
         names = dict(conn.execute(sa.text("SELECT name,id FROM module_port_types")).all())
-        assert set(names) == SEED | {" Vendor / custom "}
+        assert set(names) == SEED
+        bays = dict(conn.execute(sa.text("SELECT name,id FROM module_bay_types")).all())
+        expected = {"PCIe x1", "PCIe x4", "PCIe x8"}
+        if previously_applied:
+            expected |= {compatibility, "Renamed slot"}
+            assert bays[compatibility] == custom
+            assert bays["Renamed slot"] == renamed_seed
+            assert conn.scalar(sa.text("SELECT is_active FROM module_bay_types WHERE id = :id"), {"id": custom}) is False
+        else:
+            expected.add("PCIe x16")
+        assert set(bays) == expected
         for table, item_id in ids.items():
             assert conn.scalar(sa.text(f"SELECT id FROM {table} WHERE id = :id"), {"id": item_id}) == item_id
         for table in ("module_bays", "module_template_revisions"):
-            assert conn.scalar(sa.text(f"SELECT module_port_type_id FROM {table} WHERE id = :id"), {"id": ids[table]}) == names[" Vendor / custom "]
-        assert conn.scalar(sa.text("SELECT definition->'bays'->0->>'module_port_type_id' FROM base_template_drafts")) == str(names[" Vendor / custom "])
-        assert conn.scalar(sa.text("SELECT result->'changes'->0->'after'->>'module_port_type_id' FROM base_template_candidates")) == str(names[" Vendor / custom "])
-        assert conn.scalar(sa.text("SELECT definition->'module_ports'->0->>'module_port_type_id' FROM module_template_drafts")) == str(names["SFP+"])
-        assert conn.scalar(sa.text("SELECT module_ports->0->>'module_port_type_id' FROM module_template_revisions WHERE name = 'Nested marker example'")) == str(names["SFP+"])
-        assert conn.scalar(sa.text("SELECT result->'changes'->0->>'key' FROM module_template_candidates")) == "module_port_type_id"
+            assert conn.scalar(sa.text(f"SELECT module_bay_type_id FROM {table} WHERE id = :id"), {"id": ids[table]}) == bays[compatibility]
+        assert conn.scalar(sa.text("SELECT definition->'bays'->0->>'module_bay_type_id' FROM base_template_drafts")) == str(bays[compatibility])
+        assert conn.scalar(sa.text("SELECT result->'changes'->0->'after'->>'module_bay_type_id' FROM base_template_candidates")) == str(bays[compatibility])
+        assert conn.scalar(sa.text("SELECT definition->'module_places'->0->>'module_port_type_id' FROM module_template_drafts")) == str(names["SFP+"])
+        assert conn.scalar(sa.text("SELECT module_places->0->>'module_port_type_id' FROM module_template_revisions WHERE name = 'Nested marker example'")) == str(names["SFP+"])
+        assert conn.scalar(sa.text("SELECT result->'changes'->0->>'key' FROM module_template_candidates")) == "mount"
     repeated = upgrade()
     assert repeated.returncode == 0, repeated.stderr
     with db.connect() as conn:
         assert dict(conn.execute(sa.text("SELECT name,id FROM module_port_types")).all()) == names
+        assert dict(conn.execute(sa.text("SELECT name,id FROM module_bay_types")).all()) == bays
 
 
 @pytest.mark.parametrize("value", ["sfp", "Legacy"])
@@ -230,3 +293,49 @@ def test_forward_migration_rolls_back_on_name_collision(legacy_database, value):
         assert conn.scalar(sa.text("SELECT compatibility FROM module_bays")) == value
         assert conn.scalar(sa.text("SELECT id FROM module_installations")) == ids["module_installations"]
         assert conn.scalar(sa.text("SELECT id FROM cables")) == ids["cables"]
+
+
+
+def test_unclassified_legacy_name_rolls_back_both_steps(legacy_database):
+    db, upgrade = legacy_database
+    ids = _legacy_installation(db, "Custom kind")
+    result = upgrade()
+    assert result.returncode != 0 and "classify these UUIDs" in result.stderr
+    with db.connect() as conn:
+        assert conn.scalar(sa.text("SELECT version_num FROM alembic_version")) == "mod01_module_port_markers"
+        assert conn.scalar(sa.text("SELECT compatibility FROM module_bays")) == "Custom kind"
+        assert conn.scalar(sa.text("SELECT id FROM module_installations")) == ids["module_installations"]
+
+
+def test_pcie_card_definition_with_sfp_ports_publishes_and_roundtrips():
+    from app.module_geometry import initial_geometry
+    from tests.test_module_template_review import check, open_draft, save
+
+    pcie = client.post(BAY_CATALOG, json={"name": "PCIe x16"}).json()["id"]
+    sfp = client.post(CATALOG, json={"name": "SFP+"}).json()["id"]
+    mount = {"mount_kind": "MODULE_BAY", "module_bay_type_id": pcie}
+    definition = {"name": "Network card", **mount, "geometry": initial_geometry([]), "endpoints": []}
+    created = client.post("/v1/library/module-templates", json=definition)
+    assert created.status_code == 201, created.text
+    template = created.json()["template_id"]
+    child = {"key": "sfp-1", "display_name": "SFP+ 1", "x": .25, "y": .5,
+             "mount_kind": "MODULE_PORT", "module_port_type_id": sfp}
+    draft = save(template, open_draft(template), {**definition, "module_places": [child]})
+    reviewed = check(template, draft)["review"]
+    assert reviewed["definition"]["module_places"] == [child]
+    assert reviewed["result"]["changes"][0]["after"] == child
+    published = client.post(f"/v1/library/module-templates/{template}/candidates/{reviewed['candidate_id']}/publish")
+    assert published.status_code == 200, published.text
+    payload = base_payload()
+    bay = payload["bays"][0]
+    bay.pop("module_port_type_id")
+    bay.update(mount)
+    base, _ = create_base(payload)
+    obj = create_object(base)["physical_object_ref"]["entity_id"]
+    rejected = install(obj, template, bay["bay_key"])
+    assert rejected.status_code == 409
+    assert rejected.json()["error"]["details"]["reason"] == "NESTED_MODULE_PORTS_UNSUPPORTED"
+    package = client.get(PACKAGE).json()
+    assert client.delete("/v1/workspace/dataset").status_code == 204
+    assert client.post(PACKAGE, json=package).status_code == 204
+    assert client.get(PACKAGE).json() == package

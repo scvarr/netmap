@@ -1,23 +1,52 @@
 import type { BlueprintSlot, BlueprintSlotKind, TemplateImpactReason } from './baseTemplateTypes';
 
-export interface PlacedModuleBay {
+export type MountKind = 'MODULE_PORT' | 'MODULE_BAY';
+export type ModuleMount =
+  | { mount_kind: 'MODULE_PORT'; module_port_type_id: string; module_bay_type_id?: null }
+  | { mount_kind: 'MODULE_BAY'; module_bay_type_id: string; module_port_type_id?: null };
+
+export const isMountKind = (value: unknown): value is MountKind => value === 'MODULE_PORT' || value === 'MODULE_BAY';
+export const mountTypeId = (mount: ModuleMount) =>
+  mount.mount_kind === 'MODULE_PORT' ? mount.module_port_type_id : mount.module_bay_type_id;
+
+export type SelectedMount = ModuleMount & { module_port_type_id: string | null; module_bay_type_id: string | null };
+
+export function moduleMount(kind: MountKind, id: string): SelectedMount {
+  return kind === 'MODULE_PORT'
+    ? { mount_kind: kind, module_port_type_id: id, module_bay_type_id: null }
+    : { mount_kind: kind, module_bay_type_id: id, module_port_type_id: null };
+}
+
+export function parseMount(value: Record<string, unknown>): ModuleMount {
+  const { mount_kind, module_port_type_id, module_bay_type_id } = value;
+  if (mount_kind === 'MODULE_PORT' && typeof module_port_type_id === 'string' && module_bay_type_id == null) {
+    return moduleMount(mount_kind, module_port_type_id);
+  }
+  if (mount_kind === 'MODULE_BAY' && typeof module_bay_type_id === 'string' && module_port_type_id == null) {
+    return moduleMount(mount_kind, module_bay_type_id);
+  }
+  throw new Error('Invalid module mount');
+}
+
+export type PlacedModuleBay = ModuleMount & {
   kind?: "PLACED";
-  bay_key: string; display_name: string; module_port_type_id: string; panel_key: string;
+  bay_key: string; display_name: string; panel_key: string;
   x: number; y: number; width?: number | null; height?: number | null;
-}
-export interface LogicalModuleBay {
+};
+export type LogicalModuleBay = ModuleMount & {
   kind: "LOGICAL";
-  bay_key: string; display_name: string; module_port_type_id: string; panel_key: string;
+  bay_key: string; display_name: string; panel_key: string;
   x?: null; y?: null; width?: null; height?: null;
-}
+};
 export type ModuleBay = PlacedModuleBay | LogicalModuleBay;
 export const isPlacedBay = (bay: ModuleBay): bay is PlacedModuleBay => bay.kind !== "LOGICAL";
 export interface ModuleEndpoint { key: string; display_name: string; kind: BlueprintSlotKind; port_type_id: string }
-export interface ModulePortDefinition {
-  key: string; display_name: string; module_port_type_id: string;
+export type ModulePlaceDefinition = ModuleMount & {
+  key: string; display_name: string;
   x: number; y: number; width?: number | null; height?: number | null;
-}
-export type ModulePortMarker = { key: string; display_name: string; kind: 'MODULE_PORT'; port_type_id?: never };
+};
+export type ModulePortMarker = { key: string; display_name: string; kind: MountKind; port_type_id?: never };
+export const isModulePlaceMarker = (marker: ModuleEndpoint | ModulePortMarker): marker is ModulePortMarker => isMountKind(marker.kind);
 export type BlueprintMarker = BlueprintSlot | (ModulePortMarker & Pick<BlueprintSlot, 'panel_key' | 'rendered_position'>);
 
 export function modulePortPosition({ x, y, width, height }: Pick<PlacedModuleBay, 'x' | 'y' | 'width' | 'height'>) {
@@ -30,19 +59,19 @@ export function positionModulePort<T extends Pick<PlacedModuleBay, 'x' | 'y' | '
   const current = modulePortPosition(port);
   if (Math.abs(current.x - position.x) < 1e-12 && Math.abs(current.y - position.y) < 1e-12) return port;
   const { width: _width, height: _height, ...definition } = port;
-  return { ...definition, ...position };
+  return { ...definition, ...position } as T;
 }
 
 export function moduleBayMarkers(bays: ModuleBay[]) {
   return bays.filter(isPlacedBay).map(bay => ({
-    key: bay.bay_key, display_name: bay.display_name, kind: 'MODULE_PORT' as const,
+    key: bay.bay_key, display_name: bay.display_name, kind: bay.mount_kind,
     panel_key: bay.panel_key, rendered_position: modulePortPosition(bay),
   }));
 }
 export interface ModuleGeometry { width: number; height: number; fill_color: string; endpoints: Record<string, { x: number; y: number }> }
 export const initialModuleGeometry = (): ModuleGeometry => ({ width: 240, height: 80, fill_color: "#64748b", endpoints: {} });
-export interface ModuleTemplateInput { geometry: ModuleGeometry; name: string; module_port_type_id: string; endpoints: ModuleEndpoint[]; module_ports?: ModulePortDefinition[] }
-export interface ModuleTemplate extends ModuleTemplateInput { template_id: string; revision_id: string; publication_state?: ModuleDraftDocument["publication_state"] }
+export type ModuleTemplateInput = ModuleMount & { geometry: ModuleGeometry; name: string; endpoints: ModuleEndpoint[]; module_places?: ModulePlaceDefinition[] };
+export type ModuleTemplate = ModuleTemplateInput & { template_id: string; revision_id: string; publication_state?: ModuleDraftDocument["publication_state"] };
 export interface ModuleDraftDocument {
   template_id: string; source_revision_id: string; generation: number; definition: ModuleTemplateInput;
   publication_state?: { revision_id: string; version_number: number; outdated_count: number; awaiting_update_count: number; requires_intervention_count: number; installations: NonNullable<ModuleDraftDocument["review"]>["result"]["installations"] };
@@ -55,9 +84,9 @@ export interface ModuleDraftDocument {
   };
 }
 export interface ModuleStructuralChange {
-  section: 'properties' | 'endpoints' | 'module_ports' | 'geometry'; key: string; operation: 'added' | 'removed' | 'changed';
-  before: ModuleGeometry | ModulePortDefinition | string | (ModuleEndpoint & { order_index: number }) | null;
-  after: ModuleGeometry | ModulePortDefinition | string | (ModuleEndpoint & { order_index: number }) | null;
+  section: 'properties' | 'endpoints' | 'module_places' | 'geometry'; key: string; operation: 'added' | 'removed' | 'changed';
+  before: ModuleGeometry | ModulePlaceDefinition | ModuleMount | string | (ModuleEndpoint & { order_index: number }) | null;
+  after: ModuleGeometry | ModulePlaceDefinition | ModuleMount | string | (ModuleEndpoint & { order_index: number }) | null;
 }
 export interface ModuleReconciliationResult {
   revision_id: string; version_number: number;

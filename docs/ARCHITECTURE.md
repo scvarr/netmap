@@ -52,7 +52,7 @@ MOD-01 хранит модульный порт BaseTemplate как сущест
 Эти определения не участвуют в materialization endpoints.
 
 Исторические прямоугольники отображаются ромбом в центре сохранённой области.
-Неизменённая область сохраняется в workspace v12 и используется для расчёта
+Неизменённая область сохраняется в workspace v13 и используется для расчёта
 initial layout. Явное перемещение ромба сохраняет в новом черновике точку
 вместо области. Для места с X/Y начальный layout вписывает корпус в область
 30% панели по каждой оси и ограничивает его границами панели. Уже сохранённые
@@ -309,10 +309,10 @@ API-first core независим от React state. User/ACL semantics прин�
 Применённые Alembic revisions immutable: исправления только forward migration.
 Сохраняются canonical user/network data, stable identity и retained immutable
 snapshots; development-stage authoring/runtime compatibility не является целью.
-Workspace JSON v12 включает физические справочники и их ссылки по UUID,
+Workspace JSON v13 включает физические справочники и их ссылки по UUID,
 в том числе обязательный CableType и необязательные ConnectorType A/B.
-Импорт принимает пакеты v12. Справочник ModulePortType и его UUID-ссылки
-сохраняются в ревизиях, черновиках, кандидатах и результатах review.
+Импорт принимает пакеты v13. Справочники ModulePortType и ModuleBayType, вид посадочного
+места и UUID-ссылки сохраняются в ревизиях, черновиках, кандидатах и результатах review.
 Исторические snapshots внутри пакета сохраняют
 исходные определения.
 Не добавлять old/new fallback, shadow models или translation shims ради obsolete

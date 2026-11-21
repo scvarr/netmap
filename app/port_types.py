@@ -14,7 +14,7 @@ from app.database import get_session
 from app.errors import ValidationError
 from app.models import (
     BaseTemplateCandidate, BaseTemplateDraft, BuiltInEndpointDefinition, Cable, CableType,
-    ConnectorType, ModuleBay, ModuleEndpointDefinition, ModulePortType, ModuleTemplateCandidate,
+    ConnectorType, ModuleBay, ModuleBayType, ModuleEndpointDefinition, ModulePortType, ModuleTemplateCandidate,
     ModuleTemplateDraft, ModuleTemplateRevision, PortType,
 )
 
@@ -78,7 +78,7 @@ class CableTypeInput(CatalogInput):
     construction: StructuralLabel
 
 
-class ModulePortTypeInput(BaseModel):
+class MountTypeInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: Annotated[str, Field(min_length=1, max_length=255)]
@@ -110,7 +110,7 @@ class CableTypeDocument(CableTypeInput, CatalogDocument):
     pass
 
 
-class ModulePortTypeDocument(ModulePortTypeInput, CatalogDocument):
+class MountTypeDocument(MountTypeInput, CatalogDocument):
     pass
 
 
@@ -153,34 +153,31 @@ def _port_type_usage(item_id):
     )
 
 
-def _module_port_type_usage(item_id):
+def _mount_type_usage(field, item_id):
     key = str(item_id)
     for model in (ModuleBay, ModuleTemplateRevision):
-        yield select(model.id).where(model.module_port_type_id == item_id).exists()
+        yield select(model.id).where(getattr(model, field) == item_id).exists()
     yield select(ModuleTemplateRevision.id).where(
-        ModuleTemplateRevision.module_ports.contains([{"module_port_type_id": key}])
+        ModuleTemplateRevision.module_places.contains([{field: key}])
     ).exists()
     for model in (BaseTemplateDraft, BaseTemplateCandidate):
-        yield select(model.id).where(model.definition.contains({"bays": [{"module_port_type_id": key}]})).exists()
+        yield select(model.id).where(model.definition.contains({"bays": [{field: key}]})).exists()
     for model in (ModuleTemplateDraft, ModuleTemplateCandidate):
         yield select(model.id).where(or_(
-            model.definition.contains({"module_port_type_id": key}),
-            model.definition.contains({"module_ports": [{"module_port_type_id": key}]}),
+            model.definition.contains({field: key}),
+            model.definition.contains({"module_places": [{field: key}]}),
         )).exists()
     for model in (BaseTemplateCandidate, ModuleTemplateCandidate):
         # The path also covers reasons and snapshots nested in object/installation impacts.
-        yield select(model.id).where(or_(
-            model.result.path_exists(cast(f'$.**.module_port_type_id ? (@ == "{key}")', JSONPATH)),
-            model.result.path_exists(cast(
-                f'$.**.changes[*] ? (@.section == "properties" && @.key == "module_port_type_id"'
-                f' && (@.before == "{key}" || @.after == "{key}"))', JSONPATH
-            )),
-        )).exists()
+        yield select(model.id).where(
+            model.result.path_exists(cast(f'$.**.{field} ? (@ == "{key}")', JSONPATH)),
+        ).exists()
 
 
 def _used(session, model, item_id):
-    if model is ModulePortType:
-        return session.scalar(select(or_(*_module_port_type_usage(item_id))))
+    if model in (ModulePortType, ModuleBayType):
+        field = "module_port_type_id" if model is ModulePortType else "module_bay_type_id"
+        return session.scalar(select(or_(*_mount_type_usage(field, item_id))))
     if model is PortType:
         revisions, snapshots = _port_type_usage(item_id)
         return session.scalar(select(or_(*revisions, *snapshots)))
@@ -275,4 +272,6 @@ router.include_router(catalog_router("port-types", "Port types", PortType, PortT
 router.include_router(catalog_router("connector-types", "Connector types", ConnectorType, ConnectorTypeInput, ConnectorTypeDocument, ("mating_profile", "termination")))
 router.include_router(catalog_router("cable-types", "Cable types", CableType, CableTypeInput, CableTypeDocument, ("medium", "construction")))
 
-router.include_router(catalog_router("module-port-types", "Module port types", ModulePortType, ModulePortTypeInput, ModulePortTypeDocument, ()))
+router.include_router(catalog_router("module-port-types", "Module port types", ModulePortType, MountTypeInput, MountTypeDocument, ()))
+
+router.include_router(catalog_router("module-bay-types", "Module bay types", ModuleBayType, MountTypeInput, MountTypeDocument, ()))

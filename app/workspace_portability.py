@@ -1,4 +1,4 @@
-"""Version 12 exchange contract for the current implicit workspace dataset.
+"""Version 13 exchange contract for the current implicit workspace dataset.
 
 The public names and fields below are deliberately fixed independently of table
 names. A storage change must adapt this mapping or introduce a new format version.
@@ -19,14 +19,14 @@ from sqlalchemy.sql.sqltypes import JSON
 
 from app.database import Base
 from app import models
-from app.port_types import CableTypeInput, ConnectorTypeInput, ModulePortTypeInput, PortTypeInput
-from app.module_port_types import base_assignments, module_assignments, result_type_references
-from app.schemas import ModuleBayRequest, AutomaticLocationLayout
+from app.port_types import CableTypeInput, ConnectorTypeInput, MountTypeInput, PortTypeInput
+from app.module_port_types import MOUNT_CATALOGS, MOUNT_FIELDS, mount_identity, result_mounts
+from app.schemas import ModuleBayRequest, ModuleMount, AutomaticLocationLayout
 from pydantic import ValidationError
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 12
+FORMAT_VERSION = 13
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -77,10 +77,10 @@ ENTITIES = (
     ("authoring", "BaseInternalLink", "BaseInternalLink", "id base_revision_id slot_a_id slot_b_id member_mappings"),
     ("authoring", "ObjectConfiguration", "ObjectConfiguration", "id base_revision_id physical_object_id"),
     ("authoring", "BuiltInEndpointMapping", "BuiltInEndpointMapping", "id configuration_id definition_id connection_point_id network_interface_id"),
-    ("authoring", "ModuleBay", "ModuleBay", "id base_revision_id bay_key display_name module_port_type_id panel_key kind x y width height"),
+    ("authoring", "ModuleBay", "ModuleBay", "id base_revision_id bay_key display_name mount_kind module_port_type_id module_bay_type_id panel_key kind x y width height"),
     ("authoring", "ModuleTemplate", "ModuleTemplate", "id name"),
     ("authoring", "ModuleTemplatePublication", "ModuleTemplatePublication", "id revision_id"),
-    ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number name module_port_type_id geometry module_ports"),
+    ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number name mount_kind module_port_type_id module_bay_type_id geometry module_places"),
     ("authoring", "ModuleTemplateDraft", "ModuleTemplateDraft", "id template_id source_revision_id generation definition"),
     ("authoring", "ModuleTemplateCandidate", "ModuleTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
     ("authoring", "ModuleEndpointDefinition", "ModuleEndpointDefinition", "id module_revision_id definition_key order_index display_name kind port_type_id"),
@@ -94,6 +94,7 @@ ENTITIES = (
     ("presentation", "MapTextAnnotation", "MapTextAnnotation", "id map_id text position text_color font_size"),
     ("settings", "ConnectorType", "ConnectorType", "id name description color is_active mating_profile termination"),
     ("settings", "PortType", "PortType", "id name description color is_active medium members connector_type_id"),
+    ("settings", "ModuleBayType", "ModuleBayType", "id name is_active"),
     ("settings", "ModulePortType", "ModulePortType", "id name is_active"),
     ("settings", "CableType", "CableType", "id name description color is_active medium construction"),
     ("settings", "CableLabelSettings", "CableLabelSettings", "id unique_labels"),
@@ -208,13 +209,19 @@ def validate_package(package: object) -> dict:
                 except ValidationError as error:
                     raise PackageError("Invalid MapPresentationVariant.automatic_layout settings") from error
             catalog_schema = {models.PortType: PortTypeInput, models.ConnectorType: ConnectorTypeInput,
-                              models.CableType: CableTypeInput, models.ModulePortType: ModulePortTypeInput}.get(model)
+                              models.CableType: CableTypeInput, models.ModulePortType: MountTypeInput,
+                              models.ModuleBayType: MountTypeInput}.get(model)
             if catalog_schema:
                 try:
                     item = catalog_schema.model_validate({k: v for k, v in row.items() if k != "id"})
                 except ValidationError as error:
                     raise PackageError(f"Invalid {name} record") from error
                 row.update(item.model_dump())
+            if model is models.ModuleTemplateRevision:
+                try:
+                    ModuleMount.model_validate({key: row[key] for key in MOUNT_FIELDS})
+                except ValidationError as error:
+                    raise PackageError("Invalid ModuleTemplateRevision mount") from error
             if model is models.ModuleBay:
                 try:
                     ModuleBayRequest.model_validate({k: row[k] for k in ModuleBayRequest.model_fields if k in row})
@@ -283,30 +290,39 @@ def validate_package(package: object) -> dict:
                     if ((prefix == "base" and endpoint.get("cardinality", 1) != capacities[type_id])
                             or (endpoint["kind"] == "NETWORK_PORT" and capacities[type_id] != 1)):
                         raise PackageError("Template definition contradicts its port type cardinality")
-    _validate_module_port_type_references(result)
+    _validate_mount_references(result)
     return result
 
 
-def _validate_module_port_type_references(rows):
-    catalog = rows["module_port_types"]
-    if len({row["name"].lower() for row in catalog}) != len(catalog):
-        raise PackageError("Duplicate module port type name")
-    ids = {str(row["id"]) for row in catalog}
-    references = [
-        port["module_port_type_id"]
-        for revision in rows["module_template_revisions"] for port in revision["module_ports"]
-    ]
-    for prefix, assignments, impacts in (
-        ("base", base_assignments, "objects"),
-        ("module", module_assignments, "installations"),
+def _validate_mount_references(rows):
+    ids = {}
+    for kind, (_, model) in MOUNT_CATALOGS.items():
+        catalog = rows[model.__tablename__]
+        if len({row["name"].lower() for row in catalog}) != len(catalog):
+            raise PackageError(f"Duplicate {kind} type name")
+        ids[kind] = {str(row["id"]) for row in catalog}
+
+    mounts = [place for revision in rows["module_template_revisions"] for place in revision["module_places"]]
+    for prefix, section, impacts in (
+        ("base", "bays", "objects"), ("module", "module_places", "installations"),
     ):
         for state in ("drafts", "candidates"):
             for row in rows[f"{prefix}_template_{state}"]:
-                references.extend(type_id for _, type_id in assignments(row["definition"]))
+                definition = row["definition"]
+                mounts.extend(definition.get(section, ()))
+                if prefix == "module":
+                    mounts.append(definition)
                 if state == "candidates":
-                    references.extend(result_type_references(row["result"], impacts))
-    if any(not isinstance(type_id, str) or type_id not in ids for type_id in references):
-        raise PackageError("Template snapshot requires a canonical UUID of an existing module port type")
+                    mounts.extend(result_mounts(row["result"], impacts))
+    for mount in mounts:
+        fields = {key: mount[key] for key in MOUNT_FIELDS if key in mount} if isinstance(mount, dict) else mount
+        try:
+            ModuleMount.model_validate(fields)
+        except ValidationError as error:
+            raise PackageError("Invalid mount in template snapshot") from error
+        kind, type_id = mount_identity(fields)
+        if type_id not in ids[kind]:
+            raise PackageError("Template snapshot refers to a missing type in its mount catalog")
 
 
 def _validate_module_template_reviews(rows):
@@ -322,12 +338,12 @@ def _validate_module_template_reviews(rows):
     definitions = {}
     for revision in revisions.values():
         try:
-            definitions[revision["id"]] = validate_definition({**{k: revision[k] for k in ("name", "module_port_type_id", "geometry", "module_ports")}, "endpoints": [
+            definitions[revision["id"]] = validate_definition({**{k: revision[k] for k in ("name", "geometry", "module_places", *MOUNT_FIELDS)}, "endpoints": [
                 {"key": e["definition_key"], "display_name": e["display_name"], "kind": e["kind"], "port_type_id": str(e["port_type_id"])}
                 for e in sorted(rows["module_endpoint_definitions"], key=lambda e: e["order_index"]) if e["module_revision_id"] == revision["id"]]})
         except (SchemaError, TypeError) as exc:
             raise PackageError("Invalid module revision definition") from exc
-    if any(revisions[i["module_revision_id"]]["module_ports"] for i in rows["module_installations"]):
+    if any(revisions[i["module_revision_id"]]["module_places"] for i in rows["module_installations"]):
         raise PackageError("Installations with nested module ports are unsupported")
     for receipt in receipts:
         candidate = candidates[receipt["id"]]
@@ -392,7 +408,7 @@ def _validate_template_reviews(rows):
             "body": {"kind": revision["body_kind"], "width": revision["width"], "height": revision["height"], "fill_color": revision["fill_color"]},
             "panels": [{k: p[k] for k in ("panel_key", "panel_number", "display_name", "x", "y", "width", "height", "face")} for p in rows["presentation_panels"] if p["base_revision_id"] == revision["id"]],
             "slots": [{"key": s["slot_key"], "display_name": s["display_name"], "kind": s["kind"], "cardinality": s["cardinality"], "port_type_id": str(s["port_type_id"]), "panel_key": s["panel_key"], "rendered_position": {"x": s["position_x"], "y": s["position_y"]}} for s in rows["built_in_endpoint_definitions"] if s["base_revision_id"] == revision["id"]],
-            "bays": [{k: b[k] for k in ("bay_key", "display_name", "module_port_type_id", "panel_key", "kind", "x", "y", "width", "height")} for b in rows["module_bays"] if b["base_revision_id"] == revision["id"]],
+            "bays": [{k: b[k] for k in ("bay_key", "display_name", "panel_key", "kind", "x", "y", "width", "height", *MOUNT_FIELDS)} for b in rows["module_bays"] if b["base_revision_id"] == revision["id"]],
         }
         keys = {s["id"]: s["slot_key"] for s in rows["built_in_endpoint_definitions"]}
         actual["internal_links"] = [{"from_slot_key": keys[l["slot_a_id"]], "to_slot_key": keys[l["slot_b_id"]], "member_mappings": l["member_mappings"]} for l in rows["base_internal_links"] if l["base_revision_id"] == revision["id"]]
@@ -461,7 +477,7 @@ def _validate_hardware_configuration(rows):
     for installation in installations.values():
         config = configs[installation["configuration_id"]]
         bay = bays.get((config["base_revision_id"], installation["bay_key"]))
-        if bay is None or bay["module_port_type_id"] != revisions[installation["module_revision_id"]]["module_port_type_id"]:
+        if bay is None or mount_identity(bay) != mount_identity(revisions[installation["module_revision_id"]]):
             raise PackageError("Installation has no compatible bay in its owning configuration")
         from app.module_layout import validate_layout
         try:

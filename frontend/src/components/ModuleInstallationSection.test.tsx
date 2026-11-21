@@ -5,8 +5,8 @@ import { I18nProvider } from '../i18n';
 import type { HardwareConfiguration, HardwareModuleDataSource } from '../topology/hardwareModules';
 import { ModuleInstallationSection } from './ModuleInstallationSection';
 
-const module = { template_id: 'template', revision_id: 'revision', name: 'FC25Gb-2', module_port_type_id: 'OCP3', endpoints: [] };
-const free: HardwareConfiguration = { configuration_id: 'config', base_revision_id: 'base-revision', bays: [{ bay_key: 'bay-key', display_name: 'PCIe1', module_port_type_id: 'OCP3', panel_key: 'back', x: .1, y: .1, width: .3, height: .3, installation: null }] };
+const module = { template_id: 'template', revision_id: 'revision', name: 'FC25Gb-2', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'OCP3', endpoints: [] };
+const free: HardwareConfiguration = { configuration_id: 'config', base_revision_id: 'base-revision', bays: [{ bay_key: 'bay-key', display_name: 'PCIe1', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'OCP3', panel_key: 'back', x: .1, y: .1, width: .3, height: .3, installation: null }] };
 const occupied: HardwareConfiguration = { ...free, panels: [{ panel_key: 'back', display_name: 'Back', width: 600, height: 200 }], bays: [{ ...free.bays[0], installation: {
   layout: { panel_key: 'back', x: .1, y: .1, width: .3, height: .2 }, fill_color: '#123456', id: 'stable-installation-id', name: module.name, module_template_id: 'template', module_revision_id: 'revision', orientation: 'HORIZONTAL', endpoints: [{
     key: 'endpoint', port_type_id: 'test-type', kind: 'NETWORK_PORT', installation_id: 'stable-installation-id', panel_key: 'back', panel_display_name: 'Back', bay_key: 'bay-key', bay_display_name: 'PCIe1',
@@ -33,12 +33,12 @@ function tableBayKeys() {
 it('groups mixed places by pinned panel and exact type matching, with stable natural order on reopen', async () => {
   const data = source();
   const logical = (key: string, name: string, module_port_type_id = 'OCP3', panel = 'back'): HardwareConfiguration['bays'][number] => ({
-    kind: 'LOGICAL', bay_key: key, display_name: name, module_port_type_id, panel_key: panel, installation: null,
+    kind: 'LOGICAL', bay_key: key, display_name: name, mount_kind: 'MODULE_PORT' as const, module_port_type_id, panel_key: panel, installation: null,
   });
   const bays = [
     logical('ten', 'Место 10'), logical('two-b', 'Место 2'),
     logical('lower', 'Lower case', 'ocp3'), logical('space', 'With space', 'OCP3 '),
-    { ...free.bays[0], bay_key: 'fixed', display_name: 'Fixed-01', module_port_type_id: 'AUX' },
+    { ...free.bays[0], bay_key: 'fixed', display_name: 'Fixed-01', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'AUX', module_bay_type_id: null },
     logical('front', 'Место 1', 'OCP3', 'front'),
     logical('one', 'Место 1'), logical('two-a', 'Место 2'),
     logical('missing-z', 'Место 1', 'OCP3', 'z'), logical('missing-a', 'Место 1', 'OCP3', 'a'),
@@ -52,7 +52,7 @@ it('groups mixed places by pinned panel and exact type matching, with stable nat
   show(data, vi.fn(), presentation);
   const table = await screen.findByRole('table');
   expect(Array.from(table.querySelectorAll('th[scope="rowgroup"]'), header => header.textContent)).toEqual([
-    'Front · OCP3', 'Back · AUX', 'Back · OCP3', 'Back · ocp3', 'Back · OCP3 ', 'a · OCP3', 'z · OCP3',
+    'Front · Модульный порт · OCP3', 'Back · Модульный порт · AUX', 'Back · Модульный порт · OCP3', 'Back · Модульный порт · ocp3', 'Back · Модульный порт · OCP3 ', 'a · Модульный порт · OCP3', 'z · Модульный порт · OCP3',
   ]);
   const order = ['front', 'fixed', 'one', 'two-a', 'two-b', 'ten', 'lower', 'space', 'missing-a', 'missing-z'];
   expect(tableBayKeys()).toEqual(order);
@@ -353,7 +353,7 @@ it('selects only one module and reopens the explicitly saved layout without chan
 it('reads a logical place without drawing a rectangle and enables installation', async () => {
   const data = source();
   vi.mocked(data.loadConfiguration).mockResolvedValue({ ...free, panels: occupied.panels, bays: [{
-    kind: 'LOGICAL', bay_key: 'logical', display_name: 'Logical place', module_port_type_id: 'OCP3', panel_key: 'back', installation: null,
+    kind: 'LOGICAL', bay_key: 'logical', display_name: 'Logical place', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'OCP3', panel_key: 'back', installation: null,
   }] });
   show(data);
   await screen.findByRole('rowheader', { name: 'Logical place' });

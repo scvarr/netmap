@@ -1,3 +1,4 @@
+import type { ModuleMount } from './hardwareModules';
 export type BlueprintSlotKind = 'CONNECTION_POINT' | 'NETWORK_PORT';
 
 export interface PresentationPanel {
@@ -123,7 +124,7 @@ export interface TemplateStructuralChange {
   before?: unknown;
   after?: unknown;
 }
-export interface TemplateImpactReason { code: string; key?: string | string[]; endpoint_name?: string; dependencies?: string[]; module_port_type_id?: string; installation_id?: string; connection_ids?: string[] }
+export interface TemplateImpactReason { code: string; key?: string | string[]; endpoint_name?: string; dependencies?: string[]; mount?: ModuleMount; installation_id?: string; connection_ids?: string[] }
 export interface BaseTemplateReviewDocument {
   candidate_id: string; draft_generation: number; definition: CreateBaseTemplateRequest; current: boolean; created_at: string;
   published_revision_id?: string | null;

@@ -1,4 +1,5 @@
-import { ModulePortTypeSelect, useModulePortTypes } from './ModulePortTypeSelect';
+import { isModulePlaceMarker, isMountKind, type ModulePlaceDefinition } from '../topology/hardwareModules';
+import { ModuleMountFields, mountKindLabels, useMountTypes } from './ModulePortTypeSelect';
 import { useState } from 'react';
 import { PortTypeSelect, usePortTypes } from './PortTypeSelect';
 import { TemplateElementCreator } from './TemplateElementKindSelect';
@@ -28,9 +29,9 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
 }) {
   const { t } = useI18n();
   const catalog = usePortTypes();
-  const moduleCatalog = useModulePortTypes();
-  const modulePorts = value.module_ports ?? [];
-  const moduleMarkers: ModulePortMarker[] = modulePorts.map(({ key, display_name }) => ({ key, display_name, kind: 'MODULE_PORT' }));
+  const moduleCatalog = useMountTypes();
+  const modulePorts = value.module_places ?? [];
+  const moduleMarkers: ModulePortMarker[] = modulePorts.map(({ key, display_name, mount_kind }) => ({ key, display_name, kind: mount_kind }));
   const markers = [...value.endpoints, ...moduleMarkers];
   const [selection, setSelection] = useState<Set<string>>(() => new Set(markers.slice(0, 1).map(marker => marker.key)));
   const selected = new Set(markers.filter(marker => selection.has(marker.key)).map(marker => marker.key));
@@ -42,7 +43,7 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
   const changeGeometry = (geometry: ModuleGeometry) => {
     onChange({ ...value,
       geometry: { ...geometry, endpoints: Object.fromEntries(value.endpoints.map(endpoint => [endpoint.key, geometry.endpoints[endpoint.key]])) },
-      ...(value.module_ports && { module_ports: modulePorts.map(port => positionModulePort(port, geometry.endpoints[port.key])) }),
+      ...(value.module_places && { module_places: modulePorts.map(port => positionModulePort(port, geometry.endpoints[port.key])) }),
     });
   };
   const changeEndpoints = (endpoints: ModuleTemplateInput['endpoints']) => {
@@ -51,33 +52,32 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
       endpoints: Object.fromEntries(endpoints.map(endpoint => [endpoint.key, positions[endpoint.key]])),
     } });
   };
-  const updateModulePort = (key: string, field: 'display_name' | 'module_port_type_id', text: string) =>
-    onChange({ ...value, module_ports: modulePorts.map(port => port.key === key ? { ...port, [field]: text } : port) });
+  const updateModulePort = (key: string, patch: Partial<ModulePlaceDefinition>) =>
+    onChange({ ...value, module_places: modulePorts.map(port => port.key === key ? { ...port, ...patch } as ModulePlaceDefinition : port) });
   const removeDefinitions = (keys: ReadonlySet<string>) => {
     const endpoints = value.endpoints.filter(endpoint => !keys.has(endpoint.key));
     onChange({ ...value, endpoints, geometry: { ...value.geometry, endpoints: moduleEndpointPositions(endpoints, value.geometry.endpoints) },
-      ...(value.module_ports && { module_ports: modulePorts.filter(port => !keys.has(port.key)) }),
+      ...(value.module_places && { module_places: modulePorts.filter(port => !keys.has(port.key)) }),
     });
     setSelection(old => new Set([...old].filter(key => !keys.has(key))));
   };
   return <fieldset disabled={disabled} className="module-template-editor">
     <aside className="blueprint-editor-controls module-template-editor__controls">
       <label>{t('hardware.name')}<input required value={value.name} onChange={e => onChange({ ...value, name: e.target.value })} /></label>
-      <ModulePortTypeSelect types={moduleCatalog.types} value={value.module_port_type_id}
-        onChange={module_port_type_id => onChange({ ...value, module_port_type_id })} />
+      <ModuleMountFields catalogs={moduleCatalog} mount={value} onChange={mount => onChange({ ...value, ...mount })} />
       <h2>{t('blueprint.endpoint.elements')}</h2>
       <p role="status">{t('blueprint.layout.selected', { count: selected.size })}</p>
       <TemplateElementCreator moduleCatalog={moduleCatalog} catalog={catalog}
-        onAddModulePorts={(count, module_port_type_id) => {
+        onAddModulePlaces={(count, mount) => {
           const names = new Set(markers.map(marker => marker.display_name));
-          const prefix = t('blueprint.endpoint.modulePort');
+          const prefix = t(mountKindLabels[mount.mount_kind]);
           let number = 1;
           const added = Array.from({ length: count }, () => {
             while (names.has(`${prefix} ${number}`)) number++;
-            return { key: crypto.randomUUID(), display_name: `${prefix} ${number++}`, module_port_type_id };
+            return { key: crypto.randomUUID(), display_name: `${prefix} ${number++}`, ...mount };
           });
           const positions = moduleEndpointPositions([...markers, ...added], markerGeometry.endpoints);
-          onChange({ ...value, module_ports: [...modulePorts, ...added.map(port => ({ ...port, ...positions[port.key] }))] });
+          onChange({ ...value, module_places: [...modulePorts, ...added.map(port => ({ ...port, ...positions[port.key] }))] });
           setSelection(new Set(added.map(port => port.key)));
           return true;
         }}
@@ -100,24 +100,24 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
             setSelection(next);
           }} />
           <button type="button" className="module-template-editor__port-name" onClick={() => setSelection(new Set([marker.key]))}>{marker.display_name || `#${index + 1}`}</button>
-          <span>{t(marker.kind === 'MODULE_PORT' ? 'blueprint.endpoint.modulePort' : marker.kind === 'NETWORK_PORT' ? 'blueprint.endpoint.networkPort' : 'blueprint.endpoint.connectionPoint')}</span>
+          <span>{t(isMountKind(marker.kind) ? mountKindLabels[marker.kind] : marker.kind === 'NETWORK_PORT' ? 'blueprint.endpoint.networkPort' : 'blueprint.endpoint.connectionPoint')}</span>
         </div>)}
       </div>
       {active && (() => {
-        const isModulePort = active.kind === 'MODULE_PORT';
+        const isModulePort = isModulePlaceMarker(active);
         const definitions = isModulePort ? modulePorts : value.endpoints;
         const index = definitions.findIndex(item => item.key === active.key);
         const changeEndpoint = (patch: Partial<ModuleTemplateInput['endpoints'][number]>) =>
           changeEndpoints(value.endpoints.map(item => item.key === active.key ? { ...item, ...patch } : item));
         return <fieldset className="endpoint-group">
-          <legend>{t(isModulePort ? 'blueprint.endpoint.modulePort' : 'moduleGeometry.portDetails')}</legend>
+          <legend>{t(isMountKind(active.kind) ? mountKindLabels[active.kind] : 'moduleGeometry.portDetails')}</legend>
           <label>{t('hardware.name')}<input required value={active.display_name} onChange={event => {
-            if (isModulePort) updateModulePort(active.key, 'display_name', event.target.value);
+            if (isModulePort) updateModulePort(active.key, { display_name: event.target.value });
             else changeEndpoint({ display_name: event.target.value });
           }} /></label>
           {isModulePort
-            ? <ModulePortTypeSelect types={moduleCatalog.types} value={modulePorts[index].module_port_type_id}
-                onChange={id => updateModulePort(active.key, 'module_port_type_id', id)} />
+            ? <ModuleMountFields catalogs={moduleCatalog} mount={modulePorts[index]}
+                onChange={mount => updateModulePort(active.key, mount)} />
             : <>
               <PortTypeSelect types={catalog.types} value={active.port_type_id} singleMember={active.kind === 'NETWORK_PORT'}
                 onChange={port_type_id => changeEndpoint({ port_type_id })} />
@@ -136,7 +136,7 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
             disabled={index + delta < 0 || index + delta >= definitions.length} onClick={() => {
               const order = [index, index + delta];
               const swap = <T,>(items: T[]) => items.map((item, i) => i === order[0] ? items[order[1]] : i === order[1] ? items[order[0]] : item);
-              if (isModulePort) onChange({ ...value, module_ports: swap(modulePorts) });
+              if (isModulePort) onChange({ ...value, module_places: swap(modulePorts) });
               else changeEndpoints(swap(value.endpoints));
             }}>{t(delta < 0 ? 'moduleReview.up' : 'moduleReview.down')}</button>)}
             <button type="button" onClick={() => removeDefinitions(new Set([active.key]))}>{t('hardware.remove')}</button>

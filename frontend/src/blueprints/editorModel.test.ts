@@ -598,7 +598,7 @@ describe('BASE-UX-01 panel trim', () => {
     const state = addEndpoints(initial, 'NETWORK_PORT', 48, initial.activePanelKey, 'test-type');
     state.name = 'Trim';
     state.slots = state.slots.map((slot, i) => ({ ...slot, rendered_position: { x: .1 + (i % 24) * .025, y: i < 24 ? .3 : .6 } }));
-    state.bays = [{ kind: 'PLACED', bay_key: 'bay', panel_key: state.activePanelKey, display_name: 'Bay', module_port_type_id: 'test', x: .75, y: .2, width: .1, height: .4 }];
+    state.bays = [{ kind: 'PLACED', bay_key: 'bay', panel_key: state.activePanelKey, display_name: 'Bay', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'test', x: .75, y: .2, width: .1, height: .4 }];
     return state;
   };
   it.each(['n','ne','e','se','s','sw','w','nw'] as const)('preserves absolute geometry, identity and publication through %s trim', handle => {

@@ -28,7 +28,7 @@ const draft = (): BaseTemplateDraftDocument => ({ template_id: 'base', source_re
   definition: { name: 'Сохранённый черновик', default_physical_object_class: 'server', body: { kind: 'RECTANGLE', width: 160, height: 60, fill_color: '#28565a' },
     panels: [{ panel_key: 'panel', panel_number: 1, display_name: 'Front', x: 0, y: 0, width: 160, height: 60 }],
     slots: [{ key: 'endpoint', display_name: 'MGMT', port_type_id: 'test-type', kind: 'NETWORK_PORT', panel_key: 'panel', rendered_position: { x: .2, y: .5 } }],
-    internal_links: [], bays: [{ bay_key: 'stable-bay', display_name: 'OCP bay', module_port_type_id: 'OCP3', panel_key: 'panel', x: .2, y: .1, width: .6, height: .8 }] } });
+    internal_links: [], bays: [{ bay_key: 'stable-bay', display_name: 'OCP bay', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'OCP3', panel_key: 'panel', x: .2, y: .1, width: .6, height: .8 }] } });
 const withReview = (doc: BaseTemplateDraftDocument): BaseTemplateDraftDocument => ({ ...doc, review: {
   candidate_id: 'candidate', draft_generation: doc.generation, definition: doc.definition, current: true, created_at: '2026-10-16T12:00:00Z',
   result: { changes: [{ section: 'slots', key: 'new-endpoint', operation: 'added' }], objects: [{ physical_object_id: 'object', source_revision_id: 'published', classification: 'potentially_safe', reasons: [{ code: 'IDENTITY_AND_DATA_PRESERVED' }], proposed_placements: {}, changes: [] }] },
@@ -109,7 +109,7 @@ it('authors exact logical groups and keeps their individual bays through draft r
   view.unmount();
   mount();
   fireEvent.click(await screen.findByText('Модульные места · 4'));
-  const group = within(screen.getByRole('group', { name: '1 · Front / OCP3' }));
+  const group = within(screen.getByRole('group', { name: '1 · Front / Модульный порт · OCP3' }));
   const count = () => group.getByLabelText('Количество мест');
   const apply = (value: string) => {
     fireEvent.change(count(), { target: { value } });
@@ -369,7 +369,7 @@ it('shows zero checked objects without claiming a successful update', async () =
 it('describes exact logical changes and keeps technical keys behind disclosure', async () => {
   const doc = withReview(draft());
   const logical = (bay_key: string, module_port_type_id: string) => ({
-    bay_key, module_port_type_id, panel_key: 'panel', kind: 'LOGICAL' as const,
+    bay_key, mount_kind: 'MODULE_PORT' as const, module_port_type_id, panel_key: 'panel', kind: 'LOGICAL' as const,
     display_name: 'Место', x: null, y: null, width: null, height: null,
   });
   doc.definition.bays = [logical('first', 'OCP3'), logical('second', 'OCP3'), logical('lower', 'SFP+'), logical('spaced', 'QSFP+')];
@@ -385,7 +385,7 @@ it('describes exact logical changes and keeps technical keys behind disclosure',
   safe.display_name = 'Safe server';
   doc.review!.result.objects.push({
     ...safe, physical_object_id: 'blocked', display_name: 'Blocked server', classification: 'requires_intervention',
-    reasons: [{ code: 'INSUFFICIENT_COMPATIBLE_CAPACITY', module_port_type_id: 'OCP3', installation_id: key }],
+    reasons: [{ code: 'INSUFFICIENT_COMPATIBLE_CAPACITY', mount: { mount_kind: 'MODULE_PORT', module_port_type_id: 'OCP3' }, installation_id: key }],
   });
   const { source, mount } = setup(doc);
   mount();

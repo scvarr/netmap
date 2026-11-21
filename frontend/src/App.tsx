@@ -87,6 +87,7 @@ export function App(props: AppProps) {
         <Route path="infrastructure/cable-label-templates" element={props.cableLabelDataSource ? <CableLabelTemplatesPage dataSource={props.cableLabelDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="catalogs/port-types" element={<PhysicalCatalogPage key="port-types" catalog="port-types" />} />
         <Route path="catalogs/module-port-types" element={<PhysicalCatalogPage key="module-port-types" catalog="module-port-types" />} />
+        <Route path="catalogs/module-bay-types" element={<PhysicalCatalogPage key="module-bay-types" catalog="module-bay-types" />} />
         <Route path="catalogs/connector-types" element={<PhysicalCatalogPage key="connector-types" catalog="connector-types" />} />
         <Route path="catalogs/cable-types" element={<PhysicalCatalogPage key="cable-types" catalog="cable-types" />} />
         <Route path="settings/data" element={<WorkspaceDataPage />} />

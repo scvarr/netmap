@@ -93,7 +93,7 @@ it('authors a diamond-shaped module port without assigning a PortType', async ()
   fireEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));
   await waitFor(() => expect(createModule).toHaveBeenCalledWith(expect.objectContaining({
     endpoints: [],
-    module_ports: [{ key: expect.any(String), display_name: 'Child bay', module_port_type_id: 'Lab / custom', x: .2, y: .5 }],
+    module_places: [{ key: expect.any(String), display_name: 'Child bay', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'Lab / custom', module_bay_type_id: null, x: .2, y: .5 }],
   })));
 });
 
@@ -122,7 +122,7 @@ it.each([2, 48, 256])('creates and reopens %i separate module ports', async coun
   fireEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));
   await waitFor(() => expect(createModule).toHaveBeenCalledOnce());
   const saved = createModule.mock.calls[0][0] as import('../topology/hardwareModules').ModuleTemplateInput;
-  const ports = saved.module_ports!;
+  const ports = saved.module_places!;
   expect(saved.endpoints).toEqual([]);
   expect(ports).toHaveLength(count);
   expect(new Set(ports.map(port => port.key)).size).toBe(count);
@@ -135,4 +135,32 @@ it.each([2, 48, 256])('creates and reopens %i separate module ports', async coun
   unmount();
   render(<I18nProvider><MemoryRouter><ModuleTemplateEditor value={saved} onChange={vi.fn()} /></MemoryRouter></I18nProvider>);
   expect(positions()).toEqual(before);
+});
+
+
+it('uses separate catalogs for a PCIe card and its SFP+ port', async () => {
+  vi.stubGlobal('fetch', vi.fn(async url => Response.json(
+    String(url).endsWith('/module-bay-types') ? [{ id: 'pcie', name: 'PCIe x16', is_active: true }]
+      : String(url).endsWith('/module-port-types') ? [{ id: 'sfpplus', name: 'SFP+', is_active: true }] : catalog,
+  )));
+  const createModule = vi.fn().mockResolvedValue({});
+  const { container } = render(<I18nProvider><MemoryRouter>
+    <NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} />
+  </MemoryRouter></I18nProvider>);
+  fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'PCIe card' } });
+  fireEvent.change(screen.getByLabelText('Вид посадочного места'), { target: { value: 'MODULE_BAY' } });
+  await screen.findByRole('option', { name: 'PCIe x16' });
+  expect(screen.queryByRole('option', { name: 'SFP+' })).toBeNull();
+  fireEvent.change(screen.getByLabelText('Совместимость'), { target: { value: 'pcie' } });
+  const chooser = within(container.querySelector<HTMLElement>('.template-element-creator')!);
+  fireEvent.change(chooser.getByLabelText('Вид точки'), { target: { value: 'MODULE_PORT' } });
+  await chooser.findByRole('option', { name: 'SFP+' });
+  expect(chooser.queryByRole('option', { name: 'PCIe x16' })).toBeNull();
+  fireEvent.change(chooser.getByLabelText('Совместимость модульного порта'), { target: { value: 'sfpplus' } });
+  fireEvent.click(chooser.getByRole('button', { name: /^Добавить$/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));
+  await waitFor(() => expect(createModule).toHaveBeenCalledWith(expect.objectContaining({
+    mount_kind: 'MODULE_BAY', module_bay_type_id: 'pcie',
+    module_places: [expect.objectContaining({ mount_kind: 'MODULE_PORT', module_port_type_id: 'sfpplus' })],
+  })));
 });

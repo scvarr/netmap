@@ -98,7 +98,7 @@ export function BlueprintPreview({ portTypes, body, panels, slots, internalLinks
               stroke="#b6dfd3" opacity=".8" vectorEffect="non-scaling-stroke" /> : null;
           })}
           {markers.map(port => <g key={port.key} data-slot-key={port.key}>
-            <EndpointMarker fill={portTypes?.find(type => port.kind !== 'MODULE_PORT' && type.id === port.port_type_id)?.color} kind={port.kind} label={port.display_name} cx={port.x} cy={port.y} r={port.radius / scale}
+            <EndpointMarker fill={portTypes?.find(type => 'port_type_id' in port && type.id === port.port_type_id)?.color} kind={port.kind} label={port.display_name} cx={port.x} cy={port.y} r={port.radius / scale}
               stroke="#1c3135" strokeWidth={port.radius * .4 / scale} />
           </g>)}
         </svg>

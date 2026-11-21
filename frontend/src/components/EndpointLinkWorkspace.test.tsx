@@ -1,9 +1,10 @@
+import { moduleMount } from '../topology/hardwareModules';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, it, expect } from 'vitest';
 import { I18nProvider } from '../i18n';
 import { newBlueprintEditorState } from '../pages/BaseTemplateEditor';
-import { addEndpoints, addModulePorts, addPanel, type BlueprintEditorState } from '../blueprints/editorModel';
+import { addEndpoints, addModulePlaces, addPanel, type BlueprintEditorState } from '../blueprints/editorModel';
 import { EndpointLinkWorkspace } from './EndpointLinkWorkspace';
 
 function setup(count = 2, configure = (state: BlueprintEditorState) => state) {
@@ -26,7 +27,7 @@ describe('unified endpoint workspace', () => {
   it('previews spatially ordered names across all marker kinds and keeps continuity physical', () => {
     const s = setup(2, state => {
       state.slots[0].kind = 'NETWORK_PORT';
-      return addModulePorts(state, state.activePanelKey, 1, 'Custom / 7');
+      return addModulePlaces(state, state.activePanelKey, 1, moduleMount('MODULE_PORT', 'Custom / 7'));
     });
     const a = s.side('A');
     fireEvent.change(a.getByLabelText('Сортировка'), { target: { value: 'spatial' } });

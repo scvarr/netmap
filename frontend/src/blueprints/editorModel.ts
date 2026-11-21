@@ -1,3 +1,4 @@
+import { isModulePlaceMarker, moduleMount, mountTypeId, type ModuleMount } from '../topology/hardwareModules';
 import type { BaseInternalLink, BlueprintSlot, BlueprintSlotKind, CreateBaseTemplateRequest, BaseTemplateRevisionDocument, PresentationPanel } from '../topology/baseTemplateTypes';
 import { isPlacedBay, moduleBayMarkers, positionModulePort, type BlueprintMarker } from '../topology/hardwareModules';
 
@@ -323,10 +324,10 @@ export const copySelectionToPanel = (state: BlueprintEditorState, keys: Readonly
   const copiedKeys = sources.map((source, index) => {
     const key = crypto.randomUUID();
     const display_name = `${panel.panel_number}-${next + index}`;
-    if (source.kind === 'MODULE_PORT') {
+    if (isModulePlaceMarker(source)) {
       const original = state.bays!.find(bay => bay.bay_key === source.key)!;
       bays.push({ kind: 'PLACED', bay_key: key, display_name, panel_key: destinationPanelKey,
-        module_port_type_id: original.module_port_type_id, ...source.rendered_position });
+        ...moduleMount(original.mount_kind, mountTypeId(original)), ...source.rendered_position });
     } else {
       slots.push({ ...source, key, display_name, panel_key: destinationPanelKey, rendered_position: { ...source.rendered_position } });
       if (createContinuity) links.push({ from_slot_key: source.key, to_slot_key: key });
@@ -371,11 +372,11 @@ export const addEndpoints = (state: BlueprintEditorState, kind: BlueprintSlotKin
   return { ...state, nextLocalNumberByPanel: batch.nextLocalNumberByPanel, slots: [...state.slots, ...slots] };
 };
 
-export const addModulePorts = (state: BlueprintEditorState, panelKey: string, count: number, module_port_type_id: string): BlueprintEditorState => {
+export const addModulePlaces = (state: BlueprintEditorState, panelKey: string, count: number, mount: ModuleMount): BlueprintEditorState => {
   const batch = newPanelMarkers(state, count, panelKey);
   if (!batch) return state;
   const bays = batch.markers.map(({ key, rendered_position, ...marker }) => ({
-    ...marker, ...rendered_position, kind: 'PLACED' as const, bay_key: key, module_port_type_id,
+    ...marker, ...rendered_position, kind: 'PLACED' as const, bay_key: key, ...mount,
   }));
   return { ...state, nextLocalNumberByPanel: batch.nextLocalNumberByPanel, bays: [...state.bays ?? [], ...bays] };
 };

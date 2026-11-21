@@ -10,7 +10,7 @@ from tests import test_base_template_review as base_review
 
 
 def module_port():
-    return {"key": str(uuid.uuid4()), "display_name": " Гнездо 1 ", "module_port_type_id": ensure_module_port_type_id(" Lab / оптика 42 "),
+    return {"key": str(uuid.uuid4()), "display_name": " Гнездо 1 ", "mount_kind": "MODULE_PORT", "module_port_type_id": ensure_module_port_type_id(" Lab / оптика 42 "),
             "x": .15, "y": .2, "width": .41, "height": .35}
 
 
@@ -45,13 +45,13 @@ def test_module_port_revision_copy_and_workspace_roundtrip():
     draft = open_draft(template_id)
     definition = copy.deepcopy(draft["definition"])
     port = module_port()
-    marker = {"key": str(uuid.uuid4()), "display_name": "Anchor", "module_port_type_id": ensure_module_port_type_id("Open spec"), "x": 1, "y": 0}
-    definition["module_ports"] = [port, marker]
+    marker = {"key": str(uuid.uuid4()), "display_name": "Anchor", "mount_kind": "MODULE_PORT", "module_port_type_id": ensure_module_port_type_id("Open spec"), "x": 1, "y": 0}
+    definition["module_places"] = [port, marker]
     definition["endpoints"].append({**definition["endpoints"][0], "key": "patch", "kind": "CONNECTION_POINT", "display_name": "Patch"})
     checked = check(template_id, save(template_id, draft, definition))
     candidate = checked["review"]
     assert open_draft(template_id)["definition"] == candidate["definition"] == definition
-    assert {"section": "module_ports", "operation": "added", "key": port["key"], "before": None, "after": port} in candidate["result"]["changes"]
+    assert {"section": "module_places", "operation": "added", "key": port["key"], "before": None, "after": port} in candidate["result"]["changes"]
     assert candidate["result"]["installations"][0]["reasons"] == [{"code": "NESTED_MODULE_PORTS_UNSUPPORTED"}]
     published = client.post(f"/v1/library/module-templates/{template_id}/candidates/{candidate['candidate_id']}/publish")
     assert published.status_code == 200, published.text
@@ -73,20 +73,20 @@ def test_module_port_revision_copy_and_workspace_roundtrip():
     assert {key: current[key] for key in definition} == definition
     duplicate = client.post("/v1/library/module-templates", json={**definition, "name": "Copy"})
     assert duplicate.status_code == 201, duplicate.text
-    assert duplicate.json()["module_ports"] == [port, marker]
+    assert duplicate.json()["module_places"] == [port, marker]
 
     reopened = open_draft(template_id)
     renamed = {**port, "display_name": "Moved", "x": .25}
-    save(template_id, reopened, {**definition, "module_ports": [renamed, marker]})
+    save(template_id, reopened, {**definition, "module_places": [renamed, marker]})
     package = client.get("/v1/workspace/package").json()
     revisions = {item["id"]: item for item in package["authoring"]["ModuleTemplateRevision"]}
-    assert revisions[module["revision_id"]]["module_ports"] == []
-    assert revisions[published.json()["revision_id"]]["module_ports"] == [port, marker]
+    assert revisions[module["revision_id"]]["module_places"] == []
+    assert revisions[published.json()["revision_id"]]["module_places"] == [port, marker]
     assert client.delete("/v1/workspace/dataset").status_code == 204
     imported = client.post("/v1/workspace/package", json=package)
     assert imported.status_code == 204, imported.text
     assert client.get("/v1/workspace/package").json() == package
-    assert open_draft(template_id)["definition"]["module_ports"] == [renamed, marker]
+    assert open_draft(template_id)["definition"]["module_places"] == [renamed, marker]
 
 
 def test_base_marker_revision_and_legacy_installation_survive_workspace_roundtrip():
@@ -117,7 +117,7 @@ def test_base_marker_revision_and_legacy_installation_survive_workspace_roundtri
     assert edited in base_review.open_draft(base)["definition"]["bays"]
     assert client.get(configuration_url).json() == pinned
     package = client.get("/v1/workspace/package").json()
-    assert package["format_version"] == 12
+    assert package["format_version"] == 13
     assert client.delete("/v1/workspace/dataset").status_code == 204
     imported = client.post("/v1/workspace/package", json=package)
     assert imported.status_code == 204, imported.text
@@ -127,9 +127,9 @@ def test_base_marker_revision_and_legacy_installation_survive_workspace_roundtri
 
 @pytest.mark.parametrize("invalid", [{"module_port_type_id": "  "}, {"x": .9}, {"width": 0}, {"port_type_id": None}, {"key": "endpoint"}])
 def test_module_port_definition_rejects_invalid_structure(invalid):
-    definition = {"name": "Module", "module_port_type_id": ensure_module_port_type_id("Custom"), "endpoints": [],
+    definition = {"name": "Module", "mount_kind": "MODULE_PORT", "module_port_type_id": ensure_module_port_type_id("Custom"), "endpoints": [],
                   "geometry": {"width": 240, "height": 80, "fill_color": "#000000", "endpoints": {}},
-                  "module_ports": [{**module_port(), **invalid}]}
+                  "module_places": [{**module_port(), **invalid}]}
     if invalid.get("key") == "endpoint":
         definition["endpoints"] = [{"key": "endpoint", "display_name": "Physical", "kind": "NETWORK_PORT",
                                     "port_type_id": str(uuid.uuid4())}]

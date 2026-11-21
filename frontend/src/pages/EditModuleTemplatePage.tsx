@@ -1,3 +1,4 @@
+import { mountTypeId } from '../topology/hardwareModules';
 import { moduleEndpointPositions } from '../topology/hardwareModules';
 import { ModuleTemplateEditor } from '../components/ModuleTemplateEditor';
 import { useEffect, useRef, useState } from 'react';
@@ -6,7 +7,7 @@ import { PageHeader, PageShell } from '../components/PageChrome';
 import { useI18n } from '../i18n';
 import { moduleReviewDataSource, type ModuleReconciliationResult, type ModuleDraftDocument, type ModuleReviewDataSource, type ModuleTemplateInput } from '../topology/hardwareModules';
 
-const signature = (d: ModuleTemplateInput) => JSON.stringify([d.name, d.module_port_type_id, d.geometry, d.module_ports ?? [], d.endpoints.map(e => [e.key, e.display_name, e.kind])]);
+const signature = (d: ModuleTemplateInput) => JSON.stringify([d.name, d.mount_kind, mountTypeId(d), d.geometry, d.module_places ?? [], d.endpoints.map(e => [e.key, e.display_name, e.kind])]);
 
 export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: { dataSource?: ModuleReviewDataSource }) {
   const { templateId = '' } = useParams(); const { t } = useI18n();
@@ -75,7 +76,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
     {error && <p role="alert">{error}</p>}
     {definition && <form className="module-template-form" onSubmit={e => { e.preventDefault(); void run(false); }}>
       <ModuleTemplateEditor value={definition} onChange={change} disabled={busy} />
-        <button type="submit" className="primary-action" disabled={busy || revalidating || !definition.name.trim() || !definition.module_port_type_id.trim() || definition.endpoints.some(e => !e.display_name.trim()) || definition.module_ports?.some(port => !port.display_name.trim() || !port.module_port_type_id.trim())}>{t('review.save')}</button>
+        <button type="submit" className="primary-action" disabled={busy || revalidating || !definition.name.trim() || !mountTypeId(definition) || definition.endpoints.some(e => !e.display_name.trim()) || definition.module_places?.some(port => !port.display_name.trim() || !mountTypeId(port))}>{t('review.save')}</button>
     </form>}
     {document?.publication_state && <section aria-label={t('publication.state')}>
       <p>{t('publication.revision', { number: document.publication_state.version_number })}</p>
@@ -120,7 +121,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
         <p>{t('review.candidate', { id: review.candidate_id, time: review.created_at })}</p>
         <p>{t(review.published_revision_id ? 'publication.candidatePublished' : current ? 'review.current' : 'review.stale')}</p>
         {current && <>
-          <ul>{review.result.changes.map((c, i) => <li key={i}>{t(c.section === 'endpoints' ? 'moduleReview.endpoints' : c.section === 'module_ports' ? 'blueprint.endpoint.modulePort' : 'review.section.properties')} В· {t(`review.operation.${c.operation}`)} В· {c.section === 'properties' ? t(c.key === 'name' ? 'hardware.name' : 'hardware.compatibility') : (typeof c.after === 'object' && c.after && 'display_name' in c.after && c.after.display_name) || (typeof c.before === 'object' && c.before && 'display_name' in c.before && c.before.display_name) || t('moduleGeometry.title')}</li>)}</ul>
+          <ul>{review.result.changes.map((c, i) => <li key={i}>{t(c.section === 'endpoints' ? 'moduleReview.endpoints' : c.section === 'module_places' ? 'moduleMount.places' : 'review.section.properties')} В· {t(`review.operation.${c.operation}`)} В· {c.section === 'properties' ? t(c.key === 'name' ? 'hardware.name' : 'hardware.compatibility') : (typeof c.after === 'object' && c.after && 'display_name' in c.after && c.after.display_name) || (typeof c.before === 'object' && c.before && 'display_name' in c.before && c.before.display_name) || t('moduleGeometry.title')}</li>)}</ul>
           {!review.result.installations.length && <p>{t('moduleReview.noInstallations')}</p>}
           <ul>{review.result.installations.map(i => <li key={i.installation_id}>
             <Link to={`/infrastructure/objects/${i.physical_object_id}`}>{i.display_name}</Link>

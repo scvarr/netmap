@@ -1,3 +1,4 @@
+import { parseMount } from './hardwareModules';
 import type {
   BlueprintBody,
   BaseInternalLink,
@@ -64,7 +65,7 @@ const parseLink = (value: unknown, path: string): BaseInternalLink => {
 
 const parseBay = (value: unknown, path: string): import('./hardwareModules').ModuleBay => {
   const bay = requireObject(value, path);
-  const identity = { bay_key: requireString(bay.bay_key, `${path}.bay_key`), panel_key: requireString(bay.panel_key, `${path}.panel_key`), display_name: requireString(bay.display_name, `${path}.display_name`), module_port_type_id: requireString(bay.module_port_type_id, `${path}.module_port_type_id`) };
+  const identity = { bay_key: requireString(bay.bay_key, `${path}.bay_key`), panel_key: requireString(bay.panel_key, `${path}.panel_key`), display_name: requireString(bay.display_name, `${path}.display_name`), ...parseMount(bay) };
   if (bay.kind === 'LOGICAL') {
     if (['x', 'y', 'width', 'height'].some(k => bay[k] != null)) malformed(`${path}: logical place has geometry.`);
     return { ...identity, kind: 'LOGICAL' };

@@ -83,12 +83,12 @@ def test_exact_compatibility_no_relocation(type_name):
     _, module, _ = setup_installations(1)
     template_id = module['template_id']
     draft = open_draft(template_id)
-    saved = save(template_id, draft, {**draft['definition'], 'module_port_type_id': ensure_module_port_type_id(type_name)})
+    saved = save(template_id, draft, {**draft['definition'], 'mount_kind': "MODULE_PORT", 'module_port_type_id': ensure_module_port_type_id(type_name)})
     assert saved['definition']['module_port_type_id'] == ensure_module_port_type_id(type_name)
     impact = check(template_id, saved)['review']['result']['installations'][0]
     assert impact['classification'] == ('potentially_safe' if type_name == 'OCP3' else 'requires_intervention')
     if type_name != 'OCP3':
-        assert impact['reasons'] == [{'code': 'BAY_COMPATIBILITY_MISMATCH', 'module_port_type_id': ensure_module_port_type_id(type_name)}]
+        assert impact['reasons'] == [{'code': 'BAY_COMPATIBILITY_MISMATCH', 'mount': {'mount_kind': 'MODULE_PORT', 'module_port_type_id': ensure_module_port_type_id(type_name)}}]
     assert 'proposed_placements' not in impact
 
 
@@ -232,7 +232,7 @@ def test_invalid_materialization_requires_intervention(damage):
 def test_retained_endpoint_with_invalid_cardinality_requires_intervention(kind):
     base_id, payload = create_base()
     response = client.post('/v1/library/module-templates', json={
-        'name': 'Module', 'module_port_type_id': ensure_module_port_type_id('OCP3'), 'geometry': {'width': 240, 'height': 80, 'fill_color': '#64748b', 'endpoints': {'retained': {'x': .5, 'y': .5}}},
+        'name': 'Module', 'mount_kind': "MODULE_PORT", 'module_port_type_id': ensure_module_port_type_id('OCP3'), 'geometry': {'width': 240, 'height': 80, 'fill_color': '#64748b', 'endpoints': {'retained': {'x': .5, 'y': .5}}},
         'endpoints': [{'key': 'retained', 'display_name': 'P1', 'port_type_id': ensure_port_type_id(), 'kind': kind}],
     })
     assert response.status_code == 201, response.text
@@ -311,7 +311,7 @@ def test_workspace_roundtrip():
     definition['endpoints'].append({'key': str(uuid.uuid4()), 'display_name': 'New', 'port_type_id': ensure_port_type_id(), 'kind': 'CONNECTION_POINT'})
     checked = check(module['template_id'], save(module['template_id'], draft, definition))
     package = client.get('/v1/workspace/package').json()
-    assert package['format_version'] == 12
+    assert package['format_version'] == 13
     assert client.delete('/v1/workspace/dataset').status_code == 204
     response = client.post('/v1/workspace/package', json=package)
     assert response.status_code == 204, response.text

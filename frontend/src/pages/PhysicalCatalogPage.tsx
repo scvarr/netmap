@@ -6,14 +6,14 @@ import { PageHeader, PageShell } from '../components/PageChrome';
 
 import type { CableType, CatalogType, ConnectorType, Medium, PortType } from '../components/PortTypeSelect';
 
-import type { ModulePortType } from '../components/ModulePortTypeSelect';
+import type { MountType } from '../components/ModulePortTypeSelect';
 
-type Catalog = 'module-port-types' | 'port-types' | 'connector-types' | 'cable-types';
-type Item = PortType | ConnectorType | CableType | ModulePortType;
+type Catalog = 'module-bay-types' | 'module-port-types' | 'port-types' | 'connector-types' | 'cable-types';
+type Item = PortType | ConnectorType | CableType | MountType;
 type Fields = Omit<CatalogType, 'id'>;
-type Payload = Omit<ModulePortType, 'id'> & Partial<Fields> & ReturnType<typeof structureOf>;
-const titles = { 'module-port-types': 'modulePortTypes.title', 'port-types': 'portTypes.title', 'connector-types': 'physicalCatalog.connectorTypes', 'cable-types': 'physicalCatalog.cableTypes' } as const;
-const createLabels = { 'module-port-types': 'modulePortTypes.create', 'port-types': 'portTypes.create', 'connector-types': 'physicalCatalog.createConnector', 'cable-types': 'physicalCatalog.createCable' } as const;
+type Payload = Omit<MountType, 'id'> & Partial<Fields> & ReturnType<typeof structureOf>;
+const titles = { 'module-bay-types': 'moduleBayTypes.title', 'module-port-types': 'modulePortTypes.title', 'port-types': 'portTypes.title', 'connector-types': 'physicalCatalog.connectorTypes', 'cable-types': 'physicalCatalog.cableTypes' } as const;
+const createLabels = { 'module-bay-types': 'moduleBayTypes.create', 'module-port-types': 'modulePortTypes.create', 'port-types': 'portTypes.create', 'connector-types': 'physicalCatalog.createConnector', 'cable-types': 'physicalCatalog.createCable' } as const;
 const emptyStructure = { medium: 'COPPER' as Medium, members: '', connector_type_id: '', mating_profile: '', termination: 'SOCKET' as ConnectorType['termination'], construction: '' };
 
 function structureOf(item: Item) {
@@ -32,7 +32,7 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
   const { t, locale } = useI18n();
   const endpoint = '/api/v1/' + catalog;
   const title = t(titles[catalog]);
-  const modular = catalog === 'module-port-types';
+  const modular = catalog === 'module-port-types' || catalog === 'module-bay-types';
   const [params, setParams] = useSearchParams();
   const search = params.get('q') ?? '';
   const status = params.get('status') ?? 'all';

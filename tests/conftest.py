@@ -6,7 +6,7 @@ from sqlalchemy.engine import make_url
 
 from app.database import SessionLocal
 from app.models import (
-    ModulePortType, PortType,
+    ModuleBayType, ModulePortType, PortType,
     ModuleBay, ModuleTemplate, ModuleTemplateRevision, ModuleEndpointDefinition, ModuleInstallation, ModuleEndpointMapping,
     Connection,
     CableLabelHistory,
@@ -101,6 +101,7 @@ def clean_database(request: pytest.FixtureRequest):
         session.execute(delete(ModuleTemplate))
         session.execute(delete(ModuleBay))
         session.execute(delete(ModulePortType))
+        session.execute(delete(ModuleBayType))
         session.execute(delete(BuiltInEndpointMapping))
         session.execute(delete(ObjectConfiguration))
         session.execute(delete(BaseInternalLink))

@@ -1,11 +1,12 @@
-import { modulePortTypeName, useModulePortTypes } from '../components/ModulePortTypeSelect';
+import { mountTypeId, parseMount, type ModuleMount } from '../topology/hardwareModules';
+import { mountTypeName, useMountTypes } from '../components/ModulePortTypeSelect';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n, type MessageKey } from '../i18n';
 import type { BaseTemplateDraftDocument, BaseTemplateReconciliationResult, BaseTemplateReviewDocument, TemplateImpactReason } from '../topology/baseTemplateTypes';
 
 function useReasonDescription() {
-  const { types } = useModulePortTypes();
+  const catalogs = useMountTypes();
   const { t } = useI18n();
   return (r: TemplateImpactReason) => {
     const labels = {
@@ -24,7 +25,7 @@ function useReasonDescription() {
       ROUTING_POLICY_RULES: 'review.dep.routing', ROUTING_POLICIES: 'review.dep.routing', NETWORK_INTERFACE_PHYSICAL_OWNERS: 'review.dep.owner',
       BUILT_IN_ENDPOINT_MAPPINGS: 'review.dep.mapping', MODULE_ENDPOINT_MAPPINGS: 'review.dep.mapping', CONNECTION_POINT_DATA: 'review.dep.point',
     } as const;
-    return `${t(labels[r.code as keyof typeof labels] ?? 'review.reason.unknown')} ${r.endpoint_name ?? (r.key ? (Array.isArray(r.key) ? r.key.join(' в†” ') : r.key) : '')} ${r.module_port_type_id === undefined ? '' : modulePortTypeName(types, r.module_port_type_id)}${r.dependencies?.length ? ` (${r.dependencies.map(d => t(dependencies[d as keyof typeof dependencies] ?? 'review.dep.other')).join(', ')})` : ''}`;
+    return `${t(labels[r.code as keyof typeof labels] ?? 'review.reason.unknown')} ${r.endpoint_name ?? (r.key ? (Array.isArray(r.key) ? r.key.join(' в†” ') : r.key) : '')} ${r.mount ? mountTypeName(catalogs, r.mount) : ''}${r.dependencies?.length ? ` (${r.dependencies.map(d => t(dependencies[d as keyof typeof dependencies] ?? 'review.dep.other')).join(', ')})` : ''}`;
   };
 }
 type Translate = ReturnType<typeof useI18n>['t'];
@@ -50,19 +51,19 @@ function displayName(snapshot: unknown) {
 function logicalGroup(snapshot: unknown) {
   if (snapshot && typeof snapshot === 'object' && 'kind' in snapshot && snapshot.kind === 'LOGICAL'
     && 'panel_key' in snapshot && typeof snapshot.panel_key === 'string'
-    && 'module_port_type_id' in snapshot && typeof snapshot.module_port_type_id === 'string') {
-    return { panel: snapshot.panel_key, module_port_type_id: snapshot.module_port_type_id };
+    ) {
+    return { panel: snapshot.panel_key, mount: parseMount(snapshot as Record<string, unknown>) };
   }
 }
 
 function ChangeSummary({ review }: { review: BaseTemplateReviewDocument }) {
-  const { types } = useModulePortTypes();
+  const catalogs = useMountTypes();
   const { t } = useI18n();
   const { definition, result } = review;
   const panels = new Map(definition.panels.map(panel => [panel.panel_key, panel.display_name]));
   const slots = new Map(definition.slots.map(slot => [slot.key, slot.display_name]));
   const bays = new Map(definition.bays?.map(bay => [bay.bay_key, bay.display_name]));
-  const groups = new Map<string, { panel: string; module_port_type_id: string; delta: number; after: number; keys: Set<string> }>();
+  const groups = new Map<string, { panel: string; mount: ModuleMount; delta: number; after: number; keys: Set<string> }>();
   for (const change of result.changes) {
     const name = displayName(change.before);
     if (typeof change.key !== 'string' || !name) continue;
@@ -75,7 +76,7 @@ function ChangeSummary({ review }: { review: BaseTemplateReviewDocument }) {
     const after = logicalGroup(change.after);
     for (const [group, delta] of [[before, -1], [after, 1]] as const) {
       if (!group) continue;
-      const key = JSON.stringify([group.panel, group.module_port_type_id]);
+      const key = JSON.stringify([group.panel, group.mount.mount_kind, mountTypeId(group.mount)]);
       const entry = groups.get(key) ?? { ...group, delta: 0, after: 0, keys: new Set<string>() };
       entry.delta += delta;
       entry.keys.add(change.key);
@@ -88,7 +89,7 @@ function ChangeSummary({ review }: { review: BaseTemplateReviewDocument }) {
   // the net change, even after publication advances the draft's source revision.
   for (const bay of definition.bays ?? []) {
     if (bay.kind !== 'LOGICAL') continue;
-    const group = groups.get(JSON.stringify([bay.panel_key, bay.module_port_type_id]));
+    const group = groups.get(JSON.stringify([bay.panel_key, bay.mount_kind, mountTypeId(bay)]));
     if (group) group.after++;
   }
   const sections: Record<string, MessageKey> = {
@@ -105,7 +106,7 @@ function ChangeSummary({ review }: { review: BaseTemplateReviewDocument }) {
       {[...groups].map(([key, group]) => <li key={key}>
         {t('changeInspector.places', {
           panel: panels.get(group.panel) ?? t('changeInspector.unnamedPanel'),
-          compatibility: modulePortTypeName(types, group.module_port_type_id),
+          compatibility: mountTypeName(catalogs, group.mount),
           before: group.after - group.delta, after: group.after,
           delta: group.delta < 0 ? `−${-group.delta}` : group.delta > 0 ? `+${group.delta}` : '0',
         })}

@@ -1,7 +1,8 @@
+import { moduleMount } from '../topology/hardwareModules';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
-import { addModulePorts, alignSelectionLine, blueprintMarkers, copySelectionToPanel, distributeSelection, layoutSelectionTwoRows,
+import { addModulePlaces, alignSelectionLine, blueprintMarkers, copySelectionToPanel, distributeSelection, layoutSelectionTwoRows,
   snapSelectionTranslation, translateSelection } from '../blueprints/editorModel';
 import { I18nProvider } from '../i18n';
 import { BaseTemplateEditor, newBlueprintEditorState } from './BaseTemplateEditor';
@@ -9,9 +10,9 @@ import type { BlueprintEditorState } from '../blueprints/editorModel';
 
 const panel = { panel_key: 'one', panel_number: 1, display_name: 'Front', x: 0, y: 0, width: 100, height: 40 };
 const rear = { ...panel, panel_key: 'two', panel_number: 2, display_name: 'Rear', x: 100 };
-const historical = { kind: 'PLACED' as const, bay_key: 'history', display_name: 'Original', module_port_type_id: 'Old',
+const historical = { kind: 'PLACED' as const, bay_key: 'history', display_name: 'Original', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'Old',
   panel_key: 'one', x: .2, y: .3, width: .2, height: .2 };
-const logical = { kind: 'LOGICAL' as const, bay_key: 'logical', display_name: 'Capacity', module_port_type_id: 'Old', panel_key: 'one' };
+const logical = { kind: 'LOGICAL' as const, bay_key: 'logical', display_name: 'Capacity', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'Old', panel_key: 'one' };
 const state = (): BlueprintEditorState => ({
   ...newBlueprintEditorState(), name: 'Server', panels: [panel, rear], activePanelKey: 'one', bays: [historical, logical],
   nextLocalNumberByPanel: { one: 1, two: 1 },
@@ -22,7 +23,7 @@ const state = (): BlueprintEditorState => ({
 });
 
 function show(initialState = state()) {
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async url => Response.json(String(url).endsWith('/module-port-types') ? ['Old', 'Open / 42', 'Custom'].map(name => ({ id: name, name, is_active: true })) : []));
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async url => Response.json(String(url).endsWith('/module-port-types') ? ['Old', 'Open / 42', 'Custom'].map(name => ({ id: name, name, is_active: true })) : String(url).endsWith('/module-bay-types') ? [{ id: 'pcie', name: 'PCIe x16', is_active: true }] : []));
   const save = vi.fn().mockResolvedValue(undefined);
   const view = render(<I18nProvider><MemoryRouter><BaseTemplateEditor initialState={initialState} onSave={save}
     title="Base" description="" saveLabel="Save" /></MemoryRouter></I18nProvider>);
@@ -71,13 +72,13 @@ it('uses the same snap, alignment, distribution and panel copy for a mixed selec
   const markers = blueprintMarkers(distributed);
   expect(markers.map(marker => marker.rendered_position.x).sort()).toEqual([.1, .5, .9]);
   expect(new Set(markers.map(marker => marker.rendered_position.y)).size).toBe(1);
-  expect(distributed.bays![0]).toMatchObject({ bay_key: 'history', module_port_type_id: 'Old' });
+  expect(distributed.bays![0]).toMatchObject({ bay_key: 'history', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'Old' });
   expect(distributed.bays![0]).not.toHaveProperty('width');
   expect(new Set(blueprintMarkers(layoutSelectionTwoRows(distributed, selected)).map(marker => marker.rendered_position.y)).size).toBe(2);
   const copy = copySelectionToPanel(distributed, selected, 'two', true);
   expect(copy.copiedKeys).toHaveLength(3);
   const copiedBay = copy.state.bays!.at(-1)!;
-  expect(copiedBay).toMatchObject({ kind: 'PLACED', panel_key: 'two', module_port_type_id: 'Old', x: .1 });
+  expect(copiedBay).toMatchObject({ kind: 'PLACED', panel_key: 'two', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'Old', x: .1 });
   expect(copiedBay.bay_key).not.toBe('history');
   expect(copy.state.individualLinks).toHaveLength(2);
   expect(copy.state.individualLinks.every(link => link.from_slot_key !== 'history' && link.to_slot_key !== copiedBay.bay_key)).toBe(true);
@@ -100,10 +101,10 @@ it('removes a marquee selection of mixed markers while retaining logical capacit
 
 it('keeps the draft intact if the shared panel marker limit is reached', () => {
   let full = state();
-  full = addModulePorts(full, 'one', 256, 'New');
-  full = addModulePorts(full, 'one', 141, 'New');
+  full = addModulePlaces(full, 'one', 256, moduleMount('MODULE_PORT', 'New'));
+  full = addModulePlaces(full, 'one', 141, moduleMount('MODULE_PORT', 'New'));
   expect(blueprintMarkers(full)).toHaveLength(400);
-  expect(addModulePorts(full, 'one', 1, 'New')).toBe(full);
+  expect(addModulePlaces(full, 'one', 1, moduleMount('MODULE_PORT', 'New'))).toBe(full);
 });
 
 it('opens the existing naming workspace from a selection of 48 diamonds and saves names by key', async () => {
@@ -131,4 +132,21 @@ it('opens the existing naming workspace from a selection of 48 diamonds and save
   expect(saved.bays!.slice(2).map(bay => bay.display_name)).toEqual(Array.from({ length: 48 }, (_, i) => `MP-${String(i + 1).padStart(2, '0')}`));
   expect(saved.slots).toEqual(original.slots);
   expect(saved.individualLinks).toEqual([]);
+});
+
+
+it('creates a module bay with its own type and keeps continuity limited to physical endpoints', async () => {
+  const view = show();
+  const chooser = within(view.container.querySelector<HTMLElement>('.template-element-creator')!);
+  fireEvent.change(chooser.getByLabelText('Вид точки'), { target: { value: 'MODULE_BAY' } });
+  await chooser.findByRole('option', { name: 'PCIe x16' });
+  expect(chooser.queryByRole('option', { name: 'Open / 42' })).toBeNull();
+  fireEvent.change(chooser.getByLabelText('Тип модульного отсека'), { target: { value: 'pcie' } });
+  fireEvent.click(chooser.getByRole('button', { name: /^Добавить$/ }));
+  expect(view.container.querySelector('[data-module-bay-marker]')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(view.save.mock.calls[0][0]).toMatchObject({
+    bays: [...state().bays!, expect.objectContaining({ mount_kind: 'MODULE_BAY', module_bay_type_id: 'pcie' })],
+    individualLinks: [],
+  });
 });

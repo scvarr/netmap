@@ -777,11 +777,26 @@ class BaseInternalLinkRequest(BaseModel):
     member_mappings: list[BaseInternalMemberMapping] = Field(default_factory=lambda: [BaseInternalMemberMapping(from_member_index=1, to_member_index=1)], min_length=1)
 
 
-class ModuleBayRequest(BaseModel):
+class ModuleMount(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mount_kind: Literal["MODULE_PORT", "MODULE_BAY"]
+    module_port_type_id: uuid.UUID | None = Field(default=None, strict=False)
+    module_bay_type_id: uuid.UUID | None = Field(default=None, strict=False)
+
+    @model_validator(mode="after")
+    def matching_catalog(self):
+        if (self.module_port_type_id is not None) != (self.mount_kind == "MODULE_PORT") or (
+            self.module_bay_type_id is not None
+        ) != (self.mount_kind == "MODULE_BAY"):
+            raise ValueError("Mount must reference exactly one type from the matching catalog")
+        return self
+
+
+class ModuleBayRequest(ModuleMount):
     model_config = ConfigDict(extra="forbid")
     bay_key: str = Field(min_length=1, max_length=255)
     display_name: str = Field(min_length=1, max_length=255)
-    module_port_type_id: uuid.UUID
     panel_key: str = Field(min_length=1, max_length=255)
     kind: Literal["LOGICAL", "PLACED"] = "PLACED"
     x: FiniteFloat | None = Field(default=None, ge=0, le=1)
@@ -817,10 +832,10 @@ class ModuleEndpointPosition(BaseModel):
     y: float = Field(ge=0, le=1, allow_inf_nan=False)
 
 
-class ModulePortDefinition(ModuleEndpointPosition):
+class ModulePlaceDefinition(ModuleEndpointPosition, ModuleMount):
+    model_config = ConfigDict(strict=True, extra="forbid")
     key: str = Field(min_length=1, max_length=255)
     display_name: str = Field(min_length=1, max_length=255)
-    module_port_type_id: uuid.UUID = Field(strict=False)
     width: FiniteFloat | None = Field(default=None, gt=0, le=1)
     height: FiniteFloat | None = Field(default=None, gt=0, le=1)
 
@@ -843,13 +858,12 @@ class ModuleGeometry(BaseModel):
     endpoints: dict[str, ModuleEndpointPosition]
 
 
-class CreateModuleTemplateRequest(BaseModel):
+class CreateModuleTemplateRequest(ModuleMount):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=255)
-    module_port_type_id: uuid.UUID
     endpoints: list[ModuleEndpointRequest]
     geometry: ModuleGeometry
-    module_ports: list[ModulePortDefinition] = Field(default_factory=list)
+    module_places: list[ModulePlaceDefinition] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def valid_definitions(self):
@@ -857,7 +871,7 @@ class CreateModuleTemplateRequest(BaseModel):
             raise PydanticCustomError("hardware_validation", "Module strings must not be blank")
         if set(self.geometry.endpoints) != {e.key for e in self.endpoints}:
             raise PydanticCustomError("hardware_validation", "Geometry must match endpoint keys")
-        keys = [item.key for item in [*self.endpoints, *self.module_ports]]
+        keys = [item.key for item in [*self.endpoints, *self.module_places]]
         if len(set(keys)) != len(keys):
             raise PydanticCustomError("hardware_validation", "Module definition keys must be unique")
         return self
@@ -933,7 +947,7 @@ class BaseTemplateImpactReason(BaseModel):
     endpoint_name: str | None = None
     dependencies: list[str] | None = None
     installation_id: uuid.UUID | None = None
-    module_port_type_id: uuid.UUID | None = None
+    mount: ModuleMount | None = None
     connection_ids: list[uuid.UUID] | None = None
 
 
@@ -960,11 +974,11 @@ class ModuleEndpointSnapshot(ModuleEndpointRequest):
 
 class ModuleTemplateStructuralChange(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    section: Literal["properties", "endpoints", "module_ports", "geometry"]
+    section: Literal["properties", "endpoints", "module_places", "geometry"]
     key: str
     operation: Literal["added", "removed", "changed"]
-    before: str | ModuleEndpointSnapshot | ModulePortDefinition | ModuleGeometry | None
-    after: str | ModuleEndpointSnapshot | ModulePortDefinition | ModuleGeometry | None
+    before: str | ModuleEndpointSnapshot | ModulePlaceDefinition | ModuleGeometry | ModuleMount | None
+    after: str | ModuleEndpointSnapshot | ModulePlaceDefinition | ModuleGeometry | ModuleMount | None
 
     @model_validator(mode="after")
     def valid_change(self):
@@ -972,9 +986,10 @@ class ModuleTemplateStructuralChange(BaseModel):
         if self.section == "geometry":
             valid = self.key == "geometry" and self.operation == "changed" and len(values) == 2 and all(isinstance(v, ModuleGeometry) for v in values)
         elif self.section == "properties":
-            valid = self.key in ("name", "module_port_type_id") and self.operation == "changed" and len(values) == 2 and all(isinstance(v, str) for v in values)
-        elif self.section == "module_ports":
-            valid = all(isinstance(v, ModulePortDefinition) and v.key == self.key for v in values)
+            value_type = {"name": str, "mount": ModuleMount}.get(self.key)
+            valid = value_type is not None and self.operation == "changed" and len(values) == 2 and all(isinstance(v, value_type) for v in values)
+        elif self.section == "module_places":
+            valid = all(isinstance(v, ModulePlaceDefinition) and v.key == self.key for v in values)
         else:
             valid = all(isinstance(v, ModuleEndpointSnapshot) and v.key == self.key for v in values)
         if (not valid or not values or (self.operation == "added" and (self.before is not None or self.after is None))

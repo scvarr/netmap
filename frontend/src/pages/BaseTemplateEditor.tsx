@@ -1,4 +1,5 @@
-import { ModulePortTypeSelect, useModulePortTypes } from '../components/ModulePortTypeSelect';
+import { mountTypeId, type ModuleMount } from '../topology/hardwareModules';
+import { ModuleMountFields, useMountTypes } from '../components/ModulePortTypeSelect';
 import { EndpointLinkWorkspace } from '../components/EndpointLinkWorkspace';
 import { TemplateElementCreator } from '../components/TemplateElementKindSelect';
 import { LogicalModulePlacesEditor } from '../components/LogicalModulePlacesEditor';
@@ -8,7 +9,7 @@ import { PageHeader } from '../components/PageChrome';
 import { PortTypeSelect, usePortTypes } from '../components/PortTypeSelect';
 import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCanvas';
 import { PhysicalFaceSelect } from '../components/PhysicalFaceControls';
-import { addEndpoints, addModulePorts, addPanel, blueprintMarkers, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
+import { addEndpoints, addModulePlaces, addPanel, blueprintMarkers, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
 import type { BlueprintSlot, BlueprintSlotKind } from '../topology/baseTemplateTypes';
 import { isPlacedBay } from '../topology/hardwareModules';
 
@@ -57,7 +58,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     setPanelSizeDraft(undefined);
   };
   const catalog = usePortTypes();
-  const moduleCatalog = useModulePortTypes();
+  const moduleCatalog = useMountTypes();
   const activeTypeIds = new Set(catalog.types?.filter(type => type.is_active).map(type => type.id));
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [copyDestination, setCopyDestination] = useState('');
@@ -65,9 +66,8 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
   const destinationPanels = editor.panels.filter((panel) => panel.panel_key !== panelKey);
   const destinationKey = destinationPanels.some((panel) => panel.panel_key === copyDestination) ? copyDestination : destinationPanels[0]?.panel_key ?? '';
   const selectedBays = (editor.bays ?? []).filter(bay => selected.has(bay.bay_key));
-  const activeModuleTypeIds = new Set(moduleCatalog.types?.filter(type => type.is_active).map(type => type.id));
   const copyHasArchivedType = Boolean(
-    (moduleCatalog.types && selectedBays.some(bay => !activeModuleTypeIds.has(bay.module_port_type_id))) ||
+    selectedBays.some(bay => !moduleCatalog[bay.mount_kind].types?.some(type => type.is_active && type.id === mountTypeId(bay))) ||
     (catalog.types && editor.slots.some(slot => selected.has(slot.key) && !activeTypeIds.has(slot.port_type_id))),
   );
   const markers = blueprintMarkers(editor);
@@ -110,8 +110,8 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
   const activatePanel = (key: string) => { if (key === panelKey) return; setEditor((old) => ({ ...old, activePanelKey: key })); clearPanelUi(); };
   const createPanel = (direction: PanelDirection) => { setEditor((old) => addPanel(old, direction)); clearPanelUi(); };
   const removePanel = () => { setEditor((old) => deleteActivePanel(old)); clearPanelUi(); };
-  const addModuleBatch = (count: number, module_port_type_id: string) => {
-    const next = addModulePorts(editor, panelKey, count, module_port_type_id);
+  const addModuleBatch = (count: number, mount: ModuleMount) => {
+    const next = addModulePlaces(editor, panelKey, count, mount);
     if (next === editor) return false;
     setEditor(next);
     setSelected(new Set(next.bays!.slice(editor.bays?.length ?? 0).map(bay => bay.bay_key)));
@@ -199,7 +199,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     setError(undefined);
     const result = createBlueprintRequest(editor);
     if (!result.request) { setError(t(validationKey[result.errors[0]])); return; }
-    if (editor.bays?.some(b => !b.display_name.trim() || !b.module_port_type_id.trim() || !editor.panels.some(p => p.panel_key === b.panel_key))) { setError(t("hardware.geometryError")); return; }
+    if (editor.bays?.some(b => !b.display_name.trim() || !mountTypeId(b) || !editor.panels.some(p => p.panel_key === b.panel_key))) { setError(t("hardware.geometryError")); return; }
     try { await onSave(editor); } catch { setError(t('blueprint.validation.saveFailed')); }
   };
   return <>
@@ -221,7 +221,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
         <section className="blueprint-composer__section blueprint-composer__links"><h2>{t('blueprint.composition.links')}</h2>
           <button ref={linksEntry} type="button" className="secondary-action" onClick={() => { setMenu(undefined); setDistributionAxis(undefined); setWorkspaceSelection(undefined); setLinksOpen(true); }}>{t('endpointWorkspace.title')} · {editor.individualLinks.length}</button>
         </section>
-        <LogicalModulePlacesEditor types={moduleCatalog.types} panels={editor.panels} activePanelKey={panelKey} bays={editor.bays ?? []}
+        <LogicalModulePlacesEditor catalogs={moduleCatalog} panels={editor.panels} activePanelKey={panelKey} bays={editor.bays ?? []}
           onChange={bays => setEditor(old => ({ ...old, bays }))} />
         {error && <p role="alert" className="blueprint-editor__error">{error}</p>}
         {onCancel && <button type="button" className="secondary-action" onClick={onCancel}>{t('templateCopy.cancel')}</button>}
@@ -231,7 +231,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
         <div className="blueprint-composer__chooser">
           <TemplateElementCreator moduleCatalog={moduleCatalog} placementScope={panelKey} catalog={catalog}
             notice={catalog.types && editor.slots.some(slot => !activeTypeIds.has(slot.port_type_id)) && <p role="alert">{t('templateCopy.archived')}</p>}
-            onAddModulePorts={addModuleBatch}
+            onAddModulePlaces={addModuleBatch}
             onAddEndpoints={(kind, count, portTypeId, cardinality) => {
               const next = addEndpoints(editor, kind, count, panelKey, portTypeId, cardinality);
               if (next === editor) return;
@@ -298,7 +298,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
           <strong>{t('blueprint.copy.title')}</strong>
           <label>{t('blueprint.copy.destination')}<select value={destinationKey} onChange={(event) => setCopyDestination(event.target.value)}>{destinationPanels.map((panel) => <option key={panel.panel_key} value={panel.panel_key}>{panel.panel_number} · {panel.display_name}</option>)}</select></label>
           <label className="blueprint-composer__copy-continuity"><input type="checkbox" disabled={!hasSelectedPhysical} checked={hasSelectedPhysical && createContinuity} onChange={(event) => setCreateContinuity(event.target.checked)} />{t('blueprint.copy.continuity')}</label>
-          <button type="button" className="secondary-action" disabled={Boolean(copyError) || (hasSelectedPhysical && !catalog.types) || (selectedBays.length > 0 && !moduleCatalog.types) || copyHasArchivedType} onClick={copySelected}>{t('blueprint.copy.action')}</button>
+          <button type="button" className="secondary-action" disabled={Boolean(copyError) || (hasSelectedPhysical && !catalog.types) || copyHasArchivedType} onClick={copySelected}>{t('blueprint.copy.action')}</button>
           {copyHasArchivedType && <p role="status" className="blueprint-editor__error">{t('portTypes.copyArchived')}</p>}
           {copyError === 'capacity'  && <p role="status" className="blueprint-editor__error">{t('blueprint.copy.capacity')}</p>}
         </section>}
@@ -307,9 +307,9 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
             const display_name = event.target.value;
             setEditor(old => ({ ...old, bays: old.bays?.map(bay => bay.bay_key === selectedBay.bay_key ? { ...bay, display_name } : bay) }));
           }} /></label>
-          <ModulePortTypeSelect types={moduleCatalog.types} value={selectedBay.module_port_type_id}
-            onChange={module_port_type_id => setEditor(old => ({ ...old, bays: old.bays?.map(bay =>
-              bay.bay_key === selectedBay.bay_key ? { ...bay, module_port_type_id } : bay) }))} />
+          <ModuleMountFields catalogs={moduleCatalog} mount={selectedBay}
+            onChange={mount => setEditor(old => ({ ...old, bays: old.bays?.map(bay =>
+              bay.bay_key === selectedBay.bay_key ? { ...bay, ...mount } : bay) }))} />
           <button type="button" className="text-action" onClick={deleteSelected}>{t('blueprint.composition.remove')}</button>
         </aside>}
         {selectedSlot && <aside className="blueprint-composer__selected">

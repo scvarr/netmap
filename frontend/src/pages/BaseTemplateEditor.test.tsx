@@ -1,10 +1,11 @@
+import { moduleMount } from '../topology/hardwareModules';
 import styles from '../styles.css?raw';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
-import { addEndpoints, addModulePorts, addPanel, createBlueprintRequest, hydrateBlueprintEditorState } from '../blueprints/editorModel';
+import { addEndpoints, addModulePlaces, addPanel, createBlueprintRequest, hydrateBlueprintEditorState } from '../blueprints/editorModel';
 import type { BaseTemplateRevisionDocument } from '../topology/baseTemplateTypes';
 import { newBlueprintEditorState, BaseTemplateEditor } from './BaseTemplateEditor';
 
@@ -20,7 +21,7 @@ afterEach(() => vi.unstubAllGlobals());
 it.each(['CONNECTION_POINT', 'NETWORK_PORT', 'MODULE_PORT'] as const)('uses the selected properties row for %s', async kind => {
   const initial = newBlueprintEditorState();
   const state = kind === 'MODULE_PORT'
-    ? addModulePorts(initial, initial.activePanelKey, 1, 'Open / 42')
+    ? addModulePlaces(initial, initial.activePanelKey, 1, moduleMount('MODULE_PORT', 'Open / 42'))
     : addEndpoints(initial, kind, 1, initial.activePanelKey, 'test-type');
   const { container } = render(<I18nProvider><MemoryRouter>
     <BaseTemplateEditor title="Blueprint" description="" saveLabel="Save" initialState={state} onSave={vi.fn()} />

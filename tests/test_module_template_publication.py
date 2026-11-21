@@ -123,7 +123,7 @@ def test_invalid_e2_archive_rejected(damage):
 def test_new_installation_pins_latest_with_exact_compatibility(type_name):
     base_id, payload = create_base(); module = create_module(); tid = module['template_id']
     draft = open_draft(tid)
-    checked = check(tid, save(tid, draft, {**draft['definition'], 'module_port_type_id': ensure_module_port_type_id(type_name)}))
+    checked = check(tid, save(tid, draft, {**draft['definition'], 'mount_kind': "MODULE_PORT", 'module_port_type_id': ensure_module_port_type_id(type_name)}))
     result = publish(tid, checked['review']['candidate_id']).json()
     obj = create_object(base_id)
     response = install(obj['physical_object_ref']['entity_id'], tid, payload['bays'][0]['bay_key'])
@@ -154,7 +154,7 @@ def test_input_writers_blocked_during_publication(monkeypatch):
 def test_diagnostics_intervention_and_delete_publication():
     _, module, _ = setup_installations(1); tid = module['template_id']
     draft = open_draft(tid)
-    checked = check(tid, save(tid, draft, {**draft['definition'], 'module_port_type_id': ensure_module_port_type_id('Different slot')}))
+    checked = check(tid, save(tid, draft, {**draft['definition'], 'mount_kind': "MODULE_PORT", 'module_port_type_id': ensure_module_port_type_id('Different slot')}))
     assert publish(tid, checked['review']['candidate_id']).status_code == 200
     state = open_draft(tid)['publication_state']
     assert state['awaiting_update_count'] == 0 and state['requires_intervention_count'] == 1
