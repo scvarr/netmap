@@ -221,7 +221,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
         <section className="blueprint-composer__section blueprint-composer__links"><h2>{t('blueprint.composition.links')}</h2>
           <button ref={linksEntry} type="button" className="secondary-action" onClick={() => { setMenu(undefined); setDistributionAxis(undefined); setWorkspaceSelection(undefined); setLinksOpen(true); }}>{t('endpointWorkspace.title')} · {editor.individualLinks.length}</button>
         </section>
-        <LogicalModulePlacesEditor catalogs={moduleCatalog} panels={editor.panels} activePanelKey={panelKey} bays={editor.bays ?? []}
+        <LogicalModulePlacesEditor catalogs={moduleCatalog} panels={editor.panels} activePanelKey={panelKey} bays={editor.bays ?? []} onAddPlaced={addModuleBatch}
           onChange={bays => setEditor(old => ({ ...old, bays }))} />
         {error && <p role="alert" className="blueprint-editor__error">{error}</p>}
         {onCancel && <button type="button" className="secondary-action" onClick={onCancel}>{t('templateCopy.cancel')}</button>}

@@ -1,7 +1,8 @@
-import { isModulePlaceMarker, isMountKind, type ModulePlaceDefinition } from '../topology/hardwareModules';
+import { isModulePlaceMarker, isMountKind, moduleMount, mountTypeId, type ModuleMount, type ModulePlaceDefinition } from '../topology/hardwareModules';
 import { ModuleMountFields, mountKindLabels, useMountTypes } from './ModulePortTypeSelect';
 import { useState } from 'react';
 import { PortTypeSelect, usePortTypes } from './PortTypeSelect';
+import { PlacedModuleBaysCreator } from './PlacedModuleBaysCreator';
 import { TemplateElementCreator } from './TemplateElementKindSelect';
 import { useI18n } from '../i18n';
 import { ModuleGeometryEditor } from './ModuleGeometryEditor';
@@ -52,6 +53,19 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
       endpoints: Object.fromEntries(endpoints.map(endpoint => [endpoint.key, positions[endpoint.key]])),
     } });
   };
+  const addModuleBatch = (count: number, mount: ModuleMount) => {
+    const names = new Set(markers.map(marker => marker.display_name));
+    const prefix = t(mountKindLabels[mount.mount_kind]);
+    let number = 1;
+    const added = Array.from({ length: count }, () => {
+      while (names.has(`${prefix} ${number}`)) number++;
+      return { key: crypto.randomUUID(), display_name: `${prefix} ${number++}`, ...mount };
+    });
+    const positions = moduleEndpointPositions([...markers, ...added], markerGeometry.endpoints);
+    onChange({ ...value, module_places: [...modulePorts, ...added.map(port => ({ ...port, ...positions[port.key] }))] });
+    setSelection(new Set(added.map(port => port.key)));
+    return true;
+  };
   const updateModulePort = (key: string, patch: Partial<ModulePlaceDefinition>) =>
     onChange({ ...value, module_places: modulePorts.map(port => port.key === key ? { ...port, ...patch } as ModulePlaceDefinition : port) });
   const removeDefinitions = (keys: ReadonlySet<string>) => {
@@ -68,19 +82,7 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
       <h2>{t('blueprint.endpoint.elements')}</h2>
       <p role="status">{t('blueprint.layout.selected', { count: selected.size })}</p>
       <TemplateElementCreator moduleCatalog={moduleCatalog} catalog={catalog}
-        onAddModulePlaces={(count, mount) => {
-          const names = new Set(markers.map(marker => marker.display_name));
-          const prefix = t(mountKindLabels[mount.mount_kind]);
-          let number = 1;
-          const added = Array.from({ length: count }, () => {
-            while (names.has(`${prefix} ${number}`)) number++;
-            return { key: crypto.randomUUID(), display_name: `${prefix} ${number++}`, ...mount };
-          });
-          const positions = moduleEndpointPositions([...markers, ...added], markerGeometry.endpoints);
-          onChange({ ...value, module_places: [...modulePorts, ...added.map(port => ({ ...port, ...positions[port.key] }))] });
-          setSelection(new Set(added.map(port => port.key)));
-          return true;
-        }}
+        onAddModulePlaces={addModuleBatch}
         onAddEndpoints={(kind, count, portTypeId) => {
           const added = Array.from({ length: count }, (_, index) => ({
             key: crypto.randomUUID(), display_name: count === 1 ? '' : String(value.endpoints.length + index + 1), kind, port_type_id: portTypeId,
@@ -88,6 +90,10 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
           changeEndpoints([...value.endpoints, ...added]);
           setSelection(new Set(added.map(endpoint => endpoint.key)));
         }} />
+      <details className="blueprint-composer__section">
+        <summary>{t('moduleMount.places')}</summary>
+        <PlacedModuleBaysCreator catalogs={moduleCatalog} onAdd={addModuleBatch} />
+      </details>
       {selected.size > 1 && physicalSelected.length > 0 && <PortTypeSelect bulk types={catalog.types} value=""
         singleMember={physicalSelected.some(endpoint => endpoint.kind === 'NETWORK_PORT')} onChange={id =>
         changeEndpoints(value.endpoints.map(endpoint => selected.has(endpoint.key) ? { ...endpoint, port_type_id: id } : endpoint))
@@ -139,6 +145,11 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
               if (isModulePort) onChange({ ...value, module_places: swap(modulePorts) });
               else changeEndpoints(swap(value.endpoints));
             }}>{t(delta < 0 ? 'moduleReview.up' : 'moduleReview.down')}</button>)}
+            {active.kind === 'MODULE_BAY' && <button type="button"
+              disabled={!moduleCatalog.MODULE_BAY.types?.some(type => type.id === mountTypeId(modulePorts[index]) && type.is_active)}
+              onClick={() => addModuleBatch(1, moduleMount('MODULE_BAY', mountTypeId(modulePorts[index])))}>
+              {t('hardware.duplicateBay')}
+            </button>}
             <button type="button" onClick={() => removeDefinitions(new Set([active.key]))}>{t('hardware.remove')}</button>
             {selected.size > 1 && <button type="button" onClick={() => removeDefinitions(selected)}>{t('blueprint.layout.deleteSelected')}</button>}
           </div>

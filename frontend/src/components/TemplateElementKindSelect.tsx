@@ -4,9 +4,9 @@ import type { BlueprintSlotKind } from '../topology/baseTemplateTypes';
 import { PortTypeNotice, PortTypeSelect, type usePortTypes } from './PortTypeSelect';
 
 import { MountTypeNotice, MountTypeSelect, type MountCatalogs } from './ModulePortTypeSelect';
-import { isMountKind, moduleMount, type ModuleMount, type MountKind } from '../topology/hardwareModules';
+import { moduleMount, type ModuleMount } from '../topology/hardwareModules';
 
-export type TemplateElementKind = BlueprintSlotKind | MountKind;
+export type TemplateElementKind = BlueprintSlotKind | 'MODULE_PORT';
 
 export function TemplateElementKindSelect({ value, onChange }: {
   value: TemplateElementKind;
@@ -17,7 +17,6 @@ export function TemplateElementKindSelect({ value, onChange }: {
     <option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option>
     <option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option>
     <option value="MODULE_PORT">{t('blueprint.endpoint.modulePort')}</option>
-    <option value="MODULE_BAY">{t('blueprint.endpoint.moduleBay')}</option>
   </select></label>;
 }
 
@@ -36,28 +35,28 @@ export function TemplateElementCreator({ catalog, moduleCatalog, onAddEndpoints,
   const [modulePortTypeId, setModulePortTypeId] = useState('');
   const [failedScope, setFailedScope] = useState<string>();
   const quantity = Number(count);
-  const modulePlace = isMountKind(kind);
+  const modulePort = kind === 'MODULE_PORT';
   const type = catalog.types?.find(item => item.id === portTypeId);
   const physicalReady = type?.is_active && (kind !== 'NETWORK_PORT' || type.cardinality === 1);
   const valid = Number.isInteger(quantity) && quantity >= 1 && quantity <= 256
-    && (modulePlace ? moduleCatalog[kind].types?.some(type => type.id === modulePortTypeId && type.is_active) : physicalReady);
+    && (modulePort ? moduleCatalog.MODULE_PORT.types?.some(type => type.id === modulePortTypeId && type.is_active) : physicalReady);
   return <>
     <div className="template-element-creator">
       <TemplateElementKindSelect value={kind} onChange={next => { setKind(next); setModulePortTypeId(''); setFailedScope(undefined); }} />
       <label>{t('blueprint.endpoint.count')}<input type="number" min="1" max="256" value={count}
         onChange={event => { setCount(event.target.value); setFailedScope(undefined); }} /></label>
-      {modulePlace
-        ? <MountTypeSelect types={moduleCatalog[kind].types} label={kind === 'MODULE_PORT' ? 'blueprint.endpoint.moduleCompatibility' : 'blueprint.endpoint.bayCompatibility'}
+      {modulePort
+        ? <MountTypeSelect types={moduleCatalog.MODULE_PORT.types} label="blueprint.endpoint.moduleCompatibility"
           value={modulePortTypeId} onChange={setModulePortTypeId} />
         : <PortTypeSelect types={catalog.types} value={portTypeId} onChange={setPortTypeId} singleMember={kind === 'NETWORK_PORT'} />}
       <button type="button" className="secondary-action" disabled={!valid} onClick={() => {
         if (!valid) return;
-        if (isMountKind(kind)) setFailedScope(onAddModulePlaces(quantity, moduleMount(kind, modulePortTypeId)) ? undefined : placementScope);
+        if (kind === 'MODULE_PORT') setFailedScope(onAddModulePlaces(quantity, moduleMount(kind, modulePortTypeId)) ? undefined : placementScope);
         else if (type) onAddEndpoints(kind, quantity, type.id, type.cardinality);
       }}>{t('blueprint.endpoint.add')}</button>
     </div>
     {notice}
-    {modulePlace ? <MountTypeNotice catalogs={moduleCatalog} kind={kind} /> : <PortTypeNotice {...catalog} />}
+    {modulePort ? <MountTypeNotice catalogs={moduleCatalog} kind="MODULE_PORT" /> : <PortTypeNotice {...catalog} />}
     {failedScope === placementScope && <p role="alert" className="blueprint-editor__error">{t('blueprint.endpoint.modulePlacementFailed')}</p>}
   </>;
 }

@@ -1,5 +1,6 @@
 import { moduleMount, mountTypeId, type ModuleMount } from '../topology/hardwareModules';
 import { ModuleMountFields, mountKindLabels, mountTypeName, type MountCatalogs } from './ModulePortTypeSelect';
+import { PlacedModuleBaysCreator } from './PlacedModuleBaysCreator';
 import { useState, type FormEvent } from 'react';
 import { useI18n } from '../i18n';
 import type { BlueprintEditorState } from '../blueprints/editorModel';
@@ -11,12 +12,13 @@ interface Props {
   activePanelKey: string;
   bays: ModuleBay[];
   onChange: (bays: ModuleBay[]) => void;
+  onAddPlaced: (count: number, mount: ModuleMount) => boolean;
 }
 
 const groupKey = (panel: string, mount: ModuleMount) => JSON.stringify([panel, mount.mount_kind, mountTypeId(mount)]);
 const MAX_LOGICAL_PLACES_PER_GROUP = 1024;
 
-export function LogicalModulePlacesEditor({ catalogs, panels, activePanelKey, bays, onChange }: Props) {
+export function LogicalModulePlacesEditor({ catalogs, panels, activePanelKey, bays, onChange, onAddPlaced }: Props) {
   const { t } = useI18n();
   const [newMount, setNewMount] = useState<ModuleMount>(moduleMount('MODULE_PORT', ''));
   const [error, setError] = useState<string>();
@@ -87,6 +89,7 @@ export function LogicalModulePlacesEditor({ catalogs, panels, activePanelKey, ba
 
   return <details className="blueprint-composer__section">
     <summary>{t('logicalPlaces.title')} · {groups.size}</summary>
+    <PlacedModuleBaysCreator key={activePanelKey} catalogs={catalogs} onAdd={onAddPlaced} />
     <p>{t('logicalPlaces.updateNotice')}</p>
     {error && <p role="alert" className="blueprint-editor__error">{error}</p>}
     {[...groups].map(([key, group]) => {

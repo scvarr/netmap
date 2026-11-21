@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -138,29 +139,65 @@ it.each([2, 48, 256])('creates and reopens %i separate module ports', async coun
 });
 
 
-it('uses separate catalogs for a PCIe card and its SFP+ port', async () => {
+it('uses separate catalogs for points and placed bays and keeps existing bays editable', async () => {
   vi.stubGlobal('fetch', vi.fn(async url => Response.json(
     String(url).endsWith('/module-bay-types') ? [{ id: 'pcie', name: 'PCIe x16', is_active: true }]
       : String(url).endsWith('/module-port-types') ? [{ id: 'sfpplus', name: 'SFP+', is_active: true }] : catalog,
   )));
   const createModule = vi.fn().mockResolvedValue({});
-  const { container } = render(<I18nProvider><MemoryRouter>
+  const { container, unmount } = render(<I18nProvider><MemoryRouter>
     <NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} />
   </MemoryRouter></I18nProvider>);
   fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'PCIe card' } });
   fireEvent.change(screen.getByLabelText('Вид посадочного места'), { target: { value: 'MODULE_BAY' } });
-  await screen.findByRole('option', { name: 'PCIe x16' });
-  expect(screen.queryByRole('option', { name: 'SFP+' })).toBeNull();
-  fireEvent.change(screen.getByLabelText('Совместимость'), { target: { value: 'pcie' } });
+  const compatibility = screen.getByRole('combobox', { name: 'Совместимость' });
+  await within(compatibility).findByRole('option', { name: 'PCIe x16' });
+  expect(within(compatibility).queryByRole('option', { name: 'SFP+' })).toBeNull();
+  fireEvent.change(compatibility, { target: { value: 'pcie' } });
   const chooser = within(container.querySelector<HTMLElement>('.template-element-creator')!);
+  expect(within(chooser.getByRole('combobox', { name: 'Вид точки' })).getAllByRole('option').map(option => option.getAttribute('value')))
+    .toEqual(['NETWORK_PORT', 'CONNECTION_POINT', 'MODULE_PORT']);
   fireEvent.change(chooser.getByLabelText('Вид точки'), { target: { value: 'MODULE_PORT' } });
   await chooser.findByRole('option', { name: 'SFP+' });
   expect(chooser.queryByRole('option', { name: 'PCIe x16' })).toBeNull();
   fireEvent.change(chooser.getByLabelText('Совместимость модульного порта'), { target: { value: 'sfpplus' } });
   fireEvent.click(chooser.getByRole('button', { name: /^Добавить$/ }));
+  fireEvent.click(screen.getByText('Модульные места', { selector: 'summary' }));
+  const bays = within(screen.getByRole('group', { name: 'Размещённые отсеки' }));
+  await bays.findByRole('option', { name: 'PCIe x16' });
+  expect(bays.queryByRole('option', { name: 'SFP+' })).toBeNull();
+  fireEvent.change(bays.getByLabelText('Тип модульного отсека'), { target: { value: 'pcie' } });
+  fireEvent.click(bays.getByRole('button', { name: 'Добавить на панель' }));
   fireEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));
   await waitFor(() => expect(createModule).toHaveBeenCalledWith(expect.objectContaining({
     mount_kind: 'MODULE_BAY', module_bay_type_id: 'pcie',
-    module_places: [expect.objectContaining({ mount_kind: 'MODULE_PORT', module_port_type_id: 'sfpplus' })],
+    module_places: [
+      expect.objectContaining({ mount_kind: 'MODULE_PORT', module_port_type_id: 'sfpplus' }),
+      expect.objectContaining({ mount_kind: 'MODULE_BAY', module_bay_type_id: 'pcie' }),
+    ],
   })));
+  const saved = createModule.mock.calls[0][0];
+  unmount();
+  const changed = vi.fn();
+  function Reopened() {
+    const [value, setValue] = useState(saved);
+    return <ModuleTemplateEditor value={value} onChange={next => { setValue(next); changed(next); }} />;
+  }
+  const reopened = render(<I18nProvider><MemoryRouter><Reopened /></MemoryRouter></I18nProvider>);
+  expect(reopened.container.querySelectorAll('[data-module-bay-marker]')).toHaveLength(1);
+  fireEvent.click(within(reopened.container.querySelector<HTMLElement>('.module-template-editor__ports')!)
+    .getByRole('button', { name: 'Модульный отсек 1' }));
+  const selected = within(screen.getByRole('group', { name: 'Модульный отсек' }));
+  const x = selected.getByLabelText('X (0–1)');
+  fireEvent.change(x, { target: { value: '0.65' } });
+  fireEvent.blur(x);
+  expect(changed.mock.lastCall![0].module_places[1]).toMatchObject({ x: .65, key: saved.module_places[1].key });
+  const duplicate = selected.getByRole('button', { name: 'Дублировать отсек' });
+  await waitFor(() => expect(duplicate).toBeEnabled());
+  fireEvent.click(duplicate);
+  const copied = changed.mock.lastCall![0].module_places;
+  expect(copied[2]).toMatchObject({ mount_kind: 'MODULE_BAY', module_bay_type_id: 'pcie' });
+  expect(copied[2].key).not.toBe(copied[1].key);
+  fireEvent.click(selected.getByRole('button', { name: 'Удалить' }));
+  expect(changed.mock.lastCall![0].module_places).toEqual(copied.slice(0, 2));
 });
