@@ -1,9 +1,42 @@
-import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { matchPath, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { HealthIndicator } from './HealthIndicator';
 import { useI18n } from '../i18n';
 
 export const sidebarCollapsedStorageKey = 'netmap.sidebar-collapsed';
+
+const groups = [
+  { id: 'infrastructure', label: 'nav.infrastructure', icon: '▦', links: [
+    ['/infrastructure/objects', 'nav.objects', '▦'],
+    ['/infrastructure/locations', 'nav.locations', '⌖'],
+    ['/infrastructure/cable-label-templates', 'cableTemplates.title', '⌁'],
+  ] },
+  { id: 'library', label: 'nav.library', icon: '▤', links: [
+    ['/library/base-templates', 'nav.blueprints', '▤'],
+  ] },
+  { id: 'catalogs', label: 'portTypes.section', icon: '▣', links: [
+    ['/catalogs/port-types', 'portTypes.title', '▣'],
+    ['/catalogs/connector-types', 'physicalCatalog.connectorTypes', '◇'],
+    ['/catalogs/cable-types', 'physicalCatalog.cableTypes', '∿'],
+  ] },
+  { id: 'settings', label: 'workspace.section', icon: '⚙', links: [
+    ['/settings/data', 'workspace.title', '⚙'],
+  ] },
+] as const;
+
+type GroupId = typeof groups[number]['id'];
+
+const collapsedGroupsStorageKey = 'netmap.sidebar-collapsed-groups';
+const compactMediaQuery = '(max-width: 760px)';
+
+function readCollapsedGroups(): GroupId[] {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(collapsedGroupsStorageKey) ?? '[]');
+    return Array.isArray(stored) ? groups.map(({ id }) => id).filter((id) => stored.includes(id)) : [];
+  } catch {
+    return [];
+  }
+}
 
 const readStoredSidebarCollapsed = (): boolean => window.localStorage.getItem(sidebarCollapsedStorageKey) === 'true';
 
@@ -13,9 +46,66 @@ const navClassName = ({ isActive }: { isActive: boolean }) => (
 
 export function AppShell() {
   const { locale, setLocale, t } = useI18n();
-  const { pathname } = useLocation();
+  const { pathname, key: locationKey } = useLocation();
   const mapMode = pathname === '/map';
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readStoredSidebarCollapsed);
+
+  const [narrow, setNarrow] = useState(() => window.matchMedia?.(compactMediaQuery).matches ?? false);
+  const compact = sidebarCollapsed || narrow;
+  const [collapsedGroups, setCollapsedGroups] = useState(readCollapsedGroups);
+  const [popup, setPopup] = useState<{ id: GroupId; locationKey: string } | null>(null);
+  const openPopup = compact && popup?.locationKey === locationKey ? popup.id : null;
+  const popupGroup = useRef<HTMLDivElement>(null);
+  const activeGroup = groups.find(({ links }) =>
+    links.some(([path]) => matchPath({ path, end: false }, pathname)),
+  )?.id;
+
+  useEffect(() => {
+    const media = window.matchMedia?.(compactMediaQuery);
+    if (!media) return;
+    const sync = () => {
+      setNarrow(media.matches);
+      setPopup(null);
+    };
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+
+  useEffect(() => {
+    if (activeGroup) {
+      setCollapsedGroups((current) => current.includes(activeGroup)
+        ? current.filter((id) => id !== activeGroup)
+        : current);
+    }
+  }, [pathname, activeGroup]);
+
+  useEffect(() => {
+    localStorage.setItem(collapsedGroupsStorageKey, JSON.stringify(collapsedGroups));
+  }, [collapsedGroups]);
+
+  useEffect(() => {
+    setPopup(null);
+  }, [locationKey]);
+
+  useEffect(() => {
+    if (!openPopup) return;
+    const dismissOutside = (event: PointerEvent) => {
+      if (!popupGroup.current?.contains(event.target as Node)) setPopup(null);
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      popupGroup.current?.querySelector('button')?.focus();
+      setPopup(null);
+    };
+    document.addEventListener('pointerdown', dismissOutside);
+    document.addEventListener('keydown', dismissOnEscape, true);
+    return () => {
+      document.removeEventListener('pointerdown', dismissOutside);
+      document.removeEventListener('keydown', dismissOnEscape, true);
+    };
+  }, [openPopup]);
 
   useEffect(() => {
     document.documentElement.scrollTop = 0;
@@ -27,7 +117,7 @@ export function AppShell() {
   }, [sidebarCollapsed]);
 
   return (
-    <div className={`application-shell${mapMode ? ' application-shell--map' : ''}${sidebarCollapsed ? ' application-shell--sidebar-collapsed' : ''}`}>
+    <div className={`application-shell${mapMode ? ' application-shell--map' : ''}${compact ? ' application-shell--sidebar-collapsed' : ''}`}>
       <aside className="sidebar" aria-label={t('nav.primary')}>
         <div className="sidebar__header">
           <NavLink className="sidebar__brand" to="/map" aria-label={`NetMap — ${t('nav.map')}`}>
@@ -39,7 +129,11 @@ export function AppShell() {
             className="sidebar__collapse-toggle"
             aria-label={t(sidebarCollapsed ? 'nav.sidebarExpand' : 'nav.sidebarCollapse')}
             title={t(sidebarCollapsed ? 'nav.sidebarExpand' : 'nav.sidebarCollapse')}
-            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+            hidden={narrow}
+            onClick={() => {
+              setPopup(null);
+              setSidebarCollapsed((collapsed) => !collapsed);
+            }}
           >
             {sidebarCollapsed ? '»' : '«'}
           </button>
@@ -49,44 +143,49 @@ export function AppShell() {
             <span className="shell-nav__icon" aria-hidden="true">◇</span>
             <span className="shell-nav__label">{t('nav.map')}</span>
           </NavLink>
-          <div className="shell-nav__group">
-            <span className="shell-nav__group-label">{t('nav.infrastructure')}</span>
-            <NavLink className={navClassName} to="/infrastructure/objects" title={t('nav.objects')} data-tooltip={t('nav.objects')}>
-              <span className="shell-nav__icon" aria-hidden="true">▦</span>
-              <span className="shell-nav__label">{t('nav.objects')}</span>
-            </NavLink>
-            <NavLink className={navClassName} to="/infrastructure/locations" title={t('nav.locations')} data-tooltip={t('nav.locations')}>
-              <span className="shell-nav__icon" aria-hidden="true">⌖</span>
-              <span className="shell-nav__label">{t('nav.locations')}</span>
-            </NavLink>
-            <NavLink className={navClassName} to="/infrastructure/cable-label-templates" title={t('cableTemplates.title')} data-tooltip={t('cableTemplates.title')}><span className="shell-nav__icon" aria-hidden="true">⌁</span><span className="shell-nav__label">{t('cableTemplates.title')}</span></NavLink>
-          </div>
-          <div className="shell-nav__group">
-            <span className="shell-nav__group-label">{t('nav.library')}</span>
-            <NavLink className={navClassName} to="/library/base-templates" title={t('nav.blueprints')} data-tooltip={t('nav.blueprints')}>
-              <span className="shell-nav__icon" aria-hidden="true">▤</span>
-              <span className="shell-nav__label">{t('nav.blueprints')}</span>
-            </NavLink>
-          </div>
-          <div className="shell-nav__group">
-            <span className="shell-nav__group-label">{t('portTypes.section')}</span>
-            <NavLink className={navClassName} to="/catalogs/port-types" title={t('portTypes.title')} data-tooltip={t('portTypes.title')}>
-              <span className="shell-nav__icon" aria-hidden="true">▣</span>
-              <span className="shell-nav__label">{t('portTypes.title')}</span>
-            </NavLink>
-            {([['connector-types', 'physicalCatalog.connectorTypes', '◇'], ['cable-types', 'physicalCatalog.cableTypes', '∿']] as const).map(([path, label, icon]) =>
-              <NavLink key={path} className={navClassName} to={`/catalogs/${path}`} title={t(label)} data-tooltip={t(label)}>
-                <span className="shell-nav__icon" aria-hidden="true">{icon}</span>
-                <span className="shell-nav__label">{t(label)}</span>
-              </NavLink>)}
-          </div>
-          <div className="shell-nav__group">
-            <span className="shell-nav__group-label">{t('workspace.section')}</span>
-            <NavLink className={navClassName} to="/settings/data" title={t('workspace.title')} data-tooltip={t('workspace.title')}>
-              <span className="shell-nav__icon" aria-hidden="true">⚙</span>
-              <span className="shell-nav__label">{t('workspace.title')}</span>
-            </NavLink>
-          </div>
+          {groups.map(({ id, label, icon, links }) => {
+            const expanded = compact ? openPopup === id : !collapsedGroups.includes(id);
+            const panelId = `shell-nav-${id}`;
+            return (
+              <div className="shell-nav__group" key={id} ref={openPopup === id ? popupGroup : undefined}>
+                <button
+                  type="button"
+                  className={`shell-nav__link shell-nav__group-toggle${activeGroup === id ? ' shell-nav__link--active' : ''}`}
+                  aria-label={t(label)}
+                  aria-expanded={expanded}
+                  aria-controls={panelId}
+                  title={compact ? t(label) : undefined}
+                  onClick={() => {
+                    if (compact) {
+                      setPopup(expanded ? null : { id, locationKey });
+                    } else {
+                      setCollapsedGroups((current) => expanded
+                        ? [...current, id]
+                        : current.filter((groupId) => groupId !== id));
+                    }
+                  }}
+                >
+                  <span className="shell-nav__icon shell-nav__group-icon" aria-hidden="true">{icon}</span>
+                  <span className="shell-nav__group-label">{t(label)}</span>
+                  <span className="shell-nav__chevron" aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+                </button>
+                <div id={panelId} className="shell-nav__children" hidden={!expanded}>
+                  {links.map(([path, linkLabel, linkIcon]) => (
+                    <NavLink
+                      key={path}
+                      className={navClassName}
+                      to={path}
+                      title={t(linkLabel)}
+                      onClick={() => setPopup(null)}
+                    >
+                      <span className="shell-nav__icon" aria-hidden="true">{linkIcon}</span>
+                      <span className="shell-nav__label">{t(linkLabel)}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </nav>
         <div className="sidebar__health"><HealthIndicator /></div>
       </aside>
