@@ -6,7 +6,7 @@ beforeEach(() => localStorage.clear());
 const valid = () => {
   const initial = newBlueprintEditorState();
   const s = addEndpoints(initial, 'NETWORK_PORT', 2, initial.activePanelKey, 'type');
-  s.bays = [{kind: 'PLACED', bay_key: 'bay', display_name: '', compatibility: '', panel_key: s.activePanelKey, x: 0, y: 0, width: .5, height: .5}];
+  s.bays = [{kind: 'PLACED', bay_key: 'bay', display_name: '', module_port_type_id: '', panel_key: s.activePanelKey, x: 0, y: 0, width: .5, height: .5}];
   s.individualLinks = [{from_slot_key: s.slots[0].key, to_slot_key: s.slots[1].key}];
   s.endpointNaming = [0, 1].map(() => ({ panel: s.activePanelKey, mode: 'manual', order: s.slots.map(p => p.key), horizontal: 'ltr', vertical: 'ttb', naming: {mask: '', start: '', step: ''} }));
   return s;

@@ -2,19 +2,19 @@ import type { BlueprintSlot, BlueprintSlotKind, TemplateImpactReason } from './b
 
 export interface PlacedModuleBay {
   kind?: "PLACED";
-  bay_key: string; display_name: string; compatibility: string; panel_key: string;
+  bay_key: string; display_name: string; module_port_type_id: string; panel_key: string;
   x: number; y: number; width?: number | null; height?: number | null;
 }
 export interface LogicalModuleBay {
   kind: "LOGICAL";
-  bay_key: string; display_name: string; compatibility: string; panel_key: string;
+  bay_key: string; display_name: string; module_port_type_id: string; panel_key: string;
   x?: null; y?: null; width?: null; height?: null;
 }
 export type ModuleBay = PlacedModuleBay | LogicalModuleBay;
 export const isPlacedBay = (bay: ModuleBay): bay is PlacedModuleBay => bay.kind !== "LOGICAL";
 export interface ModuleEndpoint { key: string; display_name: string; kind: BlueprintSlotKind; port_type_id: string }
 export interface ModulePortDefinition {
-  key: string; display_name: string; compatibility: string;
+  key: string; display_name: string; module_port_type_id: string;
   x: number; y: number; width?: number | null; height?: number | null;
 }
 export type ModulePortMarker = { key: string; display_name: string; kind: 'MODULE_PORT'; port_type_id?: never };
@@ -41,7 +41,7 @@ export function moduleBayMarkers(bays: ModuleBay[]) {
 }
 export interface ModuleGeometry { width: number; height: number; fill_color: string; endpoints: Record<string, { x: number; y: number }> }
 export const initialModuleGeometry = (): ModuleGeometry => ({ width: 240, height: 80, fill_color: "#64748b", endpoints: {} });
-export interface ModuleTemplateInput { geometry: ModuleGeometry; name: string; compatibility: string; endpoints: ModuleEndpoint[]; module_ports?: ModulePortDefinition[] }
+export interface ModuleTemplateInput { geometry: ModuleGeometry; name: string; module_port_type_id: string; endpoints: ModuleEndpoint[]; module_ports?: ModulePortDefinition[] }
 export interface ModuleTemplate extends ModuleTemplateInput { template_id: string; revision_id: string; publication_state?: ModuleDraftDocument["publication_state"] }
 export interface ModuleDraftDocument {
   template_id: string; source_revision_id: string; generation: number; definition: ModuleTemplateInput;

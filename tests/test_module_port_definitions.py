@@ -1,3 +1,4 @@
+from tests.module_port_type_fixtures import ensure_module_port_type_id
 import copy
 import uuid
 
@@ -9,14 +10,14 @@ from tests import test_base_template_review as base_review
 
 
 def module_port():
-    return {"key": str(uuid.uuid4()), "display_name": " Гнездо 1 ", "compatibility": " Lab / оптика 42 ",
+    return {"key": str(uuid.uuid4()), "display_name": " Гнездо 1 ", "module_port_type_id": ensure_module_port_type_id(" Lab / оптика 42 "),
             "x": .15, "y": .2, "width": .41, "height": .35}
 
 
 def test_base_template_three_elements_materialize_only_physical_endpoints():
     payload = base_payload()
     bay = payload["bays"][0]
-    bay.update(compatibility=" Lab / оптика 42 ", kind="PLACED")
+    bay.update(module_port_type_id=ensure_module_port_type_id(" Lab / оптика 42 "), kind="PLACED")
     payload["bays"].append({**bay, "bay_key": "logical", "kind": "LOGICAL",
                             "x": None, "y": None, "width": None, "height": None})
     payload["slots"].append({**payload["slots"][0], "key": "point", "display_name": "Patch", "kind": "CONNECTION_POINT"})
@@ -44,7 +45,7 @@ def test_module_port_revision_copy_and_workspace_roundtrip():
     draft = open_draft(template_id)
     definition = copy.deepcopy(draft["definition"])
     port = module_port()
-    marker = {"key": str(uuid.uuid4()), "display_name": "Anchor", "compatibility": "Open spec", "x": 1, "y": 0}
+    marker = {"key": str(uuid.uuid4()), "display_name": "Anchor", "module_port_type_id": ensure_module_port_type_id("Open spec"), "x": 1, "y": 0}
     definition["module_ports"] = [port, marker]
     definition["endpoints"].append({**definition["endpoints"][0], "key": "patch", "kind": "CONNECTION_POINT", "display_name": "Patch"})
     checked = check(template_id, save(template_id, draft, definition))
@@ -116,7 +117,7 @@ def test_base_marker_revision_and_legacy_installation_survive_workspace_roundtri
     assert edited in base_review.open_draft(base)["definition"]["bays"]
     assert client.get(configuration_url).json() == pinned
     package = client.get("/v1/workspace/package").json()
-    assert package["format_version"] == 11
+    assert package["format_version"] == 12
     assert client.delete("/v1/workspace/dataset").status_code == 204
     imported = client.post("/v1/workspace/package", json=package)
     assert imported.status_code == 204, imported.text
@@ -124,9 +125,9 @@ def test_base_marker_revision_and_legacy_installation_survive_workspace_roundtri
     assert client.get(configuration_url).json() == pinned
 
 
-@pytest.mark.parametrize("invalid", [{"compatibility": "  "}, {"x": .9}, {"width": 0}, {"port_type_id": None}, {"key": "endpoint"}])
+@pytest.mark.parametrize("invalid", [{"module_port_type_id": "  "}, {"x": .9}, {"width": 0}, {"port_type_id": None}, {"key": "endpoint"}])
 def test_module_port_definition_rejects_invalid_structure(invalid):
-    definition = {"name": "Module", "compatibility": "Custom", "endpoints": [],
+    definition = {"name": "Module", "module_port_type_id": ensure_module_port_type_id("Custom"), "endpoints": [],
                   "geometry": {"width": 240, "height": 80, "fill_color": "#000000", "endpoints": {}},
                   "module_ports": [{**module_port(), **invalid}]}
     if invalid.get("key") == "endpoint":

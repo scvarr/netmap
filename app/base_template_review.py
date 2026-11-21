@@ -13,6 +13,7 @@ from app.errors import ModelError, ValidationError
 from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.hardware_catalog import HardwareCatalog
 from app.port_types import validate_port_type_assignments
+from app.module_port_types import base_assignments, validate_module_port_types
 from app.schemas import CreateBaseTemplateRequest, ModuleBayRequest
 
 
@@ -40,7 +41,7 @@ def published_definition(session, template_id, revision_id):
         "panels": [{k: getattr(p, k) for k in ("panel_key", "panel_number", "display_name", "x", "y", "width", "height", "face")} for p in detail.panels],
         "slots": [{"key": s.slot_key, "display_name": s.display_name, "kind": s.kind, "cardinality": s.cardinality, "port_type_id": s.port_type_id, "panel_key": s.panel_key,
                    "rendered_position": {"x": s.position_x, "y": s.position_y}} for s in detail.slots],
-        "bays": [{k: getattr(b, k) for k in ("bay_key", "display_name", "compatibility", "panel_key", "kind", "x", "y", "width", "height")} for b in detail.bays],
+        "bays": [{k: getattr(b, k) for k in ("bay_key", "display_name", "module_port_type_id", "panel_key", "kind", "x", "y", "width", "height")} for b in detail.bays],
         "internal_links": [{"from_slot_key": a, "to_slot_key": b, "member_mappings": mappings} for a, b, mappings in detail.internal_links],
     })
 
@@ -48,7 +49,7 @@ def published_definition(session, template_id, revision_id):
 def physical_structure(definition):
     d = CreateBaseTemplateRequest.model_validate(definition).model_dump(mode="json")
     slots = sorted((s["key"], s["kind"], s["cardinality"], s["port_type_id"]) for s in d["slots"])
-    bays = sorted((b["bay_key"], b["compatibility"], b["kind"]) for b in d["bays"])
+    bays = sorted((b["bay_key"], b["module_port_type_id"], b["kind"]) for b in d["bays"])
     links = []
     for link in d["internal_links"]:
         for mapping in link["member_mappings"]:
@@ -192,18 +193,18 @@ def analyze_object(session, config, candidate):
     installations = list(session.scalars(select(m.ModuleInstallation).where(m.ModuleInstallation.configuration_id == config.id)))
     displaced = []
     for installation in sorted(installations, key=lambda i: str(i.id)):
-        compatibility = session.get(m.ModuleTemplateRevision, installation.module_revision_id).compatibility
+        module_port_type_id = session.get(m.ModuleTemplateRevision, installation.module_revision_id).module_port_type_id
         bay = bays.get(installation.bay_key)
-        if bay and bay["compatibility"] == compatibility:
+        if bay and bay["module_port_type_id"] == str(module_port_type_id):
             placements[str(installation.id)] = installation.bay_key
         else:
-            displaced.append((installation, compatibility))
-    for installation, compatibility in displaced:
-        available = sorted(k for k, b in bays.items() if b["compatibility"] == compatibility and k not in placements.values())
+            displaced.append((installation, module_port_type_id))
+    for installation, module_port_type_id in displaced:
+        available = sorted(k for k, b in bays.items() if b["module_port_type_id"] == str(module_port_type_id) and k not in placements.values())
         if available:
             placements[str(installation.id)] = available[0]
         else:
-            reasons.append({"code": "INSUFFICIENT_COMPATIBLE_CAPACITY", "installation_id": str(installation.id), "compatibility": compatibility})
+            reasons.append({"code": "INSUFFICIENT_COMPATIBLE_CAPACITY", "installation_id": str(installation.id), "module_port_type_id": str(module_port_type_id)})
     # Validate the final assignment, shared by candidate review and locked apply.
     for installation in installations:
         target_key = placements.get(str(installation.id))
@@ -295,6 +296,7 @@ class BaseTemplateReview:
             raise ModelError("Draft changed in another session; reopen before saving", {"reason": "DRAFT_CONFLICT"})
         updated = validate_definition(definition)
         validate_port_type_assignments(self.session, updated["slots"], draft.definition["slots"])
+        validate_module_port_types(self.session, base_assignments(updated), base_assignments(draft.definition))
         draft.definition = updated
         draft.generation += 1
         self.session.flush()

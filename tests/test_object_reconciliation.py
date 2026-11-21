@@ -1,4 +1,6 @@
 """D2 behavior against real PostgreSQL, including workspace exchange."""
+
+from tests.module_port_type_fixtures import ensure_module_port_type_id
 import copy
 import uuid
 
@@ -108,7 +110,7 @@ def add_dependency(session, obj, dependency):
             scope={str(point_id).upper(): f'opaque reference: {str(interface_id).upper()}'}))
     elif dependency == 'mapping':
         module = m.ModuleTemplate(name='Other'); session.add(module); session.flush()
-        revision_ = m.ModuleTemplateRevision(geometry={'width': 240, 'height': 80, 'fill_color': '#64748b', 'endpoints': {'other': {'x': .5, 'y': .5}}}, template_id=module.id, version_number=1, name='Module', compatibility='OCP3'); session.add(revision_); session.flush()
+        revision_ = m.ModuleTemplateRevision(geometry={'width': 240, 'height': 80, 'fill_color': '#64748b', 'endpoints': {'other': {'x': .5, 'y': .5}}}, template_id=module.id, version_number=1, name='Module', module_port_type_id=uuid.UUID(ensure_module_port_type_id('OCP3'))); session.add(revision_); session.flush()
         definition = m.ModuleEndpointDefinition(module_revision_id=revision_.id, definition_key='other', display_name='Other', kind='NETWORK_PORT', port_type_id=uuid.UUID(ensure_port_type_id()), order_index=0)
         config = session.scalar(select(m.ObjectConfiguration).where(m.ObjectConfiguration.physical_object_id == uuid.UUID(oid(obj))))
         bay = session.scalar(select(m.ModuleBay).where(m.ModuleBay.base_revision_id == config.base_revision_id))

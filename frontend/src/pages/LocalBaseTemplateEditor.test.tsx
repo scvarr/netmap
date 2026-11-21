@@ -11,7 +11,7 @@ const state = () => { const s = newBlueprintEditorState(); s.name = 'Device'; re
 const mount = (id?: string, generation?: number, save = vi.fn().mockResolvedValue(undefined)) => render(<I18nProvider><MemoryRouter><LocalBaseTemplateEditor initialState={state()} title="Editor" description="" saveLabel="Save" templateId={id} generation={generation} onSave={save} /></MemoryRouter></I18nProvider>);
 it('round trips 24 endpoints, geometry, names, types, links, bays and numbering', () => {
  const s = state(); s.individualLinks = [{ from_slot_key: s.slots[0].key, to_slot_key: s.slots[1].key }];
- s.bays = [{kind:'LOGICAL',bay_key:'bay',display_name:'Bay',compatibility:'test',panel_key:s.activePanelKey}];
+ s.bays = [{kind:'LOGICAL',bay_key:'bay',display_name:'Bay',module_port_type_id:'test',panel_key:s.activePanelKey}];
  localStorage.setItem(localDraftKey(), JSON.stringify({version:1,generation:null,state:s}));
  expect(readLocalDraft(localDraftKey()).draft?.state).toEqual(s);
  const view = mount(); expect(screen.getByText('Найден локальный черновик. Продолжить редактирование?')).toBeInTheDocument();

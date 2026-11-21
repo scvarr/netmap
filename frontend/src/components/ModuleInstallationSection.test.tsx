@@ -5,8 +5,8 @@ import { I18nProvider } from '../i18n';
 import type { HardwareConfiguration, HardwareModuleDataSource } from '../topology/hardwareModules';
 import { ModuleInstallationSection } from './ModuleInstallationSection';
 
-const module = { template_id: 'template', revision_id: 'revision', name: 'FC25Gb-2', compatibility: 'OCP3', endpoints: [] };
-const free: HardwareConfiguration = { configuration_id: 'config', base_revision_id: 'base-revision', bays: [{ bay_key: 'bay-key', display_name: 'PCIe1', compatibility: 'OCP3', panel_key: 'back', x: .1, y: .1, width: .3, height: .3, installation: null }] };
+const module = { template_id: 'template', revision_id: 'revision', name: 'FC25Gb-2', module_port_type_id: 'OCP3', endpoints: [] };
+const free: HardwareConfiguration = { configuration_id: 'config', base_revision_id: 'base-revision', bays: [{ bay_key: 'bay-key', display_name: 'PCIe1', module_port_type_id: 'OCP3', panel_key: 'back', x: .1, y: .1, width: .3, height: .3, installation: null }] };
 const occupied: HardwareConfiguration = { ...free, panels: [{ panel_key: 'back', display_name: 'Back', width: 600, height: 200 }], bays: [{ ...free.bays[0], installation: {
   layout: { panel_key: 'back', x: .1, y: .1, width: .3, height: .2 }, fill_color: '#123456', id: 'stable-installation-id', name: module.name, module_template_id: 'template', module_revision_id: 'revision', orientation: 'HORIZONTAL', endpoints: [{
     key: 'endpoint', port_type_id: 'test-type', kind: 'NETWORK_PORT', installation_id: 'stable-installation-id', panel_key: 'back', panel_display_name: 'Back', bay_key: 'bay-key', bay_display_name: 'PCIe1',
@@ -30,15 +30,15 @@ function tableBayKeys() {
   return Array.from(screen.getByRole('table').querySelectorAll('[data-bay-key]'), row => row.getAttribute('data-bay-key'));
 }
 
-it('groups mixed places by pinned panel and exact compatibility, with stable natural order on reopen', async () => {
+it('groups mixed places by pinned panel and exact type matching, with stable natural order on reopen', async () => {
   const data = source();
-  const logical = (key: string, name: string, compatibility = 'OCP3', panel = 'back'): HardwareConfiguration['bays'][number] => ({
-    kind: 'LOGICAL', bay_key: key, display_name: name, compatibility, panel_key: panel, installation: null,
+  const logical = (key: string, name: string, module_port_type_id = 'OCP3', panel = 'back'): HardwareConfiguration['bays'][number] => ({
+    kind: 'LOGICAL', bay_key: key, display_name: name, module_port_type_id, panel_key: panel, installation: null,
   });
   const bays = [
     logical('ten', 'Место 10'), logical('two-b', 'Место 2'),
     logical('lower', 'Lower case', 'ocp3'), logical('space', 'With space', 'OCP3 '),
-    { ...free.bays[0], bay_key: 'fixed', display_name: 'Fixed-01', compatibility: 'AUX' },
+    { ...free.bays[0], bay_key: 'fixed', display_name: 'Fixed-01', module_port_type_id: 'AUX' },
     logical('front', 'Место 1', 'OCP3', 'front'),
     logical('one', 'Место 1'), logical('two-a', 'Место 2'),
     logical('missing-z', 'Место 1', 'OCP3', 'z'), logical('missing-a', 'Место 1', 'OCP3', 'a'),
@@ -353,7 +353,7 @@ it('selects only one module and reopens the explicitly saved layout without chan
 it('reads a logical place without drawing a rectangle and enables installation', async () => {
   const data = source();
   vi.mocked(data.loadConfiguration).mockResolvedValue({ ...free, panels: occupied.panels, bays: [{
-    kind: 'LOGICAL', bay_key: 'logical', display_name: 'Logical place', compatibility: 'OCP3', panel_key: 'back', installation: null,
+    kind: 'LOGICAL', bay_key: 'logical', display_name: 'Logical place', module_port_type_id: 'OCP3', panel_key: 'back', installation: null,
   }] });
   show(data);
   await screen.findByRole('rowheader', { name: 'Logical place' });

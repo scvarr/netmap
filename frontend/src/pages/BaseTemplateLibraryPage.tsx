@@ -1,3 +1,4 @@
+import { modulePortTypeName, useModulePortTypes } from '../components/ModulePortTypeSelect';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { usePortTypes, type PortType } from '../components/PortTypeSelect';
@@ -60,6 +61,7 @@ export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwar
   dataSource: BaseTemplateDataSource; moduleDataSource?: HardwareModuleDataSource;
 }) {
   const { t } = useI18n();
+  const { types: moduleTypes } = useModulePortTypes();
   const id = useId();
   const { types: portTypes } = usePortTypes();
   const [tab, setTab] = useState<Tab>('objects');
@@ -181,19 +183,19 @@ export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwar
             })}
             {!isObjects && modules.status === 'ready' && modules.data.map(module => {
               const open = expanded.modules === module.template_id;
-              return <TemplateRow key={module.template_id} name={module.name} metadata={module.compatibility}
+              return <TemplateRow key={module.template_id} name={module.name} metadata={modulePortTypeName(moduleTypes, module.module_port_type_id)}
                 ports={module.endpoints.length} publication={module.publication_state} expanded={open}
                 onToggle={() => setExpanded({ ...expanded, modules: open ? undefined : module.template_id })}>
                 <ModulePreview portTypes={portTypes} module={module} />
                 <div className="template-library-facts">
-                  <span>{t('templateLibrary.compatibility', { value: module.compatibility })}</span>
+                  <span>{t('templateLibrary.compatibility', { value: modulePortTypeName(moduleTypes, module.module_port_type_id) })}</span>
                   <span>{t('physical.portCount', { count: module.endpoints.length })}</span>
                   {module.publication_state && <span>{t('publication.revision', { number: module.publication_state.version_number })}</span>}
                 </div>
                 <div className="template-library-actions">
                   <Link className="secondary-action" to={`/library/module-templates/${module.template_id}/edit`}>{t('review.edit')}</Link>
                   <Link className="secondary-action" to="/library/module-templates/new" state={{ moduleCopy: {
-                    name: module.name, compatibility: module.compatibility, endpoints: module.endpoints,
+                    name: module.name, module_port_type_id: module.module_port_type_id, endpoints: module.endpoints,
                     geometry: module.geometry, module_ports: module.module_ports,
                   } }}>{t('templateCopy.action')}</Link>
                   <button type="button" className="text-action"

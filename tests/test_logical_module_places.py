@@ -1,3 +1,4 @@
+from tests.module_port_type_fixtures import ensure_module_port_type_id
 from tests.l1_builders import post_confirmed_physical
 """HV-01-UX-02B: individual logical places, atomic boundaries and profiles."""
 import copy
@@ -56,9 +57,9 @@ def test_contradictory_places(patch):
 
 def test_logical_validation_exact_strings():
     bay = logical(base_payload()['bays'][0])
-    bay['compatibility'] = ' Ocp3 '
+    bay['module_port_type_id'] = ensure_module_port_type_id(' Ocp3 ')
     result = ModuleBayRequest.model_validate(bay)
-    assert result.compatibility == ' Ocp3 ' and result.x is None
+    assert result.module_port_type_id == uuid.UUID(bay['module_port_type_id']) and result.x is None
 
 
 def test_d2_logical_assignment_preserves_installation():
@@ -104,7 +105,7 @@ def test_logical_count_reduction_reconciles_only_when_capacity_remains(remaining
         assert after['authoring']['ModuleInstallation'] == [original]
 
 
-@pytest.mark.parametrize('change', [None, 'display_name', 'x', 'compatibility', 'logical'])
+@pytest.mark.parametrize('change', [None, 'display_name', 'x', 'module_port_type_id', 'logical'])
 def test_pre_kind_draft_check_compares_semantics_and_preserves_snapshots(change):
     from sqlalchemy import select
     from app import models as m
@@ -118,6 +119,7 @@ def test_pre_kind_draft_check_compares_semantics_and_preserves_snapshots(change)
         raw = copy.deepcopy(stored.definition)
         raw['bays'][0].pop('kind')
         if change == 'logical': raw['bays'][0] = logical(raw['bays'][0])
+        elif change == 'module_port_type_id': raw['bays'][0][change] = ensure_module_port_type_id('Another slot')
         elif change == 'x': raw['bays'][0]['x'] = .1
         elif change: raw['bays'][0][change] += ' changed '
         stored.definition = raw

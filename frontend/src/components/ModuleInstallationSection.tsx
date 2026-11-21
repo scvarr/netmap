@@ -1,3 +1,4 @@
+import { modulePortTypeName, useModulePortTypes, type ModulePortType } from './ModulePortTypeSelect';
 import { modulePortPosition } from '../topology/hardwareModules';
 import { EndpointMarker } from './EndpointMarker';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -10,26 +11,26 @@ function compareKeys(a: string, b: string) {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-function groupBays(config: HardwareConfiguration, image: BlueprintPresentation | undefined, collator: Intl.Collator) {
+function groupBays(config: HardwareConfiguration, image: BlueprintPresentation | undefined, collator: Intl.Collator, types?: ModulePortType[]) {
   const panels = new Map(image?.panels.map(panel => [panel.panel_key, panel]));
   const panelNames = new Map(config.panels?.map(panel => [panel.panel_key, panel.display_name]));
   const panelNumber = (key: string) => panels.get(key)?.panel_number ?? Infinity;
   const bays = [...config.bays].sort((a, b) =>
     (panelNumber(a.panel_key) - panelNumber(b.panel_key)) ||
     compareKeys(a.panel_key, b.panel_key) ||
-    collator.compare(a.compatibility, b.compatibility) ||
-    compareKeys(a.compatibility, b.compatibility) ||
+    collator.compare(modulePortTypeName(types, a.module_port_type_id), modulePortTypeName(types, b.module_port_type_id)) ||
+    compareKeys(a.module_port_type_id, b.module_port_type_id) ||
     collator.compare(a.display_name, b.display_name) ||
     compareKeys(a.bay_key, b.bay_key)
   );
-  const groups = new Map<string, { panelName: string; compatibility: string; bays: typeof bays }>();
+  const groups = new Map<string, { panelName: string; module_port_type_id: string; bays: typeof bays }>();
   for (const bay of bays) {
-    const key = JSON.stringify([bay.panel_key, bay.compatibility]);
+    const key = JSON.stringify([bay.panel_key, bay.module_port_type_id]);
     let group = groups.get(key);
     if (!group) {
       group = {
         panelName: panels.get(bay.panel_key)?.display_name ?? panelNames.get(bay.panel_key) ?? bay.panel_key,
-        compatibility: bay.compatibility,
+        module_port_type_id: bay.module_port_type_id,
         bays: [],
       };
       groups.set(key, group);
@@ -40,6 +41,7 @@ function groupBays(config: HardwareConfiguration, image: BlueprintPresentation |
 }
 
 export function ModuleInstallationSection({ objectId, onInstalled, presentation, dataSource = hardwareModuleDataSource }: { objectId: string; presentation?: BlueprintPresentation; onInstalled: () => void | Promise<void>; dataSource?: HardwareModuleDataSource }) {
+  const { types: moduleTypes } = useModulePortTypes();
   const { t, collator } = useI18n(); const [config, setConfig] = useState<HardwareConfiguration>(); const [modules, setModules] = useState<ModuleTemplate[]>([]); const [error, setError] = useState(''); const [pending, setPending] = useState(false); const [retry, setRetry] = useState(0);
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<string>();
@@ -59,7 +61,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
   // The projection is the existing Map presentation of the pinned base revision.
   // Do not combine a stale projection with a different configuration revision.
   const image = presentation && config?.base_revision_id === presentation.version_ref.entity_id ? presentation : undefined;
-  const groups = config && groupBays(config, image, collator);
+  const groups = config && groupBays(config, image, collator, moduleTypes);
   const bounds = image?.panels.length ? panelCompositionBounds(image.panels) : undefined;
   const contentWidth = Math.max(1, width - 40);
   const verticalPadding = editing ? 40 : 24;
@@ -157,9 +159,9 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
           <th scope="col">{t('hardware.action')}</th>
         </tr></thead>
         {Array.from(groups, ([key, group]) => {
-          const compatible = modules.filter(m => m.compatibility === group.compatibility);
+          const compatible = modules.filter(m => m.module_port_type_id === group.module_port_type_id);
           return <tbody key={key}>
-            <tr><th className="module-installation-table__group" scope="rowgroup" colSpan={4}>{group.panelName} · {group.compatibility}</th></tr>
+            <tr><th className="module-installation-table__group" scope="rowgroup" colSpan={4}>{group.panelName} · {modulePortTypeName(moduleTypes, group.module_port_type_id)}</th></tr>
             {group.bays.map(bay => {
               const installation = bay.installation;
               const choice = choices[bay.bay_key] ?? { module: '', orientation: 'HORIZONTAL' as const };

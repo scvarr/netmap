@@ -6,12 +6,14 @@ import { PageHeader, PageShell } from '../components/PageChrome';
 
 import type { CableType, CatalogType, ConnectorType, Medium, PortType } from '../components/PortTypeSelect';
 
-type Catalog = 'port-types' | 'connector-types' | 'cable-types';
-type Item = PortType | ConnectorType | CableType;
+import type { ModulePortType } from '../components/ModulePortTypeSelect';
+
+type Catalog = 'module-port-types' | 'port-types' | 'connector-types' | 'cable-types';
+type Item = PortType | ConnectorType | CableType | ModulePortType;
 type Fields = Omit<CatalogType, 'id'>;
-type Payload = Fields & ReturnType<typeof structureOf>;
-const titles = { 'port-types': 'portTypes.title', 'connector-types': 'physicalCatalog.connectorTypes', 'cable-types': 'physicalCatalog.cableTypes' } as const;
-const createLabels = { 'port-types': 'portTypes.create', 'connector-types': 'physicalCatalog.createConnector', 'cable-types': 'physicalCatalog.createCable' } as const;
+type Payload = Omit<ModulePortType, 'id'> & Partial<Fields> & ReturnType<typeof structureOf>;
+const titles = { 'module-port-types': 'modulePortTypes.title', 'port-types': 'portTypes.title', 'connector-types': 'physicalCatalog.connectorTypes', 'cable-types': 'physicalCatalog.cableTypes' } as const;
+const createLabels = { 'module-port-types': 'modulePortTypes.create', 'port-types': 'portTypes.create', 'connector-types': 'physicalCatalog.createConnector', 'cable-types': 'physicalCatalog.createCable' } as const;
 const emptyStructure = { medium: 'COPPER' as Medium, members: '', connector_type_id: '', mating_profile: '', termination: 'SOCKET' as ConnectorType['termination'], construction: '' };
 
 function structureOf(item: Item) {
@@ -19,7 +21,8 @@ function structureOf(item: Item) {
     return { medium: item.medium, members: item.members, connector_type_id: item.connector_type_id };
   }
   if ('mating_profile' in item) return { mating_profile: item.mating_profile, termination: item.termination };
-  return { medium: item.medium, construction: item.construction };
+  if ('construction' in item) return { medium: item.medium, construction: item.construction };
+  return {};
 }
 
 const emptyForm: Fields = { name: '', description: null, color: '#64748B', is_active: true };
@@ -29,6 +32,7 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
   const { t, locale } = useI18n();
   const endpoint = '/api/v1/' + catalog;
   const title = t(titles[catalog]);
+  const modular = catalog === 'module-port-types';
   const [params, setParams] = useSearchParams();
   const search = params.get('q') ?? '';
   const status = params.get('status') ?? 'all';
@@ -109,18 +113,19 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
 
   function save(event: FormEvent) {
     event.preventDefault();
-    const payload = catalog === 'port-types'
+    const fields = modular ? { name: form.name, is_active: form.is_active } : form;
+    const payload = modular ? {} : catalog === 'port-types'
       ? { medium: structure.medium, members: structure.members.split('\n').map(member => member.trim()).filter(Boolean), connector_type_id: structure.connector_type_id || null }
       : catalog === 'connector-types'
         ? { mating_profile: structure.mating_profile, termination: structure.termination }
         : { medium: structure.medium, construction: structure.construction };
-    void mutate(editingId ? 'PUT' : 'POST', editingId, { ...form, ...payload });
+    void mutate(editingId ? 'PUT' : 'POST', editingId, { ...fields, ...payload });
   }
 
   const query = search.trim().toLocaleLowerCase(locale);
   const visible = (items ?? []).filter(item =>
     (status === 'all' || item.is_active === (status === 'active')) &&
-    `${item.name} ${item.description ?? ''}`.toLocaleLowerCase(locale).includes(query),
+    `${item.name} ${('description' in item ? item.description : '') ?? ''}`.toLocaleLowerCase(locale).includes(query),
   ).sort((a, b) => {
     const byName = a.name.localeCompare(b.name, locale, { numeric: true });
     return (direction === 'ascending' ? byName : -byName) || a.id.localeCompare(b.id);
@@ -140,9 +145,9 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
           <legend>{t(editingId ? 'portTypes.edit' : createLabels[catalog])}</legend>
           <div className="port-types-form__fields">
             <label>{t('portTypes.name')} <input required maxLength={255} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
-            <label>{t('portTypes.description')} <input value={form.description ?? ''} onChange={(event) => setForm({ ...form, description: event.target.value || null })} /></label>
+            {!modular && <label>{t('portTypes.description')} <input value={form.description ?? ''} onChange={(event) => setForm({ ...form, description: event.target.value || null })} /></label>}
           </div>
-          <div className="port-types-form__fields">
+          {!modular && <><div className="port-types-form__fields">
             {catalog !== 'connector-types' && <label>{t('physicalCatalog.medium')}
               <select value={structure.medium} onChange={event => setStructure({ ...structure, medium: event.target.value as Medium })}>
                 <option value="COPPER">{t('physicalCatalog.COPPER')}</option>
@@ -181,7 +186,7 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
           <div className="blueprint-editor-color">
             <label>{t('portTypes.palette')} <input type="color" value={hex.test(form.color) ? form.color : emptyForm.color} onChange={(event) => setForm({ ...form, color: event.target.value.toUpperCase() })} /></label>
             <label>HEX <input required pattern="#[0-9A-Fa-f]{6}" maxLength={7} value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} /></label>
-          </div>
+          </div></>}
           <div className="port-types-form__actions">
             <button className="primary-action" type="submit">{t('portTypes.save')}</button>
             {editingId && <button className="secondary-action" type="button" onClick={resetForm}>{t('portTypes.cancel')}</button>}
@@ -211,24 +216,25 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
                 {t('portTypes.name')} <span aria-hidden="true">{direction === 'ascending' ? '↑' : '↓'}</span>
               </button>
             </th>
-            <th scope="col">{t('physicalCatalog.structure')}</th>
-            <th scope="col">{t('blueprint.editor.color')}</th>
+            {!modular && <><th scope="col">{t('physicalCatalog.structure')}</th>
+            <th scope="col">{t('blueprint.editor.color')}</th></>}
             <th scope="col">{t('catalog.status')}</th>
             <th scope="col"><span className="sr-only">{t('catalog.actions')}</span></th>
           </tr>
         </thead>
         <tbody>
           {rows.map(item => {
-            const { id, name, description, color, is_active } = item;
-            const fields = { name, description, color, is_active };
+            const { id, name, is_active } = item;
+            const fields = { name, is_active };
+            const appearance = 'color' in item ? { color: item.color, description: item.description } : undefined;
             const physicalFields = structureOf(item);
             return (
             <tr key={id}>
               <td>
                 <strong>{fields.name}</strong>
-                {fields.description && <small>{fields.description}</small>}
+                {appearance?.description && <small>{appearance.description}</small>}
               </td>
-              <td>
+              {appearance && <><td>
                 {'medium' in item && t(`physicalCatalog.${item.medium}`)}
                 {'members' in item && <> · {item.cardinality} <small>{item.members.join(', ')}</small>
                   {item.connector_type_id && <small>{connectors?.find(connector => connector.id === item.connector_type_id)?.name}</small>}
@@ -237,17 +243,17 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
                 {'construction' in item && <> · {item.construction}</>}
               </td>
               <td><span className="port-types-swatch">
-                <span aria-hidden="true" style={{ backgroundColor: fields.color }} />
-                <span>{fields.color}</span>
-              </span></td>
+                <span aria-hidden="true" style={{ backgroundColor: appearance.color }} />
+                <span>{appearance.color}</span>
+              </span></td></>}
               <td>{t(fields.is_active ? 'portTypes.active' : 'portTypes.archived')}</td>
               <td><div className="catalog-table__actions">
-                <button className="secondary-action" type="button" disabled={busy} onClick={() => { setEditingId(id); setForm(fields); setStructure('members' in item ? {
+                <button className="secondary-action" type="button" disabled={busy} onClick={() => { setEditingId(id); setForm({ ...emptyForm, ...fields, ...appearance }); setStructure('members' in item ? {
                   ...emptyStructure, medium: item.medium, members: item.members.join('\n'),
                   connector_type_id: item.connector_type_id ?? '',
                 } : 'mating_profile' in item ? { ...emptyStructure, mating_profile: item.mating_profile, termination: item.termination }
-                  : { ...emptyStructure, medium: item.medium, construction: item.construction }); setError(null); }}>{t('portTypes.edit')}</button>
-                <button className="secondary-action" type="button" disabled={busy} onClick={() => void mutate('PUT', id, { ...physicalFields, ...fields, is_active: !fields.is_active })}>{t(fields.is_active ? 'portTypes.archive' : 'portTypes.restore')}</button>
+                  : 'construction' in item ? { ...emptyStructure, medium: item.medium, construction: item.construction } : emptyStructure); setError(null); }}>{t('portTypes.edit')}</button>
+                <button className="secondary-action" type="button" disabled={busy} onClick={() => void mutate('PUT', id, { ...physicalFields, ...appearance, ...fields, is_active: !fields.is_active })}>{t(fields.is_active ? 'portTypes.archive' : 'portTypes.restore')}</button>
                 {!fields.is_active && <button className="danger-action" type="button" disabled={busy} onClick={() => {
                   if (window.confirm(t('portTypes.deleteConfirm'))) void mutate('DELETE', id);
                 }}>{t('portTypes.delete')}</button>}

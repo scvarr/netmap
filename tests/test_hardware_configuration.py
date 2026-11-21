@@ -1,3 +1,4 @@
+from tests.module_port_type_fixtures import ensure_module_port_type_id
 from tests.l1_builders import post_confirmed_physical
 from tests.cable_type_fixtures import copper_cable_fields
 from tests.port_type_fixtures import ensure_port_type_id
@@ -21,7 +22,7 @@ def base_payload():
     return {"name": " Base exact ", "body": {"kind": "RECTANGLE", "width": 160, "height": 60},
             "panels": [{"panel_key": panel_key, "panel_number": 1, "display_name": "Панель", "x": 0, "y": 0, "width": 160, "height": 60}],
             "slots": [{"key": str(uuid.uuid4()), "display_name": "MGMT", 'port_type_id': ensure_port_type_id(), "kind": "NETWORK_PORT", "panel_key": panel_key, "rendered_position": {"x": .05, "y": .5}}],
-            "internal_links": [], "bays": [{"bay_key": str(uuid.uuid4()), "display_name": " Bay exact ", "compatibility": "OCP3", "panel_key": panel_key, "x": .2, "y": .1, "width": .6, "height": .8}]}
+            "internal_links": [], "bays": [{"bay_key": str(uuid.uuid4()), "display_name": " Bay exact ", "module_port_type_id": ensure_module_port_type_id("OCP3"), "panel_key": panel_key, "x": .2, "y": .1, "width": .6, "height": .8}]}
 
 
 def create_base(payload=None):
@@ -31,8 +32,8 @@ def create_base(payload=None):
     return response.json()['blueprint_ref']['entity_id'], payload
 
 
-def create_module(compatibility='OCP3', names=('P1', 'P2')):
-    payload = {"name": " NIC exact ", "compatibility": compatibility, "endpoints": [{"key": str(uuid.uuid4()), "display_name": name, 'port_type_id': ensure_port_type_id(), "kind": "NETWORK_PORT"} for name in names]}
+def create_module(module_port_type_id='OCP3', names=('P1', 'P2')):
+    payload = {"name": " NIC exact ", "module_port_type_id": ensure_module_port_type_id(module_port_type_id if module_port_type_id != "ocp3" else "Different slot"), "endpoints": [{"key": str(uuid.uuid4()), "display_name": name, 'port_type_id': ensure_port_type_id(), "kind": "NETWORK_PORT"} for name in names]}
     from app.module_geometry import initial_geometry
     payload["geometry"] = initial_geometry(e["key"] for e in payload["endpoints"])
     response = client.post('/v1/library/module-templates', json=payload)
@@ -87,7 +88,7 @@ def test_materialization_identity_binding_geometry_and_round_trip(orientation):
     assert len({e['connection_point_id'] for e in endpoints}) == 4
     assert len({e['network_interface_id'] for e in endpoints}) == 4
     package = client.get('/v1/workspace/package').json()
-    assert package['format_version'] == 11
+    assert package['format_version'] == 12
     assert 'ModuleInstallation' in package['authoring']
     assert 'ObjectBlueprint' not in package['authoring']
     before = client.get(f'/v1/topology/physical-objects/{object_ids[0]}/configuration').json()
@@ -240,7 +241,7 @@ def test_base_internal_links_are_canonical_and_metadata_is_preserved():
         assert session.scalar(select(ObjectConfiguration)).base_revision_id == uuid.UUID(obj['version_ref']['entity_id'])
 
 
-@pytest.mark.parametrize('change', [{'x': .5, 'width': .6}, {'height': 0}, {'x': -1}, {'panel_key': 'missing'}, {'compatibility': ' '}])
+@pytest.mark.parametrize('change', [{'x': .5, 'width': .6}, {'height': 0}, {'x': -1}, {'panel_key': 'missing'}, {'module_port_type_id': ' '}])
 def test_invalid_bays_are_rejected_before_materialization(change):
     payload = base_payload()
     payload['bays'][0].update(change)

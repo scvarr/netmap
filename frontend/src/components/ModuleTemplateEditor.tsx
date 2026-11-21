@@ -1,3 +1,4 @@
+import { ModulePortTypeSelect, useModulePortTypes } from './ModulePortTypeSelect';
 import { useState } from 'react';
 import { PortTypeSelect, usePortTypes } from './PortTypeSelect';
 import { TemplateElementCreator } from './TemplateElementKindSelect';
@@ -27,6 +28,7 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
 }) {
   const { t } = useI18n();
   const catalog = usePortTypes();
+  const moduleCatalog = useModulePortTypes();
   const modulePorts = value.module_ports ?? [];
   const moduleMarkers: ModulePortMarker[] = modulePorts.map(({ key, display_name }) => ({ key, display_name, kind: 'MODULE_PORT' }));
   const markers = [...value.endpoints, ...moduleMarkers];
@@ -49,7 +51,7 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
       endpoints: Object.fromEntries(endpoints.map(endpoint => [endpoint.key, positions[endpoint.key]])),
     } });
   };
-  const updateModulePort = (key: string, field: 'display_name' | 'compatibility', text: string) =>
+  const updateModulePort = (key: string, field: 'display_name' | 'module_port_type_id', text: string) =>
     onChange({ ...value, module_ports: modulePorts.map(port => port.key === key ? { ...port, [field]: text } : port) });
   const removeDefinitions = (keys: ReadonlySet<string>) => {
     const endpoints = value.endpoints.filter(endpoint => !keys.has(endpoint.key));
@@ -61,17 +63,18 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
   return <fieldset disabled={disabled} className="module-template-editor">
     <aside className="blueprint-editor-controls module-template-editor__controls">
       <label>{t('hardware.name')}<input required value={value.name} onChange={e => onChange({ ...value, name: e.target.value })} /></label>
-      <label>{t('hardware.compatibility')}<input required value={value.compatibility} onChange={e => onChange({ ...value, compatibility: e.target.value })} /></label>
+      <ModulePortTypeSelect types={moduleCatalog.types} value={value.module_port_type_id}
+        onChange={module_port_type_id => onChange({ ...value, module_port_type_id })} />
       <h2>{t('blueprint.endpoint.elements')}</h2>
       <p role="status">{t('blueprint.layout.selected', { count: selected.size })}</p>
-      <TemplateElementCreator catalog={catalog}
-        onAddModulePorts={(count, compatibility) => {
+      <TemplateElementCreator moduleCatalog={moduleCatalog} catalog={catalog}
+        onAddModulePorts={(count, module_port_type_id) => {
           const names = new Set(markers.map(marker => marker.display_name));
           const prefix = t('blueprint.endpoint.modulePort');
           let number = 1;
           const added = Array.from({ length: count }, () => {
             while (names.has(`${prefix} ${number}`)) number++;
-            return { key: crypto.randomUUID(), display_name: `${prefix} ${number++}`, compatibility };
+            return { key: crypto.randomUUID(), display_name: `${prefix} ${number++}`, module_port_type_id };
           });
           const positions = moduleEndpointPositions([...markers, ...added], markerGeometry.endpoints);
           onChange({ ...value, module_ports: [...modulePorts, ...added.map(port => ({ ...port, ...positions[port.key] }))] });
@@ -113,8 +116,8 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
             else changeEndpoint({ display_name: event.target.value });
           }} /></label>
           {isModulePort
-            ? <label>{t('hardware.compatibility')}<input required value={modulePorts[index].compatibility}
-                onChange={event => updateModulePort(active.key, 'compatibility', event.target.value)} /></label>
+            ? <ModulePortTypeSelect types={moduleCatalog.types} value={modulePorts[index].module_port_type_id}
+                onChange={id => updateModulePort(active.key, 'module_port_type_id', id)} />
             : <>
               <PortTypeSelect types={catalog.types} value={active.port_type_id} singleMember={active.kind === 'NETWORK_PORT'}
                 onChange={port_type_id => changeEndpoint({ port_type_id })} />

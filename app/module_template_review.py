@@ -11,6 +11,7 @@ from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.errors import ModelError, ValidationError
 from app.hardware_catalog import HardwareCatalog
 from app.port_types import validate_port_type_assignments
+from app.module_port_types import module_assignments, validate_module_port_types
 from app.schemas import CreateModuleTemplateRequest
 
 
@@ -21,7 +22,7 @@ def validate_definition(value):
 def published_definition(session, template_id, revision_id):
     document = HardwareCatalog(session).module_document(
         session.get(m.ModuleTemplate, template_id), session.get(m.ModuleTemplateRevision, revision_id))
-    return validate_definition({k: document[k] for k in ("name", "compatibility", "endpoints", "module_ports", "geometry")})
+    return validate_definition({k: document[k] for k in ("name", "module_port_type_id", "endpoints", "module_ports", "geometry")})
 
 
 def structural_changes(before, after):
@@ -38,7 +39,7 @@ def structural_changes(before, after):
             changes.append({"section": "module_ports", "key": key,
                             "operation": "added" if key not in old_ports else "removed" if key not in new_ports else "changed",
                             "before": old_ports.get(key), "after": new_ports.get(key)})
-    for key in ("name", "compatibility"):
+    for key in ("name", "module_port_type_id"):
         if before[key] != after[key]:
             changes.append({"section": "properties", "key": key, "operation": "changed", "before": before[key], "after": after[key]})
     if before["geometry"] != after["geometry"]:
@@ -71,8 +72,8 @@ def analyze_installation(session, installation, candidate):
     if any(row.definition_id not in definitions for row in rows):
         reasons.append({"code": "INVALID_ENDPOINT_MAPPING"})
     bay = session.scalar(select(m.ModuleBay).where(m.ModuleBay.base_revision_id == config.base_revision_id, m.ModuleBay.bay_key == installation.bay_key))
-    if bay is None or bay.compatibility != candidate["compatibility"]:
-        reasons.append({"code": "BAY_COMPATIBILITY_MISMATCH", "compatibility": candidate["compatibility"]})
+    if bay is None or str(bay.module_port_type_id) != candidate["module_port_type_id"]:
+        reasons.append({"code": "BAY_COMPATIBILITY_MISMATCH", "module_port_type_id": candidate["module_port_type_id"]})
     for key, definition in old.items():
         mapping = mappings.get(key)
         if mapping is None:
@@ -169,6 +170,7 @@ class ModuleTemplateReview:
             raise ModelError("Draft changed in another session; reopen before saving", {"reason": "DRAFT_CONFLICT"})
         updated = validate_definition(definition)
         validate_port_type_assignments(self.session, updated["endpoints"], draft.definition["endpoints"])
+        validate_module_port_types(self.session, module_assignments(updated), module_assignments(draft.definition))
         draft.definition = updated
         draft.generation += 1
         self.session.flush()

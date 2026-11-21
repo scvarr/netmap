@@ -781,7 +781,7 @@ class ModuleBayRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     bay_key: str = Field(min_length=1, max_length=255)
     display_name: str = Field(min_length=1, max_length=255)
-    compatibility: str = Field(min_length=1, max_length=255)
+    module_port_type_id: uuid.UUID
     panel_key: str = Field(min_length=1, max_length=255)
     kind: Literal["LOGICAL", "PLACED"] = "PLACED"
     x: FiniteFloat | None = Field(default=None, ge=0, le=1)
@@ -798,7 +798,7 @@ class ModuleBayRequest(BaseModel):
             raise PydanticCustomError("hardware_validation", "Bay kind and placement contradict each other")
         if self.width is not None and (self.x + self.width > 1 or self.y + self.height > 1):
             raise PydanticCustomError("hardware_validation", "Bay rectangle must be entirely inside its panel")
-        if any(not v.strip() for v in (self.bay_key, self.display_name, self.compatibility, self.panel_key)):
+        if any(not v.strip() for v in (self.bay_key, self.display_name, self.panel_key)):
             raise PydanticCustomError("hardware_validation", "Bay strings must not be blank")
         return self
 
@@ -820,13 +820,13 @@ class ModuleEndpointPosition(BaseModel):
 class ModulePortDefinition(ModuleEndpointPosition):
     key: str = Field(min_length=1, max_length=255)
     display_name: str = Field(min_length=1, max_length=255)
-    compatibility: str = Field(min_length=1, max_length=255)
+    module_port_type_id: uuid.UUID = Field(strict=False)
     width: FiniteFloat | None = Field(default=None, gt=0, le=1)
     height: FiniteFloat | None = Field(default=None, gt=0, le=1)
 
     @model_validator(mode="after")
     def valid_module_port(self):
-        if any(not value.strip() for value in (self.key, self.display_name, self.compatibility)):
+        if any(not value.strip() for value in (self.key, self.display_name)):
             raise PydanticCustomError("hardware_validation", "Module port strings must not be blank")
         if (self.width is None) != (self.height is None) or (
             self.width is not None and (self.x + self.width > 1 or self.y + self.height > 1)
@@ -846,14 +846,14 @@ class ModuleGeometry(BaseModel):
 class CreateModuleTemplateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=255)
-    compatibility: str = Field(min_length=1, max_length=255)
+    module_port_type_id: uuid.UUID
     endpoints: list[ModuleEndpointRequest]
     geometry: ModuleGeometry
     module_ports: list[ModulePortDefinition] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def valid_definitions(self):
-        if not self.name.strip() or not self.compatibility.strip() or any(not e.key.strip() or not e.display_name.strip() for e in self.endpoints):
+        if not self.name.strip() or any(not e.key.strip() or not e.display_name.strip() for e in self.endpoints):
             raise PydanticCustomError("hardware_validation", "Module strings must not be blank")
         if set(self.geometry.endpoints) != {e.key for e in self.endpoints}:
             raise PydanticCustomError("hardware_validation", "Geometry must match endpoint keys")
@@ -933,7 +933,7 @@ class BaseTemplateImpactReason(BaseModel):
     endpoint_name: str | None = None
     dependencies: list[str] | None = None
     installation_id: uuid.UUID | None = None
-    compatibility: str | None = None
+    module_port_type_id: uuid.UUID | None = None
     connection_ids: list[uuid.UUID] | None = None
 
 
@@ -972,7 +972,7 @@ class ModuleTemplateStructuralChange(BaseModel):
         if self.section == "geometry":
             valid = self.key == "geometry" and self.operation == "changed" and len(values) == 2 and all(isinstance(v, ModuleGeometry) for v in values)
         elif self.section == "properties":
-            valid = self.key in ("name", "compatibility") and self.operation == "changed" and len(values) == 2 and all(isinstance(v, str) for v in values)
+            valid = self.key in ("name", "module_port_type_id") and self.operation == "changed" and len(values) == 2 and all(isinstance(v, str) for v in values)
         elif self.section == "module_ports":
             valid = all(isinstance(v, ModulePortDefinition) and v.key == self.key for v in values)
         else:

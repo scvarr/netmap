@@ -1,3 +1,4 @@
+from tests.module_port_type_fixtures import ensure_module_port_type_id
 from tests.port_type_fixtures import ensure_port_type_id
 import uuid
 
@@ -11,7 +12,7 @@ from tests.test_hardware_configuration import client, create_base, create_module
 
 def add_revision(template_id):
     with SessionLocal.begin() as session:
-        revision = ModuleTemplateRevision(template_id=uuid.UUID(template_id), version_number=2, name='Historical module', compatibility='OCP3', geometry={'width': 240, 'height': 80, 'fill_color': '#64748b', 'endpoints': {'new-port': {'x': .5, 'y': .5}}})
+        revision = ModuleTemplateRevision(template_id=uuid.UUID(template_id), version_number=2, name='Historical module', module_port_type_id=uuid.UUID(ensure_module_port_type_id('OCP3')), geometry={'width': 240, 'height': 80, 'fill_color': '#64748b', 'endpoints': {'new-port': {'x': .5, 'y': .5}}})
         session.add(revision)
         session.flush()
         session.add(ModuleEndpointDefinition(module_revision_id=revision.id, definition_key='new-port',

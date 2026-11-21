@@ -46,7 +46,7 @@ describe('RU/EN localization integration', () => {
   });
 
   it('localizes the composition editor while submitting canonical Blueprint values', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => Response.json([
+    vi.stubGlobal('fetch', vi.fn(async url => Response.json(String(url).endsWith('/module-port-types') ? ['Custom / 42'].map(name => ({ id: name, name, is_active: true })) : [
       { id: 'copper', name: 'Copper', color: '#336699', is_active: true, cardinality: 1 },
     ])));
     const createBaseTemplate = vi.fn().mockResolvedValue({});
@@ -58,7 +58,7 @@ describe('RU/EN localization integration', () => {
     await userEvent.selectOptions(await screen.findByLabelText('Port type'), 'copper');
     await userEvent.click(screen.getByRole('button', { name: /^Add$/ }));
     await userEvent.selectOptions(screen.getAllByLabelText('Endpoint kind')[0], 'MODULE_PORT');
-    await userEvent.type(screen.getByLabelText('Module port compatibility'), 'Custom / 42');
+    await userEvent.selectOptions(screen.getByLabelText('Module port compatibility'), 'Custom / 42');
     await userEvent.click(screen.getByRole('button', { name: /^Add$/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Save blueprint' }));
 
@@ -66,7 +66,7 @@ describe('RU/EN localization integration', () => {
       name: 'Карта',
       panels: [expect.objectContaining({ panel_number: 1, display_name: 'Панель 1' })],
       slots: [expect.objectContaining({ kind: 'NETWORK_PORT', display_name: '1-1', port_type_id: 'copper' })],
-      bays: [expect.objectContaining({ kind: 'PLACED', display_name: '1-2', compatibility: 'Custom / 42' })],
+      bays: [expect.objectContaining({ kind: 'PLACED', display_name: '1-2', module_port_type_id: 'Custom / 42' })],
     })));
   });
 });

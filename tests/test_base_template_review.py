@@ -1,3 +1,4 @@
+from tests.module_port_type_fixtures import ensure_module_port_type_id
 import copy
 import uuid
 
@@ -52,7 +53,7 @@ def test_draft_roundtrip_snapshot_identity_and_immutability():
     draft = open_draft(template_id)
     assert draft['source_revision_id'] == obj['version_ref']['entity_id']
     assert draft['definition']['slots'] == [{**s, 'cardinality': 1} for s in payload['slots']]
-    assert draft['definition']['panels'] == payload['panels']
+    assert draft['definition']['panels'] == [{**panel, 'face': None} for panel in payload['panels']]
     definition = copy.deepcopy(draft['definition'])
     definition['slots'][0]['display_name'] = 'Renamed'
     definition['slots'][0]['rendered_position']['x'] = .7
@@ -184,7 +185,7 @@ def test_saved_review_freshness_and_workspace_v6_roundtrip():
         alias.value = 'Changed after check'
     assert not open_draft(template_id)['review']['current']
     package = client.get('/v1/workspace/package').json()
-    assert package['format_version'] == 11
+    assert package['format_version'] == 12
     assert len(package['authoring']['BaseTemplateDraft']) == 1
     assert len(package['authoring']['BaseTemplateCandidate']) == 1
     assert client.delete('/v1/workspace/dataset').status_code == 204
@@ -213,7 +214,7 @@ def test_conflict_and_invalid_link_do_not_destroy_draft():
     assert open_draft(template_id)['definition']['name'] == 'Saved'
 
 
-@pytest.mark.parametrize('change', ['compatibility', 'kind', 'internal_link', 'remove_initial_panel'])
+@pytest.mark.parametrize('change', ['module_port_type_id', 'kind', 'internal_link', 'remove_initial_panel'])
 def test_structural_changes_keep_keys_and_fail_closed_when_needed(change):
     payload = base_payload()
     payload['panels'].append({**payload['panels'][0], 'panel_key': str(uuid.uuid4()), 'panel_number': 2})
@@ -222,13 +223,13 @@ def test_structural_changes_keep_keys_and_fail_closed_when_needed(change):
         payload['internal_links'] = [{'from_slot_key': payload['slots'][0]['key'], 'to_slot_key': payload['slots'][1]['key']}]
     template_id, _ = create_base(payload)
     object_id = create_object(template_id)['physical_object_ref']['entity_id']
-    if change == 'compatibility':
+    if change == 'module_port_type_id':
         module = create_module()
         assert install(object_id, module['template_id'], payload['bays'][0]['bay_key']).status_code == 201
     draft = open_draft(template_id)
     definition = copy.deepcopy(draft['definition'])
-    if change == 'compatibility':
-        definition['bays'][0]['compatibility'] = 'ocp3'
+    if change == 'module_port_type_id':
+        definition['bays'][0]['module_port_type_id'] = ensure_module_port_type_id('Different slot')
     elif change == 'kind':
         definition['slots'][0]['kind'] = 'CONNECTION_POINT'
     elif change == 'internal_link':
@@ -245,6 +246,6 @@ def test_structural_changes_keep_keys_and_fail_closed_when_needed(change):
         check(template_id, saved)
     result = analyze_saved_definition(template_id, saved)[0]
     assert result['classification'] == ('potentially_safe' if change == 'remove_initial_panel' else 'requires_intervention')
-    if change in ('kind', 'compatibility'):
+    if change in ('kind', 'module_port_type_id'):
         section = 'slots' if change == 'kind' else 'bays'
         assert [c['operation'] for c in result['changes'] if c['section'] == section] == ['changed']

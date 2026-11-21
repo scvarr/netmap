@@ -598,13 +598,15 @@ class ModuleBay(Base):
         ForeignKeyConstraint(["base_revision_id", "panel_key"], ["presentation_panels.base_revision_id", "presentation_panels.panel_key"], ondelete="RESTRICT"),
         CheckConstraint("(kind = 'LOGICAL' AND x IS NULL AND y IS NULL AND width IS NULL AND height IS NULL) OR (kind = 'PLACED' AND x BETWEEN 0 AND 1 AND y BETWEEN 0 AND 1 AND x IS NOT NULL AND y IS NOT NULL AND (width IS NULL) = (height IS NULL))", name="bay_representation"),
         CheckConstraint("x >= 0 AND y >= 0 AND width > 0 AND height > 0 AND x + width <= 1 AND y + height <= 1", name="rectangle_inside_panel"),
-        CheckConstraint("char_length(btrim(bay_key)) > 0 AND char_length(btrim(display_name)) > 0 AND char_length(btrim(compatibility)) > 0", name="bay_strings_not_blank"),
+        CheckConstraint("char_length(btrim(bay_key)) > 0 AND char_length(btrim(display_name)) > 0", name="bay_strings_not_blank"),
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     base_revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("base_template_revisions.id", ondelete="RESTRICT"), nullable=False)
     bay_key: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    compatibility: Mapped[str] = mapped_column(String(255), nullable=False)
+    module_port_type_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("module_port_types.id", ondelete="RESTRICT"), index=True,
+    )
     panel_key: Mapped[str] = mapped_column(String(255), nullable=False)
     kind: Mapped[str] = mapped_column(String(16), nullable=False, default="PLACED", server_default="PLACED")
     x: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -624,13 +626,15 @@ class ModuleTemplateRevision(Base):
     __tablename__ = "module_template_revisions"
     __table_args__ = (
         UniqueConstraint("template_id", "version_number"),
-        CheckConstraint("version_number > 0 AND char_length(btrim(compatibility)) > 0", name="revision_valid"),
+        CheckConstraint("version_number > 0", name="revision_valid"),
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     template_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_templates.id", ondelete="RESTRICT"), nullable=False)
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    compatibility: Mapped[str] = mapped_column(String(255), nullable=False)
+    module_port_type_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("module_port_types.id", ondelete="RESTRICT"), index=True,
+    )
     geometry: Mapped[dict] = mapped_column(JSONB, nullable=False)
     module_ports: Mapped[list[dict]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
 
@@ -1361,3 +1365,15 @@ class PortType(Base):
     @property
     def cardinality(self) -> int:
         return len(self.members)
+
+
+class ModulePortType(Base):
+    __tablename__ = "module_port_types"
+    __table_args__ = (
+        Index("uq_module_port_types_normalized_name", func.lower(sa.text("name")), unique=True),
+        CheckConstraint("char_length(btrim(name)) > 0", name="nonempty_name"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(nullable=False)

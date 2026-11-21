@@ -1,4 +1,6 @@
 """E2 atomic module publication and retained installation provenance."""
+
+from tests.module_port_type_fixtures import ensure_module_port_type_id
 import copy
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -117,16 +119,16 @@ def test_invalid_e2_archive_rejected(damage):
     assert client.get('/v1/workspace/package').json() == package
 
 
-@pytest.mark.parametrize('compatibility', ['OCP3', 'ocp3', ' OCP3', 'OCP3 '])
-def test_new_installation_pins_latest_with_exact_compatibility(compatibility):
+@pytest.mark.parametrize('type_name', ['OCP3', 'SFP+', ' OCP3', 'OCP3 '])
+def test_new_installation_pins_latest_with_exact_compatibility(type_name):
     base_id, payload = create_base(); module = create_module(); tid = module['template_id']
     draft = open_draft(tid)
-    checked = check(tid, save(tid, draft, {**draft['definition'], 'compatibility': compatibility}))
+    checked = check(tid, save(tid, draft, {**draft['definition'], 'module_port_type_id': ensure_module_port_type_id(type_name)}))
     result = publish(tid, checked['review']['candidate_id']).json()
     obj = create_object(base_id)
     response = install(obj['physical_object_ref']['entity_id'], tid, payload['bays'][0]['bay_key'])
-    assert response.status_code == (201 if compatibility == 'OCP3' else 409), response.text
-    if compatibility == 'OCP3':
+    assert response.status_code == (201 if type_name == 'OCP3' else 409), response.text
+    if type_name == 'OCP3':
         assert response.json()['bays'][0]['installation']['module_revision_id'] == result['revision_id']
 
 
@@ -152,7 +154,7 @@ def test_input_writers_blocked_during_publication(monkeypatch):
 def test_diagnostics_intervention_and_delete_publication():
     _, module, _ = setup_installations(1); tid = module['template_id']
     draft = open_draft(tid)
-    checked = check(tid, save(tid, draft, {**draft['definition'], 'compatibility': 'ocp3'}))
+    checked = check(tid, save(tid, draft, {**draft['definition'], 'module_port_type_id': ensure_module_port_type_id('Different slot')}))
     assert publish(tid, checked['review']['candidate_id']).status_code == 200
     state = open_draft(tid)['publication_state']
     assert state['awaiting_update_count'] == 0 and state['requires_intervention_count'] == 1

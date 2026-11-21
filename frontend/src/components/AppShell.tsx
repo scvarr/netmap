@@ -16,6 +16,7 @@ const groups = [
   ] },
   { id: 'catalogs', label: 'portTypes.section', icon: '▣', links: [
     ['/catalogs/port-types', 'portTypes.title', '▣'],
+    ['/catalogs/module-port-types', 'modulePortTypes.title', '◇'],
     ['/catalogs/connector-types', 'physicalCatalog.connectorTypes', '◇'],
     ['/catalogs/cable-types', 'physicalCatalog.cableTypes', '∿'],
   ] },

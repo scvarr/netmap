@@ -1,4 +1,6 @@
 """F2a presentation persistence, projection and reconciliation guarantees."""
+
+from tests.module_port_type_fixtures import ensure_module_port_type_id
 import copy
 import uuid
 import pytest
@@ -77,7 +79,7 @@ def test_d2_retains_custom_layout_and_blocks_panel_move():
 def test_archive_roundtrip_and_corruption():
     _, obj, _, document = setup()
     current = package()
-    assert current['format_version'] == 11 and current['module_layout_version'] == 1
+    assert current['format_version'] == 12 and current['module_layout_version'] == 1
     parsed = validate_package(current)
     assert parsed['module_installations'][0]['layout'] == document['bays'][0]['installation']['layout']
     for bad in (None, {}, {**parsed['module_installations'][0]['layout'], 'width': 2}):
@@ -114,7 +116,7 @@ def test_d2_final_assignment_panel_conflict_is_atomic(replace_key, logical):
         if replace_key:
             # Original bay survives but becomes incompatible: D2 must reassign.
             d['bays'].append({**original, 'bay_key': 'replacement', 'panel_key': 'other'})
-            original['compatibility'] = 'incompatible'
+            original['module_port_type_id'] = ensure_module_port_type_id('incompatible')
         else:
             original['panel_key'] = 'other'
     revision(base, edit)

@@ -1,3 +1,4 @@
+from tests.module_port_type_fixtures import ensure_module_port_type_id
 import copy
 import uuid
 import pytest
@@ -110,7 +111,7 @@ def test_physical_changes_rejected_without_instances(change):
         d['slots'][0]['cardinality']+=1
         d['slots'][0]['port_type_id'] = ensure_port_type_id(d['slots'][0]['cardinality'])
     if change=='mapping': d['internal_links']=d['internal_links'][:1]; link=d['internal_links'][0]; field='from_member_index' if next(s for s in d['slots'] if s['key']==link['from_slot_key'])['cardinality']>1 else 'to_member_index';link['member_mappings'][0][field]=1 if link['member_mappings'][0][field]!=1 else 2
-    if change=='bay': d['bays'][0]['compatibility']='different'
+    if change=='bay': d['bays'][0]['module_port_type_id']=ensure_module_port_type_id('different')
     saved=save(tid,draft,d)
     response=client.post(f'/v1/library/base-templates/{tid}/draft/check', params={'expected_generation': saved['generation']})
     assert response.status_code==409,response.text

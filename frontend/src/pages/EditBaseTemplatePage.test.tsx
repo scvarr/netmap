@@ -7,7 +7,7 @@ import { EditBaseTemplatePage } from './EditBaseTemplatePage';
 import type { BaseTemplateDataSource, BaseTemplateDraftDocument, BaseTemplateReconciliationResult } from '../topology/baseTemplateTypes';
 
 beforeEach(() => { localStorage.clear();
-  vi.stubGlobal('fetch', vi.fn(async () => Response.json([
+  vi.stubGlobal('fetch', vi.fn(async url => Response.json(String(url).endsWith('/module-port-types') ? ['OCP3', 'SFP+', 'QSFP+'].map(name => ({ id: name, name, is_active: true })) : [
     { id: 'test-type', name: 'Copper', color: '#336699', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
   ])));
 });
@@ -28,7 +28,7 @@ const draft = (): BaseTemplateDraftDocument => ({ template_id: 'base', source_re
   definition: { name: 'Сохранённый черновик', default_physical_object_class: 'server', body: { kind: 'RECTANGLE', width: 160, height: 60, fill_color: '#28565a' },
     panels: [{ panel_key: 'panel', panel_number: 1, display_name: 'Front', x: 0, y: 0, width: 160, height: 60 }],
     slots: [{ key: 'endpoint', display_name: 'MGMT', port_type_id: 'test-type', kind: 'NETWORK_PORT', panel_key: 'panel', rendered_position: { x: .2, y: .5 } }],
-    internal_links: [], bays: [{ bay_key: 'stable-bay', display_name: 'OCP bay', compatibility: 'OCP3', panel_key: 'panel', x: .2, y: .1, width: .6, height: .8 }] } });
+    internal_links: [], bays: [{ bay_key: 'stable-bay', display_name: 'OCP bay', module_port_type_id: 'OCP3', panel_key: 'panel', x: .2, y: .1, width: .6, height: .8 }] } });
 const withReview = (doc: BaseTemplateDraftDocument): BaseTemplateDraftDocument => ({ ...doc, review: {
   candidate_id: 'candidate', draft_generation: doc.generation, definition: doc.definition, current: true, created_at: '2026-10-16T12:00:00Z',
   result: { changes: [{ section: 'slots', key: 'new-endpoint', operation: 'added' }], objects: [{ physical_object_id: 'object', source_revision_id: 'published', classification: 'potentially_safe', reasons: [{ code: 'IDENTITY_AND_DATA_PRESERVED' }], proposed_placements: {}, changes: [] }] },
@@ -75,9 +75,10 @@ it('authors exact logical groups and keeps their individual bays through draft r
   const view = mount();
   fireEvent.click(await screen.findByText('Модульные места · 0'));
   const creation = within(screen.getByRole('group', { name: 'Создать группу' }));
-  const create = (compatibility: string, count: string, panel = 'panel') => {
+  await creation.findByRole('option', { name: 'OCP3' });
+  const create = (module_port_type_id: string, count: string, panel = 'panel') => {
     fireEvent.change(creation.getByLabelText('Панель'), { target: { value: panel } });
-    fireEvent.change(creation.getByLabelText('Совместимость'), { target: { value: compatibility } });
+    fireEvent.change(creation.getByLabelText('Совместимость'), { target: { value: module_port_type_id } });
     fireEvent.change(creation.getByLabelText('Количество мест'), { target: { value: count } });
     fireEvent.click(creation.getByRole('button', { name: 'Создать группу' }));
   };
@@ -87,28 +88,28 @@ it('authors exact logical groups and keeps their individual bays through draft r
     return (await source.saveDraft.mock.results[calls - 1].value).definition.bays!;
   };
   create('OCP3', '2');
-  create('ocp3', '1');
-  create(' OCP3 ', '1');
+  create('SFP+', '1');
+  create('QSFP+', '1');
   create('OCP3', '1', 'rear');
   create('OCP3', '3');
   expect(screen.getByRole('alert')).toHaveTextContent('уже существует');
   create('  ', '1');
-  expect(screen.getByRole('alert')).toHaveTextContent('непустую');
+  expect(screen.getByRole('alert')).toHaveTextContent('активный тип');
   create('new', '0');
   expect(screen.getByRole('alert')).toHaveTextContent('от 1');
   create('new', '1025');
   expect(screen.getByRole('alert')).toHaveTextContent('не более 1024');
   expect(creation.getByLabelText('Количество мест')).toHaveValue('1025');
   const first = await save(1);
-  expect(first.map(bay => [bay.panel_key, bay.compatibility])).toEqual([
-    ['panel', 'OCP3'], ['panel', 'OCP3'], ['panel', 'OCP3'], ['panel', 'ocp3'], ['panel', ' OCP3 '], ['rear', 'OCP3'],
+  expect(first.map(bay => [bay.panel_key, bay.module_port_type_id])).toEqual([
+    ['panel', 'OCP3'], ['panel', 'OCP3'], ['panel', 'OCP3'], ['panel', 'SFP+'], ['panel', 'QSFP+'], ['rear', 'OCP3'],
   ]);
   expect(first.slice(1).every(bay => bay.kind === 'LOGICAL' && [bay.x, bay.y, bay.width, bay.height].every(value => value === null))).toBe(true);
   expect(view.container.querySelectorAll('[data-module-port-marker]')).toHaveLength(1);
   view.unmount();
   mount();
   fireEvent.click(await screen.findByText('Модульные места · 4'));
-  const group = within(screen.getByRole('group', { name: '1 · Front / "OCP3"' }));
+  const group = within(screen.getByRole('group', { name: '1 · Front / OCP3' }));
   const count = () => group.getByLabelText('Количество мест');
   const apply = (value: string) => {
     fireEvent.change(count(), { target: { value } });
@@ -126,7 +127,7 @@ it('authors exact logical groups and keeps their individual bays through draft r
   expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeEnabled();
   apply('1024');
   const grown = await save(2);
-  const grownGroup = grown.filter(bay => bay.kind === 'LOGICAL' && bay.panel_key === 'panel' && bay.compatibility === 'OCP3');
+  const grownGroup = grown.filter(bay => bay.kind === 'LOGICAL' && bay.panel_key === 'panel' && bay.module_port_type_id === 'OCP3');
   expect(grownGroup).toHaveLength(1024);
   expect(grown.slice(0, first.length)).toEqual(first);
   expect(new Set(grown.map(bay => bay.bay_key)).size).toBe(grown.length);
@@ -367,11 +368,11 @@ it('shows zero checked objects without claiming a successful update', async () =
 
 it('describes exact logical changes and keeps technical keys behind disclosure', async () => {
   const doc = withReview(draft());
-  const logical = (bay_key: string, compatibility: string) => ({
-    bay_key, compatibility, panel_key: 'panel', kind: 'LOGICAL' as const,
+  const logical = (bay_key: string, module_port_type_id: string) => ({
+    bay_key, module_port_type_id, panel_key: 'panel', kind: 'LOGICAL' as const,
     display_name: 'Место', x: null, y: null, width: null, height: null,
   });
-  doc.definition.bays = [logical('first', 'OCP3'), logical('second', 'OCP3'), logical('lower', 'ocp3'), logical('spaced', ' OCP3 ')];
+  doc.definition.bays = [logical('first', 'OCP3'), logical('second', 'OCP3'), logical('lower', 'SFP+'), logical('spaced', 'QSFP+')];
   const key = '26b90ecf-f4e2-45e2-8229-f1812d09183b';
   doc.review!.result.changes = [
     ...[key, 'fourth', 'fifth'].map(bay => ({ section: 'bays', key: bay, operation: 'removed', before: logical(bay, 'OCP3') })),
@@ -384,7 +385,7 @@ it('describes exact logical changes and keeps technical keys behind disclosure',
   safe.display_name = 'Safe server';
   doc.review!.result.objects.push({
     ...safe, physical_object_id: 'blocked', display_name: 'Blocked server', classification: 'requires_intervention',
-    reasons: [{ code: 'INSUFFICIENT_COMPATIBLE_CAPACITY', compatibility: 'OCP3', installation_id: key }],
+    reasons: [{ code: 'INSUFFICIENT_COMPATIBLE_CAPACITY', module_port_type_id: 'OCP3', installation_id: key }],
   });
   const { source, mount } = setup(doc);
   mount();
@@ -392,9 +393,9 @@ it('describes exact logical changes and keeps technical keys behind disclosure',
   expect(status).toHaveAttribute('data-tone', 'warning');
   expect(status).toHaveTextContent('Потенциально безопасно: 1 · Требуют вмешательства: 1');
   const dialog = within(openInspector());
-  const group = dialog.getByText('Модульные места · Front / "OCP3" · 5 → 2 (−3)');
-  expect(dialog.getByText('Модульные места · Front / "ocp3" · 0 → 1 (+1)')).toBeVisible();
-  expect(dialog.getByText('Модульные места · Front / " OCP3 " · 0 → 1 (+1)')).toBeVisible();
+  const group = dialog.getByText('Модульные места · Front / OCP3 · 5 → 2 (−3)');
+  expect(dialog.getByText('Модульные места · Front / SFP+ · 0 → 1 (+1)')).toBeVisible();
+  expect(dialog.getByText('Модульные места · Front / QSFP+ · 0 → 1 (+1)')).toBeVisible();
   expect(dialog.getByText('Изменено · Встроенные конечные точки · MGMT')).toBeVisible();
   expect(dialog.getByText('Удалено · Встроенные конечные точки')).toBeVisible();
   expect(dialog.getByText(/MGMT ↔ Конечная точка без доступного имени/)).toBeVisible();

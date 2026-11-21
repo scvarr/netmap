@@ -13,7 +13,7 @@ const catalog = [
   { id: 'fiber', name: 'Fiber', color: '#FFAA00', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
 ];
 beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn(async () => Response.json(catalog)));
+  vi.stubGlobal('fetch', vi.fn(async url => Response.json(String(url).endsWith('/module-port-types') ? ['Open / 42'].map(name => ({ id: name, name, is_active: true })) : catalog)));
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -31,8 +31,8 @@ it.each(['CONNECTION_POINT', 'NETWORK_PORT', 'MODULE_PORT'] as const)('uses the 
   expect(row.getByRole('textbox', { name: 'Название' })).toHaveValue('1-1');
   expect(row.getByRole('button', { name: 'Удалить' })).toBeEnabled();
   if (kind === 'MODULE_PORT') {
-    expect(row.getByRole('textbox', { name: 'Совместимость' })).toHaveValue('Open / 42');
-    expect(row.queryByRole('combobox')).toBeNull();
+    expect(row.getByRole('combobox', { name: 'Совместимость' })).toHaveValue('Open / 42');
+    expect(row.queryByRole('combobox', { name: 'Тип порта' })).toBeNull();
     return;
   }
   const type = row.getByRole('combobox', { name: 'Тип порта' });

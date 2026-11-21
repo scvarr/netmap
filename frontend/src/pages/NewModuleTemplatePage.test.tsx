@@ -11,7 +11,7 @@ const catalog = [
   { id: 'fiber', name: 'Fiber', color: '#FFAA00', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
 ];
 beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn(async () => Response.json(catalog)));
+  vi.stubGlobal('fetch', vi.fn(async url => Response.json(String(url).endsWith('/module-port-types') ? ['PCIe', 'Parent A', 'Parent', 'Lab / original', 'Lab / custom', 'Custom / 42'].map(name => ({ id: name, name, is_active: true })) : catalog)));
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -19,6 +19,7 @@ it('creates NIC-2GE with two stable keys and retains input after failure', async
   const createModule = vi.fn().mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce({});
   render(<I18nProvider><MemoryRouter><NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} /></MemoryRouter></I18nProvider>);
   fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'NIC-2GE' } });
+  await screen.findByRole('option', { name: 'PCIe' });
   fireEvent.change(screen.getByLabelText('Совместимость'), { target: { value: 'PCIe' } });
   for (const name of ['GE1', 'GE2']) {
     await screen.findAllByRole('option', { name: 'Copper · #336699' });
@@ -46,6 +47,7 @@ it('bulk adds and reassigns selected module endpoints with current catalog color
     <NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} />
   </MemoryRouter></I18nProvider>);
   fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'NIC-3' } });
+  await screen.findByRole('option', { name: 'PCIe' });
   fireEvent.change(screen.getByLabelText('Совместимость'), { target: { value: 'PCIe' } });
   await screen.findByRole('option', { name: 'Copper · #336699' });
   fireEvent.change(screen.getByRole('combobox', { name: 'Тип порта' }), { target: { value: 'test-type' } });
@@ -71,6 +73,7 @@ it('authors a diamond-shaped module port without assigning a PortType', async ()
     <NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} />
   </MemoryRouter></I18nProvider>);
   fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Carrier' } });
+  await screen.findByRole('option', { name: 'Parent A' });
   fireEvent.change(screen.getByLabelText('Совместимость'), { target: { value: 'Parent A' } });
   fireEvent.change(screen.getByLabelText('Вид точки'), { target: { value: 'MODULE_PORT' } });
   fireEvent.change(screen.getByLabelText('Совместимость модульного порта'), { target: { value: 'Lab / original' } });
@@ -90,7 +93,7 @@ it('authors a diamond-shaped module port without assigning a PortType', async ()
   fireEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));
   await waitFor(() => expect(createModule).toHaveBeenCalledWith(expect.objectContaining({
     endpoints: [],
-    module_ports: [{ key: expect.any(String), display_name: 'Child bay', compatibility: 'Lab / custom', x: .2, y: .5 }],
+    module_ports: [{ key: expect.any(String), display_name: 'Child bay', module_port_type_id: 'Lab / custom', x: .2, y: .5 }],
   })));
 });
 
@@ -100,6 +103,7 @@ it.each([2, 48, 256])('creates and reopens %i separate module ports', async coun
     <NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} />
   </MemoryRouter></I18nProvider>);
   fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Carrier' } });
+  await screen.findByRole('option', { name: 'Parent' });
   fireEvent.change(screen.getByLabelText('Совместимость'), { target: { value: 'Parent' } });
   const chooser = within(container.querySelector('.template-element-creator')! as HTMLElement);
   const quantity = chooser.getByLabelText('Количество');
@@ -123,7 +127,7 @@ it.each([2, 48, 256])('creates and reopens %i separate module ports', async coun
   expect(ports).toHaveLength(count);
   expect(new Set(ports.map(port => port.key)).size).toBe(count);
   expect(ports.map(port => port.display_name)).toEqual(Array.from({ length: count }, (_, i) => `Модульный порт ${i + 1}`));
-  expect(ports.every(port => port.compatibility === 'Custom / 42')).toBe(true);
+  expect(ports.every(port => port.module_port_type_id === 'Custom / 42')).toBe(true);
   expect(new Set(ports.map(port => `${port.x}:${port.y}`)).size).toBe(count);
   expect(ports.every(port => !('width' in port) && !('height' in port))).toBe(true);
   const positions = () => Array.from(document.querySelectorAll('[data-module-port-marker]'), marker => marker.getAttribute('points'));

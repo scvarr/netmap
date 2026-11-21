@@ -1,31 +1,33 @@
+import { ModulePortTypeSelect, modulePortTypeName, type ModulePortType } from './ModulePortTypeSelect';
 import { useState, type FormEvent } from 'react';
 import { useI18n } from '../i18n';
 import type { BlueprintEditorState } from '../blueprints/editorModel';
 import type { LogicalModuleBay, ModuleBay } from '../topology/hardwareModules';
 
 interface Props {
+  types?: ModulePortType[];
   panels: BlueprintEditorState['panels'];
   activePanelKey: string;
   bays: ModuleBay[];
   onChange: (bays: ModuleBay[]) => void;
 }
 
-const groupKey = (panel: string, compatibility: string) => JSON.stringify([panel, compatibility]);
+const groupKey = (panel: string, module_port_type_id: string) => JSON.stringify([panel, module_port_type_id]);
 const MAX_LOGICAL_PLACES_PER_GROUP = 1024;
 
-export function LogicalModulePlacesEditor({ panels, activePanelKey, bays, onChange }: Props) {
+export function LogicalModulePlacesEditor({ types, panels, activePanelKey, bays, onChange }: Props) {
   const { t } = useI18n();
   const [error, setError] = useState<string>();
   const groups = new Map<string, LogicalModuleBay[]>();
   for (const bay of bays) {
     if (bay.kind !== 'LOGICAL') continue;
-    const key = groupKey(bay.panel_key, bay.compatibility);
+    const key = groupKey(bay.panel_key, bay.module_port_type_id);
     const group = groups.get(key);
     if (group) group.push(bay);
     else groups.set(key, [bay]);
   }
 
-  const apply = (panel: string, compatibility: string, rawCount: string, creating = false) => {
+  const apply = (panel: string, module_port_type_id: string, rawCount: string, creating = false) => {
     const count = Number(rawCount);
     if (/^\d+$/.test(rawCount) && count > MAX_LOGICAL_PLACES_PER_GROUP) {
       setError(t('logicalPlaces.countLimit', { max: MAX_LOGICAL_PLACES_PER_GROUP }));
@@ -39,11 +41,11 @@ export function LogicalModulePlacesEditor({ panels, activePanelKey, bays, onChan
       setError(t('logicalPlaces.invalidPanel'));
       return false;
     }
-    if (creating && (!compatibility.trim() || [...compatibility].length > 255)) {
+    const existing = groups.get(groupKey(panel, module_port_type_id)) ?? [];
+    if (count > existing.length && !types?.some(type => type.id === module_port_type_id && type.is_active)) {
       setError(t('logicalPlaces.invalidCompatibility'));
       return false;
     }
-    const existing = groups.get(groupKey(panel, compatibility)) ?? [];
     if (creating && existing.length) {
       setError(t('logicalPlaces.duplicate'));
       return false;
@@ -64,7 +66,7 @@ export function LogicalModulePlacesEditor({ panels, activePanelKey, bays, onChan
         let display_name = t('logicalPlaces.placeName', { number: number++ });
         while (names.has(display_name)) display_name = t('logicalPlaces.placeName', { number: number++ });
         names.add(display_name);
-        next.push({ bay_key, display_name, panel_key: panel, compatibility, kind: 'LOGICAL', x: null, y: null, width: null, height: null });
+        next.push({ bay_key, display_name, panel_key: panel, module_port_type_id, kind: 'LOGICAL', x: null, y: null, width: null, height: null });
       }
       onChange(next);
     }
@@ -75,7 +77,7 @@ export function LogicalModulePlacesEditor({ panels, activePanelKey, bays, onChan
     event.preventDefault();
     const form = event.currentTarget;
     const fields = new FormData(form);
-    if (apply(String(fields.get('panel')), String(fields.get('compatibility')), String(fields.get('count')), true)) form.reset();
+    if (apply(String(fields.get('panel')), String(fields.get('module_port_type_id') ?? ''), String(fields.get('count')), true)) form.reset();
   };
 
   return <details className="blueprint-composer__section">
@@ -83,17 +85,17 @@ export function LogicalModulePlacesEditor({ panels, activePanelKey, bays, onChan
     <p>{t('logicalPlaces.updateNotice')}</p>
     {error && <p role="alert" className="blueprint-editor__error">{error}</p>}
     {[...groups].map(([key, group]) => {
-      const { panel_key, compatibility } = group[0];
+      const { panel_key, module_port_type_id } = group[0];
       const panel = panels.find(item => item.panel_key === panel_key);
       return <form key={key} onSubmit={event => {
         event.preventDefault();
-        apply(panel_key, compatibility, String(new FormData(event.currentTarget).get('count')));
+        apply(panel_key, module_port_type_id, String(new FormData(event.currentTarget).get('count')));
       }}>
         <fieldset>
-          <legend>{panel?.panel_number} · {panel?.display_name} / <code style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{JSON.stringify(compatibility)}</code></legend>
+          <legend>{panel?.panel_number} · {panel?.display_name} / <code style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{modulePortTypeName(types, module_port_type_id)}</code></legend>
           <label>{t('logicalPlaces.count')}<input key={group.length} name="count" inputMode="numeric" defaultValue={group.length} /></label>
           <button type="submit" className="secondary-action">{t('logicalPlaces.apply')}</button>{' '}
-          <button type="button" className="text-action" onClick={() => apply(panel_key, compatibility, '0')}>{t('logicalPlaces.remove')}</button>
+          <button type="button" className="text-action" onClick={() => apply(panel_key, module_port_type_id, '0')}>{t('logicalPlaces.remove')}</button>
         </fieldset>
       </form>;
     })}
@@ -103,7 +105,7 @@ export function LogicalModulePlacesEditor({ panels, activePanelKey, bays, onChan
         <label>{t('hardware.panel')}<select key={JSON.stringify(panels.map(panel => panel.panel_key))} name="panel" defaultValue={activePanelKey}>
           {panels.map(panel => <option key={panel.panel_key} value={panel.panel_key}>{panel.panel_number} · {panel.display_name}</option>)}
         </select></label>
-        <label>{t('hardware.compatibility')}<input name="compatibility" /></label>
+        <ModulePortTypeSelect types={types} name="module_port_type_id" />
         <label>{t('logicalPlaces.count')}<input name="count" inputMode="numeric" defaultValue="1" /></label>
         <button type="submit" className="secondary-action">{t('logicalPlaces.create')}</button>
       </fieldset>

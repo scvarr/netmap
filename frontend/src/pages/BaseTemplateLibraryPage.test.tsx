@@ -23,12 +23,12 @@ const revision: BaseTemplateRevisionDocument = {
   panels: [{ panel_key: 'rear', panel_number: 1, display_name: 'Rear', x: 10, y: 20, width: 160, height: 60 }],
   slots: [{ key: 'eth', display_name: 'Eth', port_type_id: 'test-type', kind: 'NETWORK_PORT', panel_key: 'rear', rendered_position: { x: .25, y: .5 } }],
   internal_links: [],
-  bays: [{ kind: 'LOGICAL', bay_key: 'bay', panel_key: 'rear', display_name: 'Bay', compatibility: 'OCP3' }],
+  bays: [{ kind: 'LOGICAL', bay_key: 'bay', panel_key: 'rear', display_name: 'Bay', module_port_type_id: 'OCP3' }],
 };
 const listed = { ...revision, default_physical_object_class: 'server', slot_count: 1, version_count: 2, internal_link_count: 0 };
 const second = { ...listed, blueprint_ref: { ...listed.blueprint_ref, entity_id: 'other' }, name: 'Other', default_physical_object_class: null };
 const module = {
-  template_id: 'nic', revision_id: 'nic-rev', name: 'NIC', compatibility: 'OCP3',
+  template_id: 'nic', revision_id: 'nic-rev', name: 'NIC', module_port_type_id: 'OCP3',
   geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { p1: { x: .3, y: .5 }, p2: { x: .7, y: .75 } } },
   endpoints: [{ key: 'p1', display_name: 'P1', port_type_id: 'test-type', kind: 'NETWORK_PORT' as const }, { key: 'p2', display_name: 'P2', port_type_id: 'test-type', kind: 'CONNECTION_POINT' as const }],
   publication_state: { revision_id: 'nic-rev', version_number: 3, outdated_count: 0, awaiting_update_count: 0, requires_intervention_count: 1, installations: [] },

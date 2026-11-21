@@ -3,6 +3,8 @@ import { useI18n } from '../i18n';
 import type { BlueprintSlotKind } from '../topology/baseTemplateTypes';
 import { PortTypeNotice, PortTypeSelect, type usePortTypes } from './PortTypeSelect';
 
+import { ModulePortTypeNotice, ModulePortTypeSelect, type useModulePortTypes } from './ModulePortTypeSelect';
+
 export type TemplateElementKind = BlueprintSlotKind | 'MODULE_PORT';
 
 export function TemplateElementKindSelect({ value, onChange }: {
@@ -17,10 +19,11 @@ export function TemplateElementKindSelect({ value, onChange }: {
   </select></label>;
 }
 
-export function TemplateElementCreator({ catalog, onAddEndpoints, onAddModulePorts, notice, placementScope = '' }: {
+export function TemplateElementCreator({ catalog, moduleCatalog, onAddEndpoints, onAddModulePorts, notice, placementScope = '' }: {
   catalog: ReturnType<typeof usePortTypes>;
+  moduleCatalog: ReturnType<typeof useModulePortTypes>;
   onAddEndpoints: (kind: BlueprintSlotKind, count: number, portTypeId: string, cardinality: number) => void;
-  onAddModulePorts: (count: number, compatibility: string) => boolean;
+  onAddModulePorts: (count: number, modulePortTypeId: string) => boolean;
   notice?: ReactNode;
   placementScope?: string;
 }) {
@@ -28,31 +31,31 @@ export function TemplateElementCreator({ catalog, onAddEndpoints, onAddModulePor
   const [kind, setKind] = useState<TemplateElementKind>('NETWORK_PORT');
   const [count, setCount] = useState('1');
   const [portTypeId, setPortTypeId] = useState('');
-  const [compatibility, setCompatibility] = useState('');
+  const [modulePortTypeId, setModulePortTypeId] = useState('');
   const [failedScope, setFailedScope] = useState<string>();
   const quantity = Number(count);
   const modulePort = kind === 'MODULE_PORT';
   const type = catalog.types?.find(item => item.id === portTypeId);
   const physicalReady = type?.is_active && (kind !== 'NETWORK_PORT' || type.cardinality === 1);
   const valid = Number.isInteger(quantity) && quantity >= 1 && quantity <= 256
-    && (modulePort ? !!compatibility.trim() : physicalReady);
+    && (modulePort ? moduleCatalog.types?.some(type => type.id === modulePortTypeId && type.is_active) : physicalReady);
   return <>
     <div className="template-element-creator">
       <TemplateElementKindSelect value={kind} onChange={next => { setKind(next); setFailedScope(undefined); }} />
       <label>{t('blueprint.endpoint.count')}<input type="number" min="1" max="256" value={count}
         onChange={event => { setCount(event.target.value); setFailedScope(undefined); }} /></label>
       {modulePort
-        ? <label>{t('hardware.compatibility')}<input aria-label={t('blueprint.endpoint.moduleCompatibility')}
-          maxLength={255} value={compatibility} onChange={event => setCompatibility(event.target.value)} /></label>
+        ? <ModulePortTypeSelect types={moduleCatalog.types} label="blueprint.endpoint.moduleCompatibility"
+          value={modulePortTypeId} onChange={setModulePortTypeId} />
         : <PortTypeSelect types={catalog.types} value={portTypeId} onChange={setPortTypeId} singleMember={kind === 'NETWORK_PORT'} />}
       <button type="button" className="secondary-action" disabled={!valid} onClick={() => {
         if (!valid) return;
-        if (kind === 'MODULE_PORT') setFailedScope(onAddModulePorts(quantity, compatibility) ? undefined : placementScope);
+        if (kind === 'MODULE_PORT') setFailedScope(onAddModulePorts(quantity, modulePortTypeId) ? undefined : placementScope);
         else if (type) onAddEndpoints(kind, quantity, type.id, type.cardinality);
       }}>{t('blueprint.endpoint.add')}</button>
     </div>
     {notice}
-    {!modulePort && <PortTypeNotice {...catalog} />}
+    {modulePort ? <ModulePortTypeNotice {...moduleCatalog} /> : <PortTypeNotice {...catalog} />}
     {failedScope === placementScope && <p role="alert" className="blueprint-editor__error">{t('blueprint.endpoint.modulePlacementFailed')}</p>}
   </>;
 }

@@ -1,4 +1,6 @@
 """E3 live preflight, identity, independent commits and v5 provenance."""
+
+from tests.module_port_type_fixtures import ensure_module_port_type_id
 import copy
 import uuid
 
@@ -64,7 +66,7 @@ def test_skipped_revisions_identity_add_remove_and_retry():
     assert package()['canonical'] == before['canonical']
 
 
-@pytest.mark.parametrize('blocker', ['metadata', 'json', 'fk', 'binding', 'kind', 'missing', 'compatibility'])
+@pytest.mark.parametrize('blocker', ['metadata', 'json', 'fk', 'binding', 'kind', 'missing', 'module_port_type_id'])
 def test_refusal_is_atomic(blocker):
     _, module, ids = setup_installations(1)
     tid = module['template_id']
@@ -84,8 +86,8 @@ def test_refusal_is_atomic(blocker):
         if blocker == 'missing':
             session.delete(mapping)
     def edit(d):
-        if blocker == 'compatibility':
-            d['compatibility'] = 'different'
+        if blocker == 'module_port_type_id':
+            d['module_port_type_id'] = ensure_module_port_type_id('different')
         elif blocker == 'kind':
             e = next(e for e in d['endpoints'] if e['key'] == key)
             e['kind'] = 'CONNECTION_POINT' if e['kind'] == 'NETWORK_PORT' else 'NETWORK_PORT'
@@ -115,7 +117,7 @@ def test_partial_success_rollback_mixed_archive(monkeypatch):
     assert len({r['module_revision_id'] for r in after['authoring']['ModuleInstallation']}) == 2
     for key in ('ModuleInstallation', 'ModuleEndpointMapping'):
         assert [r for r in before['authoring'][key] if r.get('installation_id', r['id']) == str(ids[0])] == [r for r in after['authoring'][key] if r.get('installation_id', r['id']) == str(ids[0])]
-    assert after['format_version'] == 11
+    assert after['format_version'] == 12
     assert client.delete('/v1/workspace/dataset').status_code == 204
     response = client.post('/v1/workspace/package', json=after)
     assert response.status_code == 204, response.text

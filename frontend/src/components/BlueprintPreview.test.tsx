@@ -79,8 +79,8 @@ it('fits a tall, narrow composition and projects the historical bay as a marker 
   render(<BlueprintPreview label="Narrow" body={{ kind: 'RECTANGLE', width: 40, height: 480 }}
     panels={[panel('upper', -10, 20, 40, 200), panel('lower', -10, 260, 40, 240, 2)]} slots={[]}
     bays={[
-      { kind: 'PLACED', bay_key: 'placed', display_name: 'OCP', compatibility: 'OCP3', panel_key: 'lower', x: .25, y: .5, width: .5, height: .25 },
-      { kind: 'LOGICAL', bay_key: 'logical', display_name: 'Logical', compatibility: 'OCP3', panel_key: 'upper' },
+      { kind: 'PLACED', bay_key: 'placed', display_name: 'OCP', module_port_type_id: 'OCP3', panel_key: 'lower', x: .25, y: .5, width: .5, height: .25 },
+      { kind: 'LOGICAL', bay_key: 'logical', display_name: 'Logical', module_port_type_id: 'OCP3', panel_key: 'upper' },
     ]} />);
   const svg = screen.getByRole('img', { name: 'Narrow' });
   expect(svg).toHaveAttribute('viewBox', '-10 20 40 480');

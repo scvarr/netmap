@@ -6,7 +6,7 @@ import { PageHeader, PageShell } from '../components/PageChrome';
 import { useI18n } from '../i18n';
 import { moduleReviewDataSource, type ModuleReconciliationResult, type ModuleDraftDocument, type ModuleReviewDataSource, type ModuleTemplateInput } from '../topology/hardwareModules';
 
-const signature = (d: ModuleTemplateInput) => JSON.stringify([d.name, d.compatibility, d.geometry, d.module_ports ?? [], d.endpoints.map(e => [e.key, e.display_name, e.kind])]);
+const signature = (d: ModuleTemplateInput) => JSON.stringify([d.name, d.module_port_type_id, d.geometry, d.module_ports ?? [], d.endpoints.map(e => [e.key, e.display_name, e.kind])]);
 
 export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: { dataSource?: ModuleReviewDataSource }) {
   const { templateId = '' } = useParams(); const { t } = useI18n();
@@ -75,7 +75,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
     {error && <p role="alert">{error}</p>}
     {definition && <form className="module-template-form" onSubmit={e => { e.preventDefault(); void run(false); }}>
       <ModuleTemplateEditor value={definition} onChange={change} disabled={busy} />
-        <button type="submit" className="primary-action" disabled={busy || revalidating || !definition.name.trim() || !definition.compatibility.trim() || definition.endpoints.some(e => !e.display_name.trim()) || definition.module_ports?.some(port => !port.display_name.trim() || !port.compatibility.trim())}>{t('review.save')}</button>
+        <button type="submit" className="primary-action" disabled={busy || revalidating || !definition.name.trim() || !definition.module_port_type_id.trim() || definition.endpoints.some(e => !e.display_name.trim()) || definition.module_ports?.some(port => !port.display_name.trim() || !port.module_port_type_id.trim())}>{t('review.save')}</button>
     </form>}
     {document?.publication_state && <section aria-label={t('publication.state')}>
       <p>{t('publication.revision', { number: document.publication_state.version_number })}</p>

@@ -326,7 +326,7 @@ export const copySelectionToPanel = (state: BlueprintEditorState, keys: Readonly
     if (source.kind === 'MODULE_PORT') {
       const original = state.bays!.find(bay => bay.bay_key === source.key)!;
       bays.push({ kind: 'PLACED', bay_key: key, display_name, panel_key: destinationPanelKey,
-        compatibility: original.compatibility, ...source.rendered_position });
+        module_port_type_id: original.module_port_type_id, ...source.rendered_position });
     } else {
       slots.push({ ...source, key, display_name, panel_key: destinationPanelKey, rendered_position: { ...source.rendered_position } });
       if (createContinuity) links.push({ from_slot_key: source.key, to_slot_key: key });
@@ -371,11 +371,11 @@ export const addEndpoints = (state: BlueprintEditorState, kind: BlueprintSlotKin
   return { ...state, nextLocalNumberByPanel: batch.nextLocalNumberByPanel, slots: [...state.slots, ...slots] };
 };
 
-export const addModulePorts = (state: BlueprintEditorState, panelKey: string, count: number, compatibility: string): BlueprintEditorState => {
+export const addModulePorts = (state: BlueprintEditorState, panelKey: string, count: number, module_port_type_id: string): BlueprintEditorState => {
   const batch = newPanelMarkers(state, count, panelKey);
   if (!batch) return state;
   const bays = batch.markers.map(({ key, rendered_position, ...marker }) => ({
-    ...marker, ...rendered_position, kind: 'PLACED' as const, bay_key: key, compatibility,
+    ...marker, ...rendered_position, kind: 'PLACED' as const, bay_key: key, module_port_type_id,
   }));
   return { ...state, nextLocalNumberByPanel: batch.nextLocalNumberByPanel, bays: [...state.bays ?? [], ...bays] };
 };
