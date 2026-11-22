@@ -843,15 +843,22 @@ a { color: inherit; }
 .endpoint-workspace__existing-links { display: flex; flex: 1; flex-direction: column; gap: 8px; min-height: 0; }
 .endpoint-workspace__existing-links > .catalog-dialog__actions { flex: none; justify-content: flex-start; flex-wrap: wrap; margin: 0; }
 .endpoint-workspace__link-list { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
-.endpoint-workspace__link-table { table-layout: fixed; border-collapse: separate; border-spacing: 0; }
-.endpoint-workspace__link-table th,
-.endpoint-workspace__link-table td { padding: 4px clamp(4px, 1vw, 10px); overflow-wrap: anywhere; }
+.endpoint-workspace__link-table {
+  --link-cell-padding-inline: clamp(4px, 1vw, 10px);
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.endpoint-workspace__link-table th { padding: 4px var(--link-cell-padding-inline); }
+.endpoint-workspace__link-table td { padding: 2px var(--link-cell-padding-inline); }
+.endpoint-workspace__link-table td:nth-child(2),
+.endpoint-workspace__link-table td:nth-child(3) { overflow-wrap: anywhere; }
 .endpoint-workspace__link-table th { position: sticky; top: 0; z-index: 1; }
 .endpoint-workspace__link-table th:first-child { width: 60px; }
-.endpoint-workspace__link-table th:last-child { width: 84px; }
+.endpoint-workspace__link-table th:last-child { width: calc(5.5rem + 2 * var(--link-cell-padding-inline)); }
 .endpoint-workspace__link-table :is(th, td):first-child { text-align: center; }
 .endpoint-workspace__link-table :is(th, td):last-child { text-align: right; }
-.endpoint-workspace .endpoint-workspace__link-table button { max-width: 100%; padding: 4px 8px; }
+.endpoint-workspace .endpoint-workspace__link-table button { padding: 4px 8px; white-space: nowrap; }
 
 /* C-UX-13: keep information bounded and let the edit page scroll naturally. */
 .route-content:has(> .base-template-edit-page) { height: auto; min-height: 100dvh; }
