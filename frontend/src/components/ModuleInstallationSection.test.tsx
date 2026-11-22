@@ -139,6 +139,61 @@ describe('ModuleInstallationSection uninstall', () => {
   });
 });
 
+function socketCenters(panel: Element) {
+  return Array.from(panel.querySelectorAll('polygon[data-module-place-key][data-module-port-marker]'), diamond => {
+    const [top, right] = diamond.getAttribute('points')!.split(' ');
+    return [Number(top.split(',')[0]), Number(right.split(',')[1])];
+  });
+}
+
+function boardConfiguration(orientation: 'HORIZONTAL' | 'VERTICAL') {
+  const config = structuredClone(occupied);
+  const board = config.bays[0].installation!;
+  config.bays[0] = { ...config.bays[0], kind: 'LOGICAL', mount_kind: 'MODULE_BAY',
+    module_bay_type_id: 'pcie', module_port_type_id: null, x: null, y: null, width: null, height: null };
+  board.orientation = orientation;
+  const socket: InstalledModulePlace = {
+    mount_kind: 'MODULE_PORT', module_port_type_id: 'SFP+', panel_key: 'back',
+    bay_key: 'sfp-1', display_name: 'SFP+ 1', x: .25, y: .25, installation_id: null,
+    global_position: { panel_key: 'back', x: orientation === 'VERTICAL' ? .325 : .175, y: .15 },
+  };
+  board.module_places = [socket, {
+    ...socket, bay_key: 'sfp-2', display_name: 'SFP+ 2', x: .6, y: .5, width: .2, height: .2,
+    global_position: { panel_key: 'back', x: orientation === 'VERTICAL' ? .19 : .28,
+      y: orientation === 'VERTICAL' ? .22 : .2, width: .06, height: .04 },
+  }];
+  return config;
+}
+
+it('draws both pinned sockets on the board panel alongside the canonical endpoints', async () => {
+  const data = source();
+  const config = boardConfiguration('HORIZONTAL');
+  const presentation = structuredClone(basePresentation);
+  presentation.panels.push({ ...presentation.panels[0], panel_key: 'front', panel_number: 2, display_name: 'Front', x: 620 });
+  const projected = { slot_key: 'net', display_name: 'Network', kind: 'NETWORK_PORT' as const, panel_key: 'back',
+    panel_local_position: { x: .2, y: .2 }, rendered_position: { x: .2, y: .2 },
+    external_attachment: { x: 0, y: .2, side: 'LEFT' as const }, connection_point_id: 'point' };
+  presentation.slots = [projected, { ...projected, slot_key: 'patch', kind: 'CONNECTION_POINT', connection_point_id: 'patch' }];
+  vi.mocked(data.loadConfiguration).mockResolvedValue(config);
+  show(data, vi.fn(), presentation);
+  const panel = await screen.findByRole('img', { name: 'Back' });
+
+  expect(socketCenters(panel)).toEqual([
+    [expect.closeTo(105), expect.closeTo(30)],
+    [expect.closeTo(186), expect.closeTo(44)],
+  ]);
+  expect(socketCenters(screen.getByRole('img', { name: 'Front' }))).toHaveLength(0);
+  expect(panel.querySelector('[data-module-bay-marker]')).toBeNull();
+  expect(panel.querySelectorAll('[data-endpoint-id], [data-builtin-endpoint-id]')).toHaveLength(2);
+  expect(panel.querySelector('rect[data-endpoint-id="point"]')).toBeInTheDocument();
+  expect(panel.querySelector('circle[data-builtin-endpoint-id="patch"]')).toBeInTheDocument();
+  const diamond = panel.querySelector('polygon[data-module-place-key="sfp-1"]')!;
+  const [top, right] = diamond.getAttribute('points')!.split(' ');
+  const viewWidth = Number(panel.parentElement!.getAttribute('viewBox')!.split(' ')[2]);
+  const radius = Number(right.split(',')[1]) - Number(top.split(',')[1]);
+  expect(radius * 800 / viewWidth).toBeCloseTo(4);
+});
+
 it('expands nested places, installs and removes a selected leaf, and explains a blocked parent', async () => {
   const data = source();
   const tree = structuredClone(occupied);
@@ -147,6 +202,7 @@ it('expands nested places, installs and removes a selected leaf, and explains a 
   const place: InstalledModulePlace = {
     mount_kind: 'MODULE_BAY', module_bay_type_id: 'pcie', panel_key: 'back',
     bay_key: 'legacy', display_name: 'Legacy extension', x: .4, y: .6, installation_id: 'child',
+    global_position: { panel_key: 'back', x: .22, y: .22 },
   };
   const socket: InstalledModulePlace = {
     ...place, mount_kind: 'MODULE_PORT', module_bay_type_id: null, module_port_type_id: 'SFP',
@@ -172,6 +228,9 @@ it('expands nested places, installs and removes a selected leaf, and explains a 
   vi.spyOn(window, 'confirm').mockReturnValue(true);
   show(data);
   const top = await screen.findByRole('row', { name: /^PCIe1/ });
+  const panel = screen.getByRole('img', { name: 'Back' });
+  const freeSocket = socketCenters(panel);
+  expect(freeSocket).toEqual([[expect.closeTo(132), expect.closeTo(44)]]);
   expect(screen.queryByRole('rowheader', { name: 'Legacy extension' })).not.toBeInTheDocument();
   await userEvent.click(within(top).getByText('Вложенные места'));
   const historical = within(await screen.findByRole('row', { name: /^Legacy empty bay/ }));
@@ -193,6 +252,8 @@ it('expands nested places, installs and removes a selected leaf, and explains a 
     bay_key: 'bay-key', parent_installation_id: root.id, module_template_id: 'optics', orientation: 'HORIZONTAL',
   });
   expect(await leaf.findByText('SFP optics')).toBeInTheDocument();
+  expect(socketCenters(panel)).toEqual(freeSocket);
+  expect(panel.querySelectorAll('[data-endpoint-id]')).toHaveLength(1);
   await userEvent.click(within(top).getAllByRole('button', { name: 'Удалить' }).at(-1)!);
   expect(await screen.findByRole('alert')).toHaveTextContent('Сначала удалите дочерние установки.');
   expect(data.uninstallModule).toHaveBeenCalledWith('object', root.id);
@@ -221,6 +282,35 @@ function pointerSurface() {
   Object.defineProperty(SVGElement.prototype, 'getScreenCTM', { configurable: true, value: () => ({ inverse: () => ({}) }) });
   Object.defineProperty(SVGElement.prototype, 'setPointerCapture', { configurable: true, value: vi.fn() });
 }
+it('moves and resizes the rotated sockets with the unsaved board layout', async () => {
+  pointerSurface();
+  const data = source();
+  data.saveLayout = vi.fn();
+  vi.mocked(data.loadConfiguration).mockResolvedValue(boardConfiguration('VERTICAL'));
+  show(data);
+  const panel = await screen.findByRole('img', { name: 'Back' });
+  const original = [[expect.closeTo(195), expect.closeTo(30)], [expect.closeTo(132), expect.closeTo(48)]];
+  expect(socketCenters(panel)).toEqual(original);
+
+  await userEvent.click(screen.getByText('Корректировать расположение'));
+  drag(documentQuery(), panel, 120, 40);
+  expect(socketCenters(panel)).toEqual([
+    [expect.closeTo(255), expect.closeTo(50)],
+    [expect.closeTo(192), expect.closeTo(68)],
+  ]);
+  fireEvent.pointerDown(screen.getByLabelText('Изменить размер'), { clientX: 300, clientY: 80, pointerId: 1 });
+  fireEvent.pointerMove(panel, { clientX: 390, clientY: 100, pointerId: 1 });
+  fireEvent.pointerUp(panel, { pointerId: 1 });
+  expect(socketCenters(panel)).toEqual([
+    [expect.closeTo(322.5), expect.closeTo(55)],
+    [expect.closeTo(228), expect.closeTo(82)],
+  ]);
+  expect(data.saveLayout).not.toHaveBeenCalled();
+
+  await userEvent.click(screen.getByText('Отменить правки'));
+  expect(socketCenters(panel)).toEqual(original);
+});
+
 async function editingSource() {
   pointerSurface();
   const data = source();

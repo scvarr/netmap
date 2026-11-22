@@ -55,6 +55,13 @@ function placeChoiceKey(bayKey: string, parentId?: string) {
   return JSON.stringify([parentId ?? null, bayKey]);
 }
 
+function projectInstallationPosition(position: { x: number; y: number }, saved: ModuleInstallation['layout'], displayed: ModuleInstallation['layout']) {
+  return {
+    x: displayed.x + (position.x - saved.x) / saved.width * displayed.width,
+    y: displayed.y + (position.y - saved.y) / saved.height * displayed.height,
+  };
+}
+
 export function ModuleInstallationSection({ objectId, onInstalled, presentation, dataSource = hardwareModuleDataSource }: { objectId: string; presentation?: BlueprintPresentation; onInstalled: () => void | Promise<void>; dataSource?: HardwareModuleDataSource }) {
   const moduleTypes = useMountTypes();
   const { t, collator } = useI18n(); const [config, setConfig] = useState<HardwareConfiguration>(); const [modules, setModules] = useState<ModuleTemplate[]>([]); const [error, setError] = useState(''); const [pending, setPending] = useState(false); const [retry, setRetry] = useState(0);
@@ -220,7 +227,21 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
             r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
           {i && l && <g>
             <rect data-installation-id={i.id} onPointerDown={e => begin(e, false)} x={l.x * panel.width} y={l.y * panel.height} width={l.width * panel.width} height={l.height * panel.height} fill={i.fill_color} stroke={editing && selected === i.id ? '#f59e0b' : 'none'} strokeWidth={1.5} vectorEffect="non-scaling-stroke"><title>{i.name}</title></rect>
-            {i.endpoints.map(e => <EndpointMarker key={e.connection_point_id} kind={e.kind} label={e.contextual_display_name} data-endpoint-id={e.connection_point_id} pointerEvents="none" cx={(l.x + (e.x-i.layout.x)/i.layout.width*l.width)*panel.width} cy={(l.y + (e.y-i.layout.y)/i.layout.height*l.height)*panel.height} r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />)}
+            {i.module_places?.filter(place => place.mount_kind === 'MODULE_PORT').map(place => {
+              // The configuration projects the pinned place through the installed orientation.
+              const position = projectInstallationPosition(modulePortPosition(place.global_position), i.layout, l);
+              return <EndpointMarker key={place.bay_key} kind={place.mount_kind} label={place.display_name}
+                data-module-place-key={place.bay_key} pointerEvents="none"
+                cx={position.x * panel.width} cy={position.y * panel.height}
+                r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />;
+            })}
+            {i.endpoints.map(e => {
+              const position = projectInstallationPosition(e, i.layout, l);
+              return <EndpointMarker key={e.connection_point_id} kind={e.kind} label={e.contextual_display_name}
+                data-endpoint-id={e.connection_point_id} pointerEvents="none"
+                cx={position.x * panel.width} cy={position.y * panel.height}
+                r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />;
+            })}
             {editing && selected === i.id && <rect aria-label={t('layout.resize')} onPointerDown={e => begin(e, true)} x={(l.x+l.width)*panel.width-4/scale} y={(l.y+l.height)*panel.height-4/scale} width={8/scale} height={8/scale} fill="#f59e0b" style={{ cursor: 'nwse-resize' }} />}
           </g>}
         </g>;

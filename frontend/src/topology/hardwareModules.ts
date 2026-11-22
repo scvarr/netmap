@@ -99,7 +99,10 @@ export interface ModuleReviewDataSource {
   saveDraft(id: string, definition: ModuleTemplateInput, generation: number): Promise<ModuleDraftDocument>;
   checkDraft(id: string, generation: number): Promise<ModuleDraftDocument>;
 }
-export type InstalledModulePlace = PlacedModuleBay & { installation_id: string | null };
+export type InstalledModulePlace = PlacedModuleBay & {
+  installation_id: string | null;
+  global_position: Pick<PlacedModuleBay, 'panel_key' | 'x' | 'y' | 'width' | 'height'>;
+};
 export interface ModuleInstallation {
   id: string; module_template_id: string; module_revision_id: string; name: string;
   layout: { panel_key: string; x: number; y: number; width: number; height: number };
