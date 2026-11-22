@@ -15,6 +15,7 @@ from app.base_template_review import physical_structure, analyze_object, endpoin
 from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.errors import ModelError, ValidationError
 from app.hardware_catalog import HardwareCatalog
+from app.module_placement_reconciliation import configuration_installations
 from app.repository import CanonicalRepository, ConnectionMemberInput
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,8 @@ class ObjectReconciliation:
         if object_ is None:
             raise ModelError("PhysicalObject no longer exists", {"reason": "OBJECT_CHANGED"})
         config = session.scalar(select(m.ObjectConfiguration).where(
-            m.ObjectConfiguration.physical_object_id == object_id).with_for_update())
+            m.ObjectConfiguration.physical_object_id == object_id).with_for_update()
+            .execution_options(populate_existing=True))
         latest = _latest(session, template_id)
         if config is None or session.get(m.BaseTemplateRevision, config.base_revision_id).template_id != template_id:
             raise ModelError("Object configuration changed", {"reason": "OBJECT_CHANGED"})
@@ -70,10 +72,11 @@ class ObjectReconciliation:
         if config.base_revision_id == latest.id:
             return {**result, "status": "already_current", "reasons": []}
 
-        installations = list(session.scalars(select(m.ModuleInstallation).where(
-            m.ModuleInstallation.configuration_id == config.id).order_by(m.ModuleInstallation.id).with_for_update()))
+        roots = [row for row in configuration_installations(session, config.id, lock=True)
+                 if row.parent_installation_id is None]
         mappings = list(session.scalars(select(m.BuiltInEndpointMapping).where(
-            m.BuiltInEndpointMapping.configuration_id == config.id).order_by(m.BuiltInEndpointMapping.id).with_for_update()))
+            m.BuiltInEndpointMapping.configuration_id == config.id).order_by(m.BuiltInEndpointMapping.id)
+            .with_for_update().execution_options(populate_existing=True)))
         before = published_definition(session, template_id, config.base_revision_id)
         after = published_definition(session, template_id, latest.id)
         old = {s["key"]: s for s in before["slots"]}
@@ -88,10 +91,10 @@ class ObjectReconciliation:
         # writes. Interface-before-point matches physical connection creation.
         list(session.scalars(select(m.NetworkInterface).where(m.NetworkInterface.id.in_(
             [e.network_interface_id for e in mappings if e.network_interface_id]
-        )).order_by(m.NetworkInterface.id).with_for_update()))
+        )).order_by(m.NetworkInterface.id).with_for_update().execution_options(populate_existing=True)))
         list(session.scalars(select(m.ConnectionPoint).where(m.ConnectionPoint.id.in_(
             [e.connection_point_id for e in mappings]
-        )).order_by(m.ConnectionPoint.id).with_for_update()))
+        )).order_by(m.ConnectionPoint.id).with_for_update().execution_options(populate_existing=True)))
         # Retained NETWORK_PORT tuples must stay valid through the revision write.
         # Endpoint FK locks protect absent rows/new references, but an existing
         # owner/binding can be deleted or edited without changing its endpoint FK.
@@ -128,10 +131,10 @@ class ObjectReconciliation:
             else:
                 by_key[key] = self._add_endpoint(config, target_definitions[key])
 
-        moving = [i for i in installations if i.bay_key != analysis["proposed_placements"][str(i.id)]]
+        moving = [i for i in roots if i.bay_key != analysis["proposed_placements"][str(i.id)]]
         # Immediate unique(configuration,bay) also applies during swaps. Private
         # temporary keys exist only inside this transaction, never in a result.
-        occupied = {i.bay_key for i in installations} | {b["bay_key"] for b in after["bays"]}
+        occupied = {i.bay_key for i in roots} | {b["bay_key"] for b in after["bays"]}
         for installation in moving:
             temporary = str(uuid.uuid4())
             while temporary in occupied:

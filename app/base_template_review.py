@@ -14,6 +14,8 @@ from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.hardware_catalog import HardwareCatalog
 from app.port_types import validate_port_type_assignments
 from app.module_port_types import base_assignments, mount_identity, mount_document, row_mount, validate_mount_types
+from app.module_placement_reconciliation import configuration_installations, validate_nested_placements
+from app.module_layout import validate_layout
 from app.schemas import CreateBaseTemplateRequest, ModuleBayRequest
 
 
@@ -190,10 +192,8 @@ def analyze_object(session, config, candidate):
                     reasons.append({"code": "INVALID_ENDPOINT_MAPPING", "key": key,
                                     "endpoint_name": old[key]["display_name"], "dependencies": dependencies})
     bays = {b["bay_key"]: b for b in candidate["bays"]}
-    installations = list(session.scalars(select(m.ModuleInstallation).where(m.ModuleInstallation.configuration_id == config.id)))
-    for installation in installations:
-        if installation.parent_installation_id is not None:
-            reasons.append({"code": "NESTED_INSTALLATION_RECONCILE_BLOCKED", "installation_id": str(installation.id)})
+    installations = configuration_installations(session, config.id)
+    reasons.extend(validate_nested_placements(session, installations, {row.id: row for row in installations}))
     installations = [installation for installation in installations if installation.parent_installation_id is None]
     displaced = []
     for installation in sorted(installations, key=lambda i: str(i.id)):
@@ -212,8 +212,11 @@ def analyze_object(session, config, candidate):
     # Validate the final assignment, shared by candidate review and locked apply.
     for installation in installations:
         target_key = placements.get(str(installation.id))
-        if target_key is not None and bays[target_key]["panel_key"] != installation.layout["panel_key"]:
-            reasons.append({"code": "MODULE_LAYOUT_PANEL_CONFLICT", "installation_id": str(installation.id)})
+        if target_key is not None:
+            try:
+                validate_layout(installation.layout, bays[target_key]["panel_key"])
+            except ValueError:
+                reasons.append({"code": "MODULE_LAYOUT_PANEL_CONFLICT", "installation_id": str(installation.id)})
     for change in changes:
         if change["section"] == "internal_links":
             # Removing authored continuity must never silently discard a Connection.

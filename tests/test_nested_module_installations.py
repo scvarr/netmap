@@ -3,18 +3,23 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from sqlalchemy import insert
+from sqlalchemy import insert, select
 from sqlalchemy.exc import IntegrityError
 
 from app.database import SessionLocal
-from app.models import ModuleInstallation
+from app.errors import ModelError
+from app.models import Cable, ModuleInstallation
 from app.module_geometry import initial_geometry
+from app.module_reconciliation import ModuleReconciliation
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from tests import test_base_template_review as base_review
+from tests import test_module_template_review as module_review
+from tests.cable_type_fixtures import copper_cable_spec
 from tests.module_port_type_fixtures import ensure_module_port_type_id
 from tests.port_type_fixtures import ensure_port_type_id
 from tests.test_hardware_configuration import base_payload, client, create_base, create_object
 from tests.test_module_reconciliation import apply, package, revision
+from tests.test_module_layout_editing import request as layout_request
 from tests.test_module_uninstall import uninstall
 
 
@@ -132,32 +137,191 @@ def test_invalid_targets_and_concurrent_occupancy():
     assert len(read(oid)["nested_installations"]) == 1
 
 
-def test_reconcile_blocks_nested_tree_and_updates_independent_root():
-    base, obj, card, transceiver, _ = setup()
+def test_reconcile_moves_subtree_preserves_identity_and_round_trips_workspace():
+    base, obj, card, transceiver, sfp = setup()
+    oid = obj["physical_object_ref"]["entity_id"]
+    child_template = module("Extension", {"mount_kind": card["mount_kind"],
+                            "module_bay_type_id": card["module_bay_type_id"]},
+                            [place("optics", sfp)], has_endpoint=True)
+    tree = created(install(oid, card, "root", orientation="VERTICAL"))
+    root = tree["bays"][0]["installation"]
+    layout = layout_request(tree)
+    response = client.put(f"/v1/topology/physical-objects/{oid}/module-installations/{root['id']}/layout", json=layout)
+    assert response.status_code == 200, response.text
+    child, = created(install(oid, child_template, "extension", root["id"], "VERTICAL"))["nested_installations"]
+    tree = created(install(oid, transceiver, "optics", child["id"], "VERTICAL"))
+    leaf = tree["nested_installations"][1]
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        peer = repository.add_connection_point(repository.add_physical_object().id, 1)
+        connection, _ = repository.add_connection(uuid.UUID(child["endpoints"][0]["connection_point_id"]),
+                                                  peer.id, 1, [ConnectionMemberInput(1, 1, 1)])
+        session.add(Cable(connection_id=connection.id, cable_type_id=copper_cable_spec().cable_type_id))
+    before = package()
+
+    def move(definition):
+        definition["module_places"][0].update(key="moved", x=.8, y=.4, width=.15, height=.2)
+
+    target = revision(card["template_id"], move)
+    child_target = revision(child_template["template_id"], lambda d: d["geometry"]["endpoints"]["lan"].update(x=.2, y=.3))
+    revision(transceiver["template_id"], lambda d: d.update(name="New optics"))
+    assert apply(card["template_id"])[0]["status"] == "updated"
+    moved_tree = read(oid)
+    moved, moved_leaf = moved_tree["nested_installations"]
+    assert moved_tree["bays"][0]["installation"]["layout"] == layout["layout"]
+    assert moved_tree["bays"][0]["installation"]["module_revision_id"] == target["revision_id"]
+    assert (moved["id"], moved["parent_installation_id"], moved["bay_key"]) == (child["id"], root["id"], "moved")
+    assert moved["module_revision_id"] == child_template["revision_id"]
+    assert moved_leaf["global_layout"] != leaf["global_layout"]
+    assert moved_leaf["layout"] == leaf["layout"]
+    assert apply(child_template["template_id"])[0]["status"] == "updated"
+    updated, updated_leaf = read(oid)["nested_installations"]
+    assert updated["module_revision_id"] == child_target["revision_id"]
+    assert (updated_leaf["id"], updated_leaf["parent_installation_id"], updated_leaf["module_revision_id"]) == (
+        leaf["id"], child["id"], transceiver["revision_id"])
+    bounds = updated["global_layout"]
+    # Two vertical ancestors rotate the child's endpoint and places by 180°.
+    assert updated["endpoints"][0]["x"] == pytest.approx(bounds["x"] + .8 * bounds["width"])
+    assert updated["endpoints"][0]["y"] == pytest.approx(bounds["y"] + .7 * bounds["height"])
+    leaf_bounds = updated_leaf["layout"]
+    assert updated_leaf["global_layout"]["x"] == pytest.approx(
+        bounds["x"] + (1 - leaf_bounds["x"] - leaf_bounds["width"]) * bounds["width"])
+    assert apply(child_template["template_id"])[0]["status"] == "already_current"
+    assert apply(card["template_id"])[0]["status"] == "already_current"
+
+    draft = base_review.open_draft(base)
+    definition = {**draft["definition"], "name": "Updated base"}
+    checked = base_review.check(base, base_review.save(base, draft, definition))["review"]
+    assert checked["result"]["objects"][0]["classification"] == "potentially_safe"
+    published = client.post(f"/v1/library/base-templates/{base}/candidates/{checked['candidate_id']}/publish")
+    assert published.status_code == 200, published.text
+    response = client.post(f"/v1/library/base-templates/{base}/reconcile")
+    assert response.status_code == 200, response.text
+    assert response.json()["objects"][0]["status"] == "updated"
+    retry = client.post(f"/v1/library/base-templates/{base}/reconcile")
+    assert retry.status_code == 200, retry.text
+    assert retry.json()["objects"][0]["status"] == "already_current"
+    final_tree = read(oid)
+    assert final_tree["nested_installations"] == [updated, updated_leaf]
+    exported = package()
+    assert exported["format_version"] == 14
+    assert exported["canonical"] == before["canonical"]
+    def mappings(pkg):
+        return {row["id"]: (row["installation_id"], row["connection_point_id"], row["network_interface_id"])
+                for row in pkg["authoring"]["ModuleEndpointMapping"]}
+    assert mappings(exported) == mappings(before)
+    assert client.delete("/v1/workspace/dataset").status_code == 204
+    response = client.post("/v1/workspace/package", json=exported)
+    assert response.status_code == 204, response.text
+    assert package() == exported
+    assert read(oid) == final_tree
+
+
+@pytest.mark.parametrize(("count", "code"), [(0, "NO_COMPATIBLE_NESTED_PLACEMENT"), (2, "AMBIGUOUS_NESTED_PLACEMENT")])
+def test_unsafe_assignment_refused_in_review_and_apply(count, code):
+    base, obj, card, transceiver, sfp = setup()
     oid = obj["physical_object_ref"]["entity_id"]
     other = create_object(base)["physical_object_ref"]["entity_id"]
     root = created(install(oid, card, "root"))["bays"][0]["installation"]
     created(install(other, card, "root"))
     pinned = created(install(oid, transceiver, "SFP port", root["id"]))
-    revision(card["template_id"], lambda definition: definition.update(name="New card"))
-    revision(transceiver["template_id"], lambda definition: definition.update(name="New optics"))
-    statuses = {row["physical_object_id"]: row for row in apply(card["template_id"])}
+    child, = pinned["nested_installations"]
+    tid = card["template_id"]
+    revision(tid, lambda d: d.update(module_places=[place(f"new-{i}", sfp) for i in range(count)]))
+    review = module_review.open_draft(tid)["review"]["result"]["installations"]
+    expected = {"code": code, "installation_id": child["id"], "key": "SFP port", "mount": sfp}
+    assert next(row for row in review if row["physical_object_id"] == oid)["reasons"] == [expected]
+    before = package()
+    statuses = {row["physical_object_id"]: row for row in apply(tid)}
     assert statuses[other]["status"] == "updated"
-    assert statuses[oid]["reasons"] == [{"code": "NESTED_INSTALLATION_RECONCILE_BLOCKED"}]
-    result, = apply(transceiver["template_id"])
-    assert result["reasons"] == [{"code": "NESTED_INSTALLATION_RECONCILE_BLOCKED"}]
+    assert statuses[oid]["reasons"] == [expected]
+    assert read(oid) == pinned
+    assert package()["canonical"] == before["canonical"]
+
+
+def test_nested_transceiver_and_incompatible_target_mount_are_refused():
+    _, obj, card, transceiver, _ = setup()
+    oid = obj["physical_object_ref"]["entity_id"]
+    root = created(install(oid, card, "root"))["bays"][0]["installation"]
+    created(install(oid, transceiver, "SFP port", root["id"]))
+    tid = transceiver["template_id"]
+    revision(card["template_id"], lambda d: d.update(module_places=[]))
+    target = revision(tid, lambda d: d.update(name="Structural optics v2"))
+    assert apply(tid)[0]["status"] == "updated"
+    pinned = read(oid)
+    assert pinned["bays"][0]["installation"]["module_revision_id"] == card["revision_id"]
+    assert pinned["nested_installations"][0]["module_revision_id"] == target["revision_id"]
+    revision(tid, lambda d: d["endpoints"].append(card["endpoints"][0]))
+    before = package()
+    assert apply(tid)[0]["reasons"][0]["code"] == "TRANSCEIVER_BINDING_REQUIRED"
+    assert package() == before
+    revision(tid, lambda d: d.update(endpoints=[], module_port_type_id=ensure_module_port_type_id("QSFP")))
+    before = package()
+    assert apply(tid)[0]["reasons"][0]["code"] == "NESTED_PLACE_COMPATIBILITY_MISMATCH"
+    assert package() == before
+
+
+def test_locked_preflight_rechecks_children_added_after_review():
+    _, obj, card, transceiver, _ = setup()
+    oid = obj["physical_object_ref"]["entity_id"]
+    root = created(install(oid, card, "root"))["bays"][0]["installation"]
+    tid = card["template_id"]
+    revision(tid, lambda d: d.update(module_places=[]))
+    assert module_review.open_draft(tid)["review"]["result"]["installations"][0]["classification"] == "potentially_safe"
+    child, = created(install(oid, transceiver, "SFP port", root["id"]))["nested_installations"]
+    before = package()
+    with ThreadPoolExecutor(max_workers=1) as pool, SessionLocal.begin() as writer:
+        writer.scalar(select(ModuleInstallation).where(ModuleInstallation.id == uuid.UUID(child["id"])).with_for_update())
+        assert pool.submit(apply, tid).result(timeout=10)[0]["reasons"] == [{"code": "CONCURRENT_CHANGE"}]
+    assert apply(tid)[0]["reasons"][0]["code"] == "NO_COMPATIBLE_NESTED_PLACEMENT"
+    assert package() == before
+
+
+def test_unique_swap_is_atomic_when_apply_fails_after_writes(monkeypatch):
+    _, obj, card, transceiver, sfp = setup()
+    oid = obj["physical_object_ref"]["entity_id"]
+    root = created(install(oid, card, "root"))["bays"][0]["installation"]
+    mount = {"mount_kind": card["mount_kind"], "module_bay_type_id": card["module_bay_type_id"]}
+    extension = module("Extension", mount)
+    child, = created(install(oid, extension, "extension", root["id"]))["nested_installations"]
+    tree = created(install(oid, transceiver, "SFP port", root["id"]))
+    optic = tree["nested_installations"][1]
+    tid = card["template_id"]
+    revision(tid, lambda d: d.update(module_places=[place("extension", sfp), place("SFP port", mount)]))
+    before = package()
+    original_apply = ModuleReconciliation.apply
+
+    def fail_after_write(self, *args):
+        assert original_apply(self, *args)["status"] == "updated"
+        raise ModelError("Simulated concurrent conflict after writes", {"reason": "CONCURRENT_CHANGE"})
+
+    with monkeypatch.context() as patch:
+        patch.setattr(ModuleReconciliation, "apply", fail_after_write)
+        assert apply(tid)[0]["reasons"] == [{"code": "CONCURRENT_CHANGE"}]
+    assert package() == before
+    assert apply(tid)[0]["status"] == "updated"
+    assert {i["id"]: i["bay_key"] for i in read(oid)["nested_installations"]} == {
+        child["id"]: "SFP port", optic["id"]: "extension"}
+
+
+def test_invalid_nested_place_blocks_base_metadata_reconciliation():
+    base, obj, card, transceiver, _ = setup()
+    oid = obj["physical_object_ref"]["entity_id"]
+    root = created(install(oid, card, "root"))["bays"][0]["installation"]
+    child, = created(install(oid, transceiver, "SFP port", root["id"]))["nested_installations"]
+    with SessionLocal.begin() as writer:
+        writer.get(ModuleInstallation, uuid.UUID(child["id"])).bay_key = "missing"
     draft = base_review.open_draft(base)
-    definition = {**draft["definition"], "name": "Updated base"}
-    checked = base_review.check(base, base_review.save(base, draft, definition))["review"]
-    statuses = {row["physical_object_id"]: row for row in checked["result"]["objects"]}
-    assert statuses[oid]["reasons"][0]["code"] == "NESTED_INSTALLATION_RECONCILE_BLOCKED"
+    checked = base_review.check(base, base_review.save(base, draft, {**draft["definition"], "name": "New base"}))["review"]
+    expected = {"code": "INVALID_NESTED_PLACEMENT", "installation_id": child["id"], "key": "missing"}
+    assert checked["result"]["objects"][0]["reasons"] == [expected]
     published = client.post(f"/v1/library/base-templates/{base}/candidates/{checked['candidate_id']}/publish")
     assert published.status_code == 200, published.text
+    before = package()
     response = client.post(f"/v1/library/base-templates/{base}/reconcile")
     assert response.status_code == 200, response.text
-    statuses = {row["physical_object_id"]: row["status"] for row in response.json()["objects"]}
-    assert statuses == {oid: "requires_intervention", other: "updated"}
-    assert read(oid) == pinned
+    assert response.json()["objects"][0]["reasons"] == [expected]
+    assert package() == before
 
 
 def test_workspace_tree_round_trip_and_prewrite_rejection():

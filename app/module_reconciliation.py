@@ -4,6 +4,7 @@ No candidate or cached analysis authorizes a write. READ COMMITTED reads after
 the locks below are the preflight; the caller owns one transaction per installation.
 """
 import logging
+import uuid
 
 from sqlalchemy import delete, or_, select, text
 from sqlalchemy.exc import OperationalError
@@ -12,6 +13,7 @@ from app.object_reconciliation import _lock_json_references
 from app import models as m
 from app.base_template_review import endpoint_dependencies
 from app.module_template_review import analyze_installation, published_definition
+from app.module_placement_reconciliation import configuration_installations, plan_module_placements
 from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.errors import ModelError, ValidationError
 from app.hardware_catalog import HardwareCatalog
@@ -41,10 +43,13 @@ class ModuleReconciliation:
         ).where(m.ModuleInstallation.id == installation_id))
         session.scalar(select(m.PhysicalObject).where(m.PhysicalObject.id == object_id).with_for_update())
         config = session.scalar(select(m.ObjectConfiguration).where(
-            m.ObjectConfiguration.physical_object_id == object_id).with_for_update())
-        installation = session.scalar(select(m.ModuleInstallation).where(
-            m.ModuleInstallation.id == installation_id).with_for_update())
-        if installation is None or config is None or installation.configuration_id != config.id:
+            m.ObjectConfiguration.physical_object_id == object_id).with_for_update()
+            .execution_options(populate_existing=True))
+        # Lock in the same order as object reconciliation. The configuration
+        # lock also blocks inserts into the hierarchy while preflight runs.
+        installations = {row.id: row for row in configuration_installations(session, config.id, lock=True)} if config else {}
+        installation = installations.get(installation_id)
+        if installation is None:
             raise ModelError("Installation changed", {"reason": "INSTALLATION_CHANGED"})
         latest = _latest(session, template_id)
         if latest.id != target_revision_id:
@@ -58,7 +63,8 @@ class ModuleReconciliation:
         if installation.module_revision_id == latest.id:
             return {**result, "status": "already_current", "reasons": []}
         mappings = list(session.scalars(select(m.ModuleEndpointMapping).where(
-            m.ModuleEndpointMapping.installation_id == installation.id).order_by(m.ModuleEndpointMapping.id).with_for_update()))
+            m.ModuleEndpointMapping.installation_id == installation.id).order_by(m.ModuleEndpointMapping.id)
+            .with_for_update().execution_options(populate_existing=True)))
         before = published_definition(session, template_id, installation.module_revision_id)
         after = published_definition(session, template_id, latest.id)
         old = {s["key"]: s for s in before["endpoints"]}
@@ -73,10 +79,10 @@ class ModuleReconciliation:
         # writes. Interface-before-point matches physical connection creation.
         list(session.scalars(select(m.NetworkInterface).where(m.NetworkInterface.id.in_(
             [e.network_interface_id for e in mappings if e.network_interface_id]
-        )).order_by(m.NetworkInterface.id).with_for_update()))
+        )).order_by(m.NetworkInterface.id).with_for_update().execution_options(populate_existing=True)))
         list(session.scalars(select(m.ConnectionPoint).where(m.ConnectionPoint.id.in_(
             [e.connection_point_id for e in mappings]
-        )).order_by(m.ConnectionPoint.id).with_for_update()))
+        )).order_by(m.ConnectionPoint.id).with_for_update().execution_options(populate_existing=True)))
         # Retained NETWORK_PORT tuples must stay valid through the revision write.
         # Endpoint FK locks protect absent rows/new references, but an existing
         # owner/binding can be deleted or edited without changing its endpoint FK.
@@ -95,7 +101,8 @@ class ModuleReconciliation:
         for key in removed:
             if key in by_key:
                 endpoint_dependencies(session, config, by_key[key], old[key], lock_rows=True)
-        analysis = analyze_installation(session, installation, after)
+        placement_plan = plan_module_placements(session, installation, after, installations.values())
+        analysis = analyze_installation(session, installation, after, placement_plan)
         if analysis["classification"] == "requires_intervention":
             return {**result, "status": "requires_intervention", "reasons": analysis["reasons"]}
 
@@ -111,6 +118,22 @@ class ModuleReconciliation:
             else:
                 by_key[key] = self._add_endpoint(config, installation, target_definitions[key])
 
+        updates, _ = placement_plan
+        moving = [installations[id_] for id_, (key, _) in updates.items() if installations[id_].bay_key != key]
+        if moving:
+            # Vacate old keys before assigning targets, including swaps under
+            # the immediate unique(parent_installation_id, bay_key) constraint.
+            occupied = {row.bay_key for row in installations.values()} | {key for key, _ in updates.values()}
+            for child in moving:
+                temporary = str(uuid.uuid4())
+                while temporary in occupied:
+                    temporary = str(uuid.uuid4())
+                occupied.add(temporary)
+                child.bay_key = temporary
+            session.flush()
+        for id_, (key, layout) in updates.items():
+            installations[id_].bay_key = key
+            installations[id_].layout = layout
         installation.module_revision_id = latest.id
         session.flush()
         return {**result, "status": "updated", "reasons": []}

@@ -11,7 +11,8 @@ from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.errors import ModelError, ValidationError
 from app.hardware_catalog import HardwareCatalog
 from app.port_types import validate_port_type_assignments
-from app.module_port_types import MOUNT_FIELDS, module_assignments, mount_document, mount_identity, row_mount, validate_mount_types
+from app.module_placement_reconciliation import configuration_installations, plan_module_placements
+from app.module_port_types import MOUNT_FIELDS, module_assignments, mount_document, mount_identity, validate_mount_types
 from app.schemas import CreateModuleTemplateRequest
 
 
@@ -58,7 +59,7 @@ def _require_retained_port_types(before, after):
                          {"reason": "PHYSICAL_STRUCTURE_IMMUTABLE"})
 
 
-def analyze_installation(session, installation, candidate):
+def analyze_installation(session, installation, candidate, placement_plan=None):
     config = session.get(m.ObjectConfiguration, installation.configuration_id)
     revision = session.get(m.ModuleTemplateRevision, installation.module_revision_id)
     before = published_definition(session, revision.template_id, revision.id)
@@ -69,17 +70,13 @@ def analyze_installation(session, installation, candidate):
     definitions = {d.id: d.definition_key for d in session.scalars(select(m.ModuleEndpointDefinition).where(m.ModuleEndpointDefinition.module_revision_id == revision.id))}
     rows = list(session.scalars(select(m.ModuleEndpointMapping).where(m.ModuleEndpointMapping.installation_id == installation.id)))
     mappings = {definitions[row.definition_id]: row for row in rows if row.definition_id in definitions}
-    reasons = []
-    nested = installation.parent_installation_id is not None
-    has_children = session.scalar(select(m.ModuleInstallation.id).where(
-        m.ModuleInstallation.parent_installation_id == installation.id).limit(1)) is not None
-    if nested or has_children:
-        reasons.append({"code": "NESTED_INSTALLATION_RECONCILE_BLOCKED"})
+    if placement_plan is None:
+        placement_plan = plan_module_placements(session, installation, candidate,
+                                                configuration_installations(session, config.id))
+    _, placement_reasons = placement_plan
+    reasons = list(placement_reasons)
     if any(row.definition_id not in definitions for row in rows):
         reasons.append({"code": "INVALID_ENDPOINT_MAPPING"})
-    bay = session.scalar(select(m.ModuleBay).where(m.ModuleBay.base_revision_id == config.base_revision_id, m.ModuleBay.bay_key == installation.bay_key))
-    if not nested and (bay is None or mount_identity(row_mount(bay)) != mount_identity(candidate)):
-        reasons.append({"code": "BAY_COMPATIBILITY_MISMATCH", "mount": mount_document(*mount_identity(candidate))})
     for key, definition in old.items():
         mapping = mappings.get(key)
         if mapping is None:
