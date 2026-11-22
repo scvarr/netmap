@@ -66,7 +66,7 @@ export function EndpointLinkWorkspace({ state, onChange, onClose, initialSelecte
   const hasSelectedModules = keys[0].length !== left.length || keys[1].length !== right.length;
   const preview = pairwiseContinuityPreview(state, left, right, false);
   const label = (key: string) => { const slot = state.slots.find(s => s.key === key); return slot ? `${slot.display_name} · ${state.panels.find(p => p.panel_key === slot.panel_key)?.display_name}` : key; };
-  return <section className="catalog-dialog endpoint-workspace-dialog" role="dialog" aria-modal="true" aria-label={t('endpointWorkspace.title')}><div className="catalog-dialog__surface endpoint-workspace">
+  return <section className="catalog-dialog endpoint-workspace-dialog" role="dialog" aria-modal="true" aria-label={t('endpointWorkspace.title')}><div className="catalog-dialog__surface endpoint-workspace" data-tab={tab}>
     <h2>{t('endpointWorkspace.title')}</h2>
     <div role="tablist" aria-label={t('endpointWorkspace.title')} className="endpoint-workspace__tabs">
       <button type="button" role="tab" aria-selected={tab === 'ports'} onClick={() => setTab('ports')}>{t('endpointWorkspace.operations')}</button>
@@ -107,9 +107,43 @@ export function EndpointLinkWorkspace({ state, onChange, onClose, initialSelecte
     <p role="status">{status}</p>
     </div>}
     {tab === 'links' && <div role="tabpanel" className="endpoint-workspace__existing-links">
-    <h3>{t('blueprint.composition.links')} · {state.individualLinks.length}</h3>
     <label className="endpoint-workspace__filter"><input type="checkbox" checked={allLinks} onChange={e => { setAllLinks(e.target.checked); setRemoved([]); }} />{t('endpointWorkspace.allLinks')}</label>
-    <div className="endpoint-workspace__preview">{visibleLinks.map(({link:l,a,b}) => { const id = internalLinkPairKey(a,b); const text = `${label(a)} ↔ ${label(b)}`; return <div key={id} className="endpoint-workspace__link-row" data-link-row={id}><label title={text} aria-label={text}><input type="checkbox" checked={removed.includes(id)} onChange={e => setRemoved(e.target.checked ? [...removed,id] : removed.filter(k => k !== id))} /><span>{text}</span></label><button type="button" onClick={() => onChange({ ...state, individualLinks: state.individualLinks.filter(link => link !== l) })}>{t('blueprint.composition.remove')}</button></div>; })}</div>
+    <div className="endpoint-workspace__link-list" role="region" aria-label={t('endpointWorkspace.existing')} tabIndex={0}>
+      <table className="catalog-table endpoint-workspace__link-table" aria-label={t('blueprint.composition.links')}>
+        <thead>
+          <tr>
+            <th scope="col">{t('endpointWorkspace.linkSelection')}</th>
+            <th scope="col">{t('endpointWorkspace.linkPort', { side: 'A' })}</th>
+            <th scope="col">{t('endpointWorkspace.linkPort', { side: 'B' })}</th>
+            <th scope="col">{t('catalog.actions')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {visibleLinks.map(({ link, a, b }) => {
+            const id = internalLinkPairKey(a, b);
+            const portA = label(a);
+            const portB = label(b);
+            return <tr key={id} data-link-row={id}>
+              <td><input
+                type="checkbox"
+                aria-label={`${portA} ↔ ${portB}`}
+                checked={removed.includes(id)}
+                onChange={e => {
+                  const checked = e.target.checked;
+                  setRemoved(selected => checked ? [...selected, id] : selected.filter(key => key !== id));
+                }}
+              /></td>
+              <td>{portA}</td>
+              <td>{portB}</td>
+              <td><button type="button" onClick={() => {
+                onChange({ ...state, individualLinks: state.individualLinks.filter(existing => existing !== link) });
+                setRemoved(selected => selected.filter(key => key !== id));
+              }}>{t('blueprint.composition.remove')}</button></td>
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </div>
     <div className="catalog-dialog__actions">
       <button type="button" onClick={() => setRemoved(visibleLinks.map(({a,b}) => internalLinkPairKey(a,b)))}>{t('blueprint.links.selectAll')}</button>
       <button type="button" disabled={!removed.length} onClick={() => { onChange({ ...state, individualLinks: state.individualLinks.filter(l => !removed.includes(internalLinkPairKey(l.from_slot_key,l.to_slot_key))) }); setRemoved([]); }}>{t('blueprint.links.deleteSelected', { count: removed.length })}</button>

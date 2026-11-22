@@ -816,12 +816,10 @@ a { color: inherit; }
 .endpoint-workspace__tools input { width: 100%; box-sizing: border-box; }
 .endpoint-workspace__list { max-height: 38vh; overflow: auto; }
 .endpoint-workspace__row { display: grid; grid-template-columns: minmax(65px,1fr) 20px minmax(0,.7fr) minmax(50px,1fr) 26px 26px; align-items: center; gap: 5px; height: 34px; box-sizing: border-box; border-bottom: 1px solid #294145; font-size: 12px; }
-.endpoint-workspace .endpoint-workspace__row label, .endpoint-workspace .endpoint-workspace__link-row label, .endpoint-workspace .endpoint-workspace__filter { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.endpoint-workspace__row span, .endpoint-workspace__link-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.endpoint-workspace .endpoint-workspace__row label, .endpoint-workspace .endpoint-workspace__filter { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.endpoint-workspace__row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .endpoint-workspace input[type="checkbox"] { flex: 0 0 14px; width: 14px; height: 14px; margin: 0; padding: 0; }
 .endpoint-workspace .endpoint-workspace__row button { width: 26px; height: 26px; padding: 0; }
-.endpoint-workspace__link-row { display: grid; width: fit-content; max-width: 100%; grid-template-columns: minmax(0,max-content) auto; align-items: center; gap: 8px; height: 34px; }
-.endpoint-workspace .endpoint-workspace__link-row button { padding: 4px 8px; }
 .endpoint-workspace__preview { max-height: 22vh; overflow: auto; margin: 10px 0; font-size: 12px; }
 .endpoint-workspace__preview label { display: inline-flex; align-items: center; }
 .endpoint-workspace button, .blueprint-order-dialog button { padding: 7px 10px; border: 1px solid #35575b; border-radius: 6px; color: #cfe1de; background: #102326; cursor: pointer; }
@@ -832,8 +830,28 @@ a { color: inherit; }
 .endpoint-workspace__tabs { display: flex; gap: 8px; margin-bottom: 12px; }
 .endpoint-workspace__tabs [aria-selected="true"] { border-color: #55e5b5; background: #15372f; }
 
-.endpoint-workspace__existing-links { width: min(620px, 100%); }
-.endpoint-workspace__existing-links > .catalog-dialog__actions { justify-content: flex-start; flex-wrap: wrap; }
+.endpoint-workspace[data-tab="links"] {
+  display: flex;
+  flex-direction: column;
+  width: min(1200px, 100%);
+  height: calc(100dvh - 40px);
+  max-height: none;
+  padding: clamp(10px, 2vw, 22px);
+}
+.endpoint-workspace[data-tab="links"] > :not(.endpoint-workspace__existing-links) { flex: none; }
+.endpoint-workspace[data-tab="links"] > .endpoint-workspace__tabs { flex-wrap: wrap; }
+.endpoint-workspace__existing-links { display: flex; flex: 1; flex-direction: column; gap: 8px; min-height: 0; }
+.endpoint-workspace__existing-links > .catalog-dialog__actions { flex: none; justify-content: flex-start; flex-wrap: wrap; margin: 0; }
+.endpoint-workspace__link-list { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.endpoint-workspace__link-table { table-layout: fixed; border-collapse: separate; border-spacing: 0; }
+.endpoint-workspace__link-table th,
+.endpoint-workspace__link-table td { padding: 4px clamp(4px, 1vw, 10px); overflow-wrap: anywhere; }
+.endpoint-workspace__link-table th { position: sticky; top: 0; z-index: 1; }
+.endpoint-workspace__link-table th:first-child { width: 60px; }
+.endpoint-workspace__link-table th:last-child { width: 84px; }
+.endpoint-workspace__link-table :is(th, td):first-child { text-align: center; }
+.endpoint-workspace__link-table :is(th, td):last-child { text-align: right; }
+.endpoint-workspace .endpoint-workspace__link-table button { max-width: 100%; padding: 4px 8px; }
 
 /* C-UX-13: keep information bounded and let the edit page scroll naturally. */
 .route-content:has(> .base-template-edit-page) { height: auto; min-height: 100dvh; }

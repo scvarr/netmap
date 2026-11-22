@@ -1,11 +1,13 @@
 import { moduleMount } from '../topology/hardwareModules';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { useState } from 'react';
-import { describe, it, expect } from 'vitest';
-import { I18nProvider } from '../i18n';
+import { afterEach, describe, it, expect } from 'vitest';
+import { I18nProvider, localeStorageKey } from '../i18n';
 import { newBlueprintEditorState } from '../pages/BaseTemplateEditor';
-import { addEndpoints, addModulePlaces, addPanel, type BlueprintEditorState } from '../blueprints/editorModel';
+import { addEndpoints, addModulePlaces, addPanel, internalLinkPairKey, type BlueprintEditorState } from '../blueprints/editorModel';
 import { EndpointLinkWorkspace } from './EndpointLinkWorkspace';
+
+afterEach(() => localStorage.removeItem(localeStorageKey));
 
 function setup(count = 2, configure = (state: BlueprintEditorState) => state) {
   let initial = newBlueprintEditorState();
@@ -92,6 +94,68 @@ describe('unified endpoint workspace', () => {
     expect(document.querySelectorAll('[data-link-row]')).toHaveLength(0);
     fireEvent.click(screen.getByRole('checkbox',{name:'Все связи'}));
     expect(document.querySelectorAll('[data-link-row]')).toHaveLength(2);
+  });
+  it('shows 48 ordered Front–Rear pairs and keeps selection on the same pair after deletion and tab changes', () => {
+    const s = setup(48, state => {
+      state.panels[0].display_name = 'Front';
+      state.panels[1].display_name = 'Rear';
+      const [front, rear] = [state.slots.slice(0, 48), state.slots.slice(48)];
+      front.forEach((slot, index) => { slot.display_name = `F-${index + 1}`; });
+      rear.forEach((slot, index) => { slot.display_name = `R-${index + 1}`; });
+      state.individualLinks = front.map((slot, index) => ({
+        from_slot_key: rear[index].key,
+        to_slot_key: slot.key,
+      })).reverse();
+      return state;
+    });
+    const openLinks = () => fireEvent.click(screen.getByRole('tab', { name: /Существующие связи/ }));
+    openLinks();
+    const table = () => within(screen.getByRole('table', { name: 'Внутренние связи' }));
+    const rows = () => table().getAllByRole('row').slice(1);
+    expect(table().getAllByRole('columnheader').map(cell => cell.textContent)).toEqual(['Выбор', 'Порт A', 'Порт B', 'Действия']);
+    expect(rows()).toHaveLength(48);
+    rows().forEach((row, index) => {
+      const pair = s.initial.individualLinks[47 - index];
+      expect(row).toHaveAttribute('data-link-row', internalLinkPairKey(pair.from_slot_key, pair.to_slot_key));
+      expect(within(row).getAllByRole('cell').slice(1, 3).map(cell => cell.textContent)).toEqual([
+        `F-${index + 1} · Front`, `R-${index + 1} · Rear`,
+      ]);
+    });
+    expect(s.latest().individualLinks).toBe(s.initial.individualLinks);
+
+    const first = table().getByRole('checkbox', { name: 'F-1 · Front ↔ R-1 · Rear' });
+    const second = () => table().getByRole('checkbox', { name: 'F-2 · Front ↔ R-2 · Rear' });
+    fireEvent.click(first);
+    fireEvent.click(second());
+    fireEvent.click(within(rows()[0]).getByRole('button', { name: 'Удалить' }));
+    expect(rows()).toHaveLength(47);
+    expect(s.latest().individualLinks).toEqual(s.initial.individualLinks.slice(0, -1));
+    expect(screen.getByRole('button', { name: 'Удалить выбранные · 1' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Порты и операции' }));
+    openLinks();
+    expect(second()).toBeChecked();
+    expect(table().getAllByRole('checkbox', { checked: true })).toEqual([second()]);
+    fireEvent.click(screen.getByRole('button', { name: 'Выбрать все' }));
+    expect(table().getAllByRole('checkbox', { checked: true })).toHaveLength(47);
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить выбранные · 47' }));
+    expect(rows()).toHaveLength(0);
+    expect(s.latest().individualLinks).toEqual([]);
+    expect(screen.getByRole('tab', { name: 'Существующие связи · 0', selected: true })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Удалить выбранные · 0' })).toBeDisabled();
+  });
+  it('localizes the existing links table and controls in English', () => {
+    localStorage.setItem(localeStorageKey, 'en');
+    setup(2, state => ({
+      ...state,
+      individualLinks: [{ from_slot_key: state.slots[0].key, to_slot_key: state.slots[2].key }],
+    }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Existing links · 1' }));
+    const table = within(screen.getByRole('table', { name: 'Internal links' }));
+    expect(table.getAllByRole('columnheader').map(cell => cell.textContent)).toEqual(['Select', 'Port A', 'Port B', 'Actions']);
+    expect(table.getByRole('button', { name: 'Remove' })).toBeEnabled();
+    expect(screen.getByRole('checkbox', { name: 'All links' })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: 'Select all' })).toBeEnabled();
   });
   it('keeps panel orders independent, supports numeric and manual order and spatial reversal', () => {
     const s = setup();

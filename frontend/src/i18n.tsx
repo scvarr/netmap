@@ -85,6 +85,8 @@ const messages = {
     'endpointWorkspace.sort.manual': 'Вручную',
 
     'endpointWorkspace.allLinks': 'Все связи',
+    'endpointWorkspace.linkSelection': 'Выбор',
+    'endpointWorkspace.linkPort': 'Порт {side}',
     'endpointWorkspace.title': 'Порты и внутренние связи', 'endpointWorkspace.natural': 'По имени (1, 2, 10)', 'endpointWorkspace.applied': 'Связи созданы; результат показан ниже',
     'moduleGeometry.title': 'Геометрия модуля',
     'moduleGeometry.width': 'Ширина',
@@ -451,6 +453,8 @@ const messages = {
     'endpointWorkspace.sort.manual': 'Manual',
 
     'endpointWorkspace.allLinks': 'All links',
+    'endpointWorkspace.linkSelection': 'Select',
+    'endpointWorkspace.linkPort': 'Port {side}',
     'endpointWorkspace.title': 'Ports and internal links', 'endpointWorkspace.natural': 'By name (1, 2, 10)', 'endpointWorkspace.applied': 'Links created; results shown below',
     'moduleGeometry.title': 'Module geometry',
     'moduleGeometry.width': 'Width',
