@@ -191,6 +191,10 @@ def analyze_object(session, config, candidate):
                                     "endpoint_name": old[key]["display_name"], "dependencies": dependencies})
     bays = {b["bay_key"]: b for b in candidate["bays"]}
     installations = list(session.scalars(select(m.ModuleInstallation).where(m.ModuleInstallation.configuration_id == config.id)))
+    for installation in installations:
+        if installation.parent_installation_id is not None:
+            reasons.append({"code": "NESTED_INSTALLATION_RECONCILE_BLOCKED", "installation_id": str(installation.id)})
+    installations = [installation for installation in installations if installation.parent_installation_id is None]
     displaced = []
     for installation in sorted(installations, key=lambda i: str(i.id)):
         mount = mount_identity(row_mount(session.get(m.ModuleTemplateRevision, installation.module_revision_id)))

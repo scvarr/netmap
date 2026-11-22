@@ -880,6 +880,7 @@ class CreateModuleTemplateRequest(ModuleMount):
 class InstallModuleRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     module_template_id: uuid.UUID
+    parent_installation_id: uuid.UUID | None = None
     bay_key: str = Field(min_length=1, max_length=255)
     orientation: Literal["HORIZONTAL", "VERTICAL"]
 
@@ -942,7 +943,7 @@ class BaseTemplateStructuralChange(BaseModel):
 
 class BaseTemplateImpactReason(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    code: Literal["MISSING_ENDPOINT_MAPPING", "INVALID_ENDPOINT_MAPPING", "ENDPOINT_DEPENDENCIES", "ENDPOINT_KIND_CHANGE", "INSUFFICIENT_COMPATIBLE_CAPACITY", "MODULE_LAYOUT_PANEL_CONFLICT", "PHYSICAL_STRUCTURE_IMMUTABLE", "INTERNAL_LINK_CONNECTIONS", "INTERNAL_LINK_CARDINALITY", "IDENTITY_AND_DATA_PRESERVED"]
+    code: Literal["MISSING_ENDPOINT_MAPPING", "INVALID_ENDPOINT_MAPPING", "ENDPOINT_DEPENDENCIES", "ENDPOINT_KIND_CHANGE", "INSUFFICIENT_COMPATIBLE_CAPACITY", "MODULE_LAYOUT_PANEL_CONFLICT", "NESTED_INSTALLATION_RECONCILE_BLOCKED", "PHYSICAL_STRUCTURE_IMMUTABLE", "INTERNAL_LINK_CONNECTIONS", "INTERNAL_LINK_CARDINALITY", "IDENTITY_AND_DATA_PRESERVED"]
     key: str | list[str] | None = None
     endpoint_name: str | None = None
     dependencies: list[str] | None = None
@@ -1000,7 +1001,7 @@ class ModuleTemplateStructuralChange(BaseModel):
 
 
 class ModuleTemplateImpactReason(BaseTemplateImpactReason):
-    code: Literal["MISSING_ENDPOINT_MAPPING", "INVALID_ENDPOINT_MAPPING", "ENDPOINT_DEPENDENCIES", "ENDPOINT_KIND_CHANGE", "BAY_COMPATIBILITY_MISMATCH", "PHYSICAL_STRUCTURE_IMMUTABLE", "IDENTITY_AND_DATA_PRESERVED", "NESTED_MODULE_PORTS_UNSUPPORTED"]
+    code: Literal["MISSING_ENDPOINT_MAPPING", "INVALID_ENDPOINT_MAPPING", "ENDPOINT_DEPENDENCIES", "ENDPOINT_KIND_CHANGE", "BAY_COMPATIBILITY_MISMATCH", "PHYSICAL_STRUCTURE_IMMUTABLE", "IDENTITY_AND_DATA_PRESERVED", "NESTED_MODULE_PORTS_UNSUPPORTED", "NESTED_INSTALLATION_RECONCILE_BLOCKED"]
 
 
 class ModuleTemplateInstallationImpact(BaseModel):

@@ -45,3 +45,21 @@ def endpoint_position(layout, position, orientation):
     if orientation == "VERTICAL":
         x, y = 1 - y, x
     return layout["x"] + x * layout["width"], layout["y"] + y * layout["height"]
+
+
+def nested_place(place, panel_key):
+    return {**place, "bay_key": place["key"], "panel_key": panel_key, "kind": "PLACED",
+            "width": place.get("width"), "height": place.get("height")}
+
+
+def compose_layout(parent_layout, parent_turns, local_layout):
+    x, y, width, height = (local_layout[k] for k in ("x", "y", "width", "height"))
+    if parent_turns == 1:
+        x, y, width, height = 1 - y - height, x, height, width
+    elif parent_turns == 2:
+        x, y = 1 - x - width, 1 - y - height
+    elif parent_turns == 3:
+        x, y, width, height = y, 1 - x - width, height, width
+    return {"panel_key": parent_layout["panel_key"], "x": parent_layout["x"] + x * parent_layout["width"],
+            "y": parent_layout["y"] + y * parent_layout["height"], "width": width * parent_layout["width"],
+            "height": height * parent_layout["height"]}

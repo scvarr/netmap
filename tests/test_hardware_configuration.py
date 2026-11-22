@@ -88,7 +88,7 @@ def test_materialization_identity_binding_geometry_and_round_trip(orientation):
     assert len({e['connection_point_id'] for e in endpoints}) == 4
     assert len({e['network_interface_id'] for e in endpoints}) == 4
     package = client.get('/v1/workspace/package').json()
-    assert package['format_version'] == 13
+    assert package['format_version'] == 14
     assert 'ModuleInstallation' in package['authoring']
     assert 'ObjectBlueprint' not in package['authoring']
     before = client.get(f'/v1/topology/physical-objects/{object_ids[0]}/configuration').json()
@@ -170,7 +170,7 @@ def test_two_installations_in_one_object_have_distinct_definition_mappings_and_p
         event.listen(session.bind, 'before_cursor_execute', capture)
         try:
             contexts = module_endpoint_contexts(session, connection_point_ids=[uuid.UUID(e['connection_point_id']) for e in endpoints])
-            assert len(statements) == 1 and len(contexts) == 4
+            assert len(statements) == 3 and len(contexts) == 4
             statements.clear()
             HardwareCatalog(session).configuration_document(uuid.UUID(object_id))
             assert len(statements) <= 8  # Bounded batches, independent of installation count.

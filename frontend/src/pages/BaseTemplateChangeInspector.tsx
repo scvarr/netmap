@@ -14,6 +14,7 @@ function useReasonDescription() {
       MISSING_ENDPOINT_MAPPING: 'review.reason.mapping', ENDPOINT_KIND_CHANGE: 'review.reason.kind', PHYSICAL_STRUCTURE_IMMUTABLE: 'review.reason.immutable',
       INSUFFICIENT_COMPATIBLE_CAPACITY: 'review.reason.capacity', INTERNAL_LINK_CONNECTIONS: 'review.reason.links',
       INVALID_ENDPOINT_MAPPING: 'reconciliation.mapping', INTERNAL_LINK_CARDINALITY: 'reconciliation.cardinality',
+      NESTED_INSTALLATION_RECONCILE_BLOCKED: 'review.reason.nestedInstallations',
       MODULE_LAYOUT_PANEL_CONFLICT: 'changeInspector.panelConflict',
       CONCURRENT_CHANGE: 'reconciliation.concurrent', OBJECT_CHANGED: 'reconciliation.objectChanged',
       TARGET_REVISION_CHANGED: 'reconciliation.targetChanged', APPLY_FAILED: 'reconciliation.failed',

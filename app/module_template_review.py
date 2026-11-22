@@ -70,12 +70,15 @@ def analyze_installation(session, installation, candidate):
     rows = list(session.scalars(select(m.ModuleEndpointMapping).where(m.ModuleEndpointMapping.installation_id == installation.id)))
     mappings = {definitions[row.definition_id]: row for row in rows if row.definition_id in definitions}
     reasons = []
-    if candidate.get("module_places"):
-        reasons.append({"code": "NESTED_MODULE_PORTS_UNSUPPORTED"})
+    nested = installation.parent_installation_id is not None
+    has_children = session.scalar(select(m.ModuleInstallation.id).where(
+        m.ModuleInstallation.parent_installation_id == installation.id).limit(1)) is not None
+    if nested or has_children:
+        reasons.append({"code": "NESTED_INSTALLATION_RECONCILE_BLOCKED"})
     if any(row.definition_id not in definitions for row in rows):
         reasons.append({"code": "INVALID_ENDPOINT_MAPPING"})
     bay = session.scalar(select(m.ModuleBay).where(m.ModuleBay.base_revision_id == config.base_revision_id, m.ModuleBay.bay_key == installation.bay_key))
-    if bay is None or mount_identity(row_mount(bay)) != mount_identity(candidate):
+    if not nested and (bay is None or mount_identity(row_mount(bay)) != mount_identity(candidate)):
         reasons.append({"code": "BAY_COMPATIBILITY_MISMATCH", "mount": mount_document(*mount_identity(candidate))})
     for key, definition in old.items():
         mapping = mappings.get(key)

@@ -1,12 +1,12 @@
-import { mountTypeId, type ModuleMount } from '../topology/hardwareModules';
+import { mountTypeId, type ModuleMount, type ModuleBay } from '../topology/hardwareModules';
 import { mountKindLabels, mountTypeName, useMountTypes, type MountCatalogs } from './ModulePortTypeSelect';
 import { modulePortPosition } from '../topology/hardwareModules';
 import { EndpointMarker } from './EndpointMarker';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { BlueprintPresentation } from '../topology/types';
 import { panelCompositionBounds } from '../topology/blueprintDisplaySize';
-import { useI18n } from '../i18n';
-import { hardwareModuleDataSource, type HardwareConfiguration, type HardwareModuleDataSource, type ModuleInstallation, type ModuleTemplate } from '../topology/hardwareModules';
+import { useI18n, type MessageKey } from '../i18n';
+import { HardwareModuleError, hardwareModuleDataSource, type HardwareConfiguration, type HardwareModuleDataSource, type ModuleInstallation, type ModuleTemplate } from '../topology/hardwareModules';
 
 function compareKeys(a: string, b: string) {
   return a < b ? -1 : a > b ? 1 : 0;
@@ -39,6 +39,20 @@ function groupBays(config: HardwareConfiguration, image: BlueprintPresentation |
     group.bays.push(bay);
   }
   return groups;
+}
+
+const operationErrors: Partial<Record<string, MessageKey>> = {
+  INVALID_MODULE_PARENT: 'hardware.error.parent',
+  INVALID_MODULE_PLACE: 'hardware.error.place',
+  MODULE_PLACE_OCCUPIED: 'hardware.error.occupied',
+  MODULE_MOUNT_MISMATCH: 'hardware.error.mount',
+  TRANSCEIVER_BINDING_REQUIRED: 'hardware.error.transceiver',
+  MODULE_INSTALLATION_HAS_CHILDREN: 'hardware.error.children',
+  MODULE_INSTALLATION_IN_USE: 'hardware.error.inUse',
+};
+
+function placeChoiceKey(bayKey: string, parentId?: string) {
+  return JSON.stringify([parentId ?? null, bayKey]);
 }
 
 export function ModuleInstallationSection({ objectId, onInstalled, presentation, dataSource = hardwareModuleDataSource }: { objectId: string; presentation?: BlueprintPresentation; onInstalled: () => void | Promise<void>; dataSource?: HardwareModuleDataSource }) {
@@ -87,18 +101,77 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
       });
       setConfig(confirmed); setDraft(undefined);
       await onInstalled();
-    } catch(e) { setError(t('hardware.failed', { error: String(e) })); }
+    } catch(e) { showOperationError(e); }
     finally { setPending(false); }
   };
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [choices, setChoices] = useState<Record<string, { module: string; orientation: 'HORIZONTAL' | 'VERTICAL' }>>({});
-  useEffect(() => { let active = true; setConfig(undefined); setError(''); setChoices({}); void Promise.all([dataSource.loadConfiguration(objectId), dataSource.listModules()]).then(([c, m]) => { if (active) { setConfig(c); setModules(m.modules); } }, e => { if(active) setError(t('hardware.failed', { error: String(e) })); }); return () => { active = false; }; }, [objectId, dataSource, retry, t]);
-  const install = async (bayKey: string) => { const choice = choices[bayKey]; if (!choice?.module || pending) return; setPending(true); setError(''); try { setConfig(await dataSource.installModule(objectId, { bay_key: bayKey, module_template_id: choice.module, orientation: choice.orientation })); await onInstalled(); } catch(e) { setError(t('hardware.failed', { error: String(e) })); } finally { setPending(false); } };
+  useEffect(() => { let active = true; setConfig(undefined); setError(''); setChoices({}); setExpanded(new Set()); void Promise.all([dataSource.loadConfiguration(objectId), dataSource.listModules()]).then(([c, m]) => { if (active) { setConfig(c); setModules(m.modules); } }, e => { if(active) setError(t('hardware.failed', { error: String(e) })); }); return () => { active = false; }; }, [objectId, dataSource, retry, t]);
+  const showOperationError = (error: unknown) => {
+    const key = error instanceof HardwareModuleError && operationErrors[error.reason ?? ''];
+    setError(key ? t(key) : t('hardware.failed', { error: String(error) }));
+  };
+  const install = async (bayKey: string, parentId?: string) => { const choice = choices[placeChoiceKey(bayKey, parentId)]; if (!choice?.module || pending) return; setPending(true); setError(''); try { setConfig(await dataSource.installModule(objectId, { bay_key: bayKey, ...(parentId ? { parent_installation_id: parentId } : {}), module_template_id: choice.module, orientation: choice.orientation })); await onInstalled(); } catch(e) { showOperationError(e); } finally { setPending(false); } };
   const uninstall = async (installationId: string, name: string, bay: string) => {
     if (pending || !window.confirm(t('hardware.uninstallConfirm', { name, bay }))) return;
     setPending(true); setError('');
     try { setConfig(await dataSource.uninstallModule(objectId, installationId)); await onInstalled(); }
-    catch(e) { setError(t('hardware.failed', { error: String(e) })); }
+    catch(e) { showOperationError(e); }
     finally { setPending(false); }
+  };
+  const nested = new Map(config?.nested_installations?.map(item => [item.id, item]));
+  const header = <tr>
+          <th scope="col">{t('hardware.place')}</th>
+          <th scope="col">{t('hardware.installedModule')}</th>
+          <th scope="col">{t('hardware.orientation')}</th>
+          <th scope="col">{t('hardware.action')}</th>
+        </tr>;
+  const renderPlace = (bay: ModuleBay, installation: ModuleInstallation | undefined, parentId?: string) => {
+    const compatible = modules.filter(module => module.mount_kind === bay.mount_kind && mountTypeId(module) === mountTypeId(bay));
+    const choiceKey = placeChoiceKey(bay.bay_key, parentId);
+    const choice = choices[choiceKey] ?? { module: '', orientation: 'HORIZONTAL' as const };
+    const disabled = pending || editing;
+    return <tr key={bay.bay_key} data-bay-key={bay.bay_key}>
+      <th scope="row">{bay.display_name}</th>
+      <td>{installation ? <>
+        {installation.name}
+        {installation.endpoints.length > 0 && <details key={installation.id}>
+          <summary>{t('hardware.ports')}</summary>
+          <ul>{installation.endpoints.map(endpoint => <li key={endpoint.connection_point_id} data-connection-point-id={endpoint.connection_point_id}>{endpoint.contextual_display_name}</li>)}</ul>
+        </details>}
+        {!!installation.module_places?.length && <details key={installation.id + ':places'}
+          onToggle={event => {
+            const open = event.currentTarget.open;
+            setExpanded(current => {
+              const next = new Set(current);
+              if (open) next.add(installation.id);
+              else next.delete(installation.id);
+              return next;
+            });
+          }}>
+          <summary>{t('hardware.nestedPlaces')}</summary>
+          {expanded.has(installation.id) && <table className="ports-table" aria-label={t('hardware.nestedPlaces')}>
+            <thead>{header}</thead>
+            <tbody>{installation.module_places.map(place => renderPlace(
+              place, nested.get(place.installation_id ?? ''), installation.id,
+            ))}</tbody>
+          </table>}
+        </details>}
+      </> : compatible.length ? <select aria-label={t('hardware.selectModule')} disabled={disabled} value={choice.module}
+        onChange={e => setChoices(old => ({ ...old, [choiceKey]: { ...choice, module: e.target.value } }))}>
+        <option value="">{t('hardware.selectModule')}</option>
+        {compatible.map(m => <option key={m.template_id} value={m.template_id}>{m.name}</option>)}
+      </select> : t('hardware.noModules')}</td>
+      <td>{installation ? t(installation.orientation === 'VERTICAL' ? 'hardware.vertical' : 'hardware.horizontal') :
+        <select aria-label={t('hardware.orientation')} disabled={disabled || !compatible.length} value={choice.orientation}
+          onChange={e => setChoices(old => ({ ...old, [choiceKey]: { ...choice, orientation: e.target.value as ModuleInstallation['orientation'] } }))}>
+          <option value="HORIZONTAL">{t('hardware.horizontal')}</option>
+          <option value="VERTICAL">{t('hardware.vertical')}</option>
+        </select>}</td>
+      <td>{installation ?
+        <button type="button" className="text-action" disabled={disabled} onClick={() => void uninstall(installation.id, installation.name, bay.display_name)}>{t('hardware.uninstall')}</button> :
+        <button type="button" className="primary-action" disabled={disabled || !compatible.some(m => m.template_id === choice.module)} onClick={() => void install(bay.bay_key, parentId)}>{t('hardware.install')}</button>}</td>
+    </tr>;
   };
   return <section className="blueprint-editor-controls" aria-label={t('hardware.bays')}><h2>{t('hardware.bays')}</h2>
     {config && dataSource.saveLayout && <div className="module-installation-toolbar">
@@ -153,44 +226,11 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
     </div>
     {groups && groups.size > 0 && <div className="ports-table-wrap module-installation-list" tabIndex={0} role="region" aria-label={t('hardware.bays')}>
       <table className="ports-table module-installation-table" aria-label={t('hardware.bays')}>
-        <thead><tr>
-          <th scope="col">{t('hardware.place')}</th>
-          <th scope="col">{t('hardware.installedModule')}</th>
-          <th scope="col">{t('hardware.orientation')}</th>
-          <th scope="col">{t('hardware.action')}</th>
-        </tr></thead>
+        <thead>{header}</thead>
         {Array.from(groups, ([key, group]) => {
-          const compatible = modules.filter(m => m.mount_kind === group.mount.mount_kind && mountTypeId(m) === mountTypeId(group.mount));
           return <tbody key={key}>
             <tr><th className="module-installation-table__group" scope="rowgroup" colSpan={4}>{group.panelName} · {t(mountKindLabels[group.mount.mount_kind])} · {mountTypeName(moduleTypes, group.mount)}</th></tr>
-            {group.bays.map(bay => {
-              const installation = bay.installation;
-              const choice = choices[bay.bay_key] ?? { module: '', orientation: 'HORIZONTAL' as const };
-              const disabled = pending || editing;
-              return <tr key={bay.bay_key} data-bay-key={bay.bay_key}>
-                <th scope="row">{bay.display_name}</th>
-                <td>{installation ? <>
-                  {installation.name}
-                  {installation.endpoints.length > 0 && <details key={installation.id}>
-                    <summary>{t('hardware.ports')}</summary>
-                    <ul>{installation.endpoints.map(endpoint => <li key={endpoint.connection_point_id} data-connection-point-id={endpoint.connection_point_id}>{endpoint.contextual_display_name}</li>)}</ul>
-                  </details>}
-                </> : compatible.length ? <select aria-label={t('hardware.selectModule')} disabled={disabled} value={choice.module}
-                  onChange={e => setChoices(old => ({ ...old, [bay.bay_key]: { ...choice, module: e.target.value } }))}>
-                  <option value="">{t('hardware.selectModule')}</option>
-                  {compatible.map(m => <option key={m.template_id} value={m.template_id}>{m.name}</option>)}
-                </select> : t('hardware.noModules')}</td>
-                <td>{installation ? t(installation.orientation === 'VERTICAL' ? 'hardware.vertical' : 'hardware.horizontal') :
-                  <select aria-label={t('hardware.orientation')} disabled={disabled || !compatible.length} value={choice.orientation}
-                    onChange={e => setChoices(old => ({ ...old, [bay.bay_key]: { ...choice, orientation: e.target.value as ModuleInstallation['orientation'] } }))}>
-                    <option value="HORIZONTAL">{t('hardware.horizontal')}</option>
-                    <option value="VERTICAL">{t('hardware.vertical')}</option>
-                  </select>}</td>
-                <td>{installation ?
-                  <button type="button" className="text-action" disabled={disabled} onClick={() => void uninstall(installation.id, installation.name, bay.display_name)}>{t('hardware.uninstall')}</button> :
-                  <button type="button" className="primary-action" disabled={disabled || !compatible.some(m => m.template_id === choice.module)} onClick={() => void install(bay.bay_key)}>{t('hardware.install')}</button>}</td>
-              </tr>;
-            })}
+            {group.bays.map(bay => renderPlace(bay, bay.installation ?? undefined))}
           </tbody>;
         })}
       </table>

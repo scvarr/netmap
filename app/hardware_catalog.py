@@ -1,12 +1,13 @@
 import uuid
+from collections import deque
 from dataclasses import dataclass
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.port_types import validate_port_type_assignments
-from app.module_port_types import MOUNT_FIELDS, base_assignments, module_assignments, row_mount, validate_mount_types
-from app.module_layout import initial_layout, validate_layout, endpoint_position
+from app.module_port_types import MOUNT_FIELDS, mount_identity, base_assignments, module_assignments, row_mount, validate_mount_types
+from app.module_layout import compose_layout, initial_layout, nested_place, validate_layout
 from app.device_catalog import DISPLAY_ALIAS_KEY, PHYSICAL_OBJECT_CLASS_KEY
 from app.errors import ModelError, ValidationError
 from app.models import (
@@ -23,7 +24,7 @@ from app.models import (
     ModuleInstallation, ModuleEndpointMapping, PhysicalObject, PortType,
 )
 from app.repository import CanonicalRepository, ConnectionMemberInput
-from app.module_endpoint_names import module_endpoint_contexts
+from app.module_endpoint_names import endpoint_context
 
 
 @dataclass(frozen=True)
@@ -431,29 +432,58 @@ class HardwareCatalog:
         config = self.session.scalar(select(ObjectConfiguration).where(ObjectConfiguration.physical_object_id == object_id).with_for_update())
         if config is None:
             raise ValidationError("Object has no base template configuration")
-        bay = self.session.scalar(select(ModuleBay).where(ModuleBay.base_revision_id == config.base_revision_id, ModuleBay.bay_key == query.bay_key))
-        if bay is None:
-            raise ValidationError("Bay does not belong to the object's base revision")
-        if self.session.scalar(select(ModuleInstallation.id).where(ModuleInstallation.configuration_id == config.id, ModuleInstallation.bay_key == bay.bay_key)) is not None:
-            raise ModelError("Bay is occupied")
-        revision = self.session.scalar(select(ModuleTemplateRevision).where(ModuleTemplateRevision.template_id == query.module_template_id).order_by(ModuleTemplateRevision.version_number.desc()).limit(1))
+        parent_id = query.parent_installation_id
+        if parent_id is None:
+            bay_rows = self.session.scalars(select(ModuleBay).where(ModuleBay.base_revision_id == config.base_revision_id))
+            places = [_base_place(row) for row in bay_rows]
+            place = next((item for item in places if item["bay_key"] == query.bay_key), None)
+            if place is None:
+                raise ValidationError("Место отсутствует в закреплённой ревизии оборудования")
+            panel = self.session.scalar(select(PresentationPanel).where(
+                PresentationPanel.base_revision_id == config.base_revision_id,
+                PresentationPanel.panel_key == place["panel_key"]))
+            frame = {"width": panel.width, "height": panel.height}
+        else:
+            parent = self.session.get(ModuleInstallation, parent_id)
+            if parent is None or parent.configuration_id != config.id:
+                raise ValidationError("Родительская установка не принадлежит конфигурации этого объекта",
+                                      {"reason": "INVALID_MODULE_PARENT"})
+            parent_revision = self.session.get(ModuleTemplateRevision, parent.module_revision_id)
+            places = [nested_place(item, parent.layout["panel_key"]) for item in parent_revision.module_places]
+            place = next((item for item in places if item["bay_key"] == query.bay_key), None)
+            if place is None:
+                raise ValidationError("Место отсутствует в закреплённой ревизии родительского модуля",
+                                      {"reason": "INVALID_MODULE_PLACE"})
+            frame = parent_revision.geometry
+        if self.session.scalar(select(ModuleInstallation.id).where(
+            ModuleInstallation.configuration_id == config.id,
+            ModuleInstallation.parent_installation_id == parent_id,
+            ModuleInstallation.bay_key == query.bay_key,
+        )) is not None:
+            raise ModelError("Место уже занято", {"reason": "MODULE_PLACE_OCCUPIED"})
+        revision = self.session.scalar(select(ModuleTemplateRevision).where(
+            ModuleTemplateRevision.template_id == query.module_template_id
+        ).order_by(ModuleTemplateRevision.version_number.desc()).limit(1))
         if revision is None:
             raise ValidationError("Module template was not found")
-        if revision.module_places:
-            raise ModelError("Установка модуля с вложенными модульными портами пока не поддерживается",
-                             {"reason": "NESTED_MODULE_PORTS_UNSUPPORTED"})
-        if row_mount(revision) != row_mount(bay):
-            raise ModelError("Module mount kind and type must match the placement")
-        panel = self.session.scalar(select(PresentationPanel).where(PresentationPanel.base_revision_id == config.base_revision_id, PresentationPanel.panel_key == bay.panel_key))
-        places = [{k: getattr(b, k) for k in ("kind", "bay_key", "panel_key")}
-                  for b in self.session.scalars(select(ModuleBay).where(ModuleBay.base_revision_id == config.base_revision_id))]
-        layout = initial_layout({k: getattr(bay, k) for k in ("kind", "bay_key", "panel_key", "x", "y", "width", "height")}, revision.geometry, query.orientation, {"width": panel.width, "height": panel.height}, places)
-        validate_layout(layout, bay.panel_key)
-        installation = ModuleInstallation(layout=layout, configuration_id=config.id, module_revision_id=revision.id, bay_key=bay.bay_key, orientation=query.orientation)
+        if mount_identity(row_mount(revision)) != mount_identity(place):
+            raise ModelError("Вид и тип модуля должны точно совпадать с посадочным местом",
+                             {"reason": "MODULE_MOUNT_MISMATCH"})
+        definitions = list(self.session.scalars(select(ModuleEndpointDefinition).where(
+            ModuleEndpointDefinition.module_revision_id == revision.id
+        ).order_by(ModuleEndpointDefinition.order_index)))
+        if parent_id is not None and revision.mount_kind == "MODULE_PORT" and definitions:
+            raise ModelError("Физические окончания вложенного трансивера требуют привязки MOD-03",
+                             {"reason": "TRANSCEIVER_BINDING_REQUIRED"})
+        layout = initial_layout(place, revision.geometry, query.orientation, frame, places)
+        validate_layout(layout, place["panel_key"])
+        installation = ModuleInstallation(layout=layout, configuration_id=config.id,
+            parent_installation_id=parent_id, module_revision_id=revision.id,
+            bay_key=query.bay_key, orientation=query.orientation)
         self.session.add(installation)
         self.session.flush()
         repository = CanonicalRepository(self.session)
-        for definition in self.session.scalars(select(ModuleEndpointDefinition).where(ModuleEndpointDefinition.module_revision_id == revision.id).order_by(ModuleEndpointDefinition.order_index)):
+        for definition in definitions:
             capacity = self.session.get(PortType, definition.port_type_id).cardinality
             point = repository.add_connection_point(object_id, cardinality=capacity)
             self._metadata(connection_point_id=point.id, key=DISPLAY_ALIAS_KEY, value=definition.display_name)
@@ -473,31 +503,75 @@ class HardwareCatalog:
         config = self.session.scalar(select(ObjectConfiguration).where(ObjectConfiguration.physical_object_id == object_id))
         if config is None:
             return {"configuration_id": None, "bays": []}
-        installations = {i.bay_key: i for i in self.session.scalars(select(ModuleInstallation).where(ModuleInstallation.configuration_id == config.id))}
-        contexts = {c["connection_point_id"]: c for c in module_endpoint_contexts(self.session, configuration_ids=[config.id])}
-        modules = {r.id: (r, t) for r, t in self.session.execute(select(ModuleTemplateRevision, ModuleTemplate).join(ModuleTemplate, ModuleTemplate.id == ModuleTemplateRevision.template_id).where(ModuleTemplateRevision.id.in_([i.module_revision_id for i in installations.values()])))}
+        installations = list(self.session.scalars(select(ModuleInstallation).where(
+            ModuleInstallation.configuration_id == config.id).order_by(ModuleInstallation.id)))
+        occupied = {(i.parent_installation_id, i.bay_key): i for i in installations}
+        modules = {r.id: (r, t) for r, t in self.session.execute(
+            select(ModuleTemplateRevision, ModuleTemplate)
+            .join(ModuleTemplate, ModuleTemplate.id == ModuleTemplateRevision.template_id)
+            .where(ModuleTemplateRevision.id.in_({i.module_revision_id for i in installations})))}
         endpoints_by_installation = {}
-        for mapping, definition in self.session.execute(select(ModuleEndpointMapping, ModuleEndpointDefinition).join(ModuleEndpointDefinition, ModuleEndpointDefinition.id == ModuleEndpointMapping.definition_id).where(ModuleEndpointMapping.installation_id.in_([i.id for i in installations.values()])).order_by(ModuleEndpointDefinition.order_index)):
+        for mapping, definition in self.session.execute(
+            select(ModuleEndpointMapping, ModuleEndpointDefinition)
+            .join(ModuleEndpointDefinition, ModuleEndpointDefinition.id == ModuleEndpointMapping.definition_id)
+            .where(ModuleEndpointMapping.installation_id.in_([i.id for i in installations]))
+            .order_by(ModuleEndpointDefinition.order_index)
+        ):
             endpoints_by_installation.setdefault(mapping.installation_id, []).append((mapping, definition))
-        panel_rows = {p.panel_key: p for p in self.session.scalars(select(PresentationPanel).where(PresentationPanel.base_revision_id == config.base_revision_id))}
-        bay_rows = list(self.session.scalars(select(ModuleBay).where(ModuleBay.base_revision_id == config.base_revision_id).order_by(ModuleBay.bay_key)))
-        places = [{k: getattr(b, k) for k in ("kind", "bay_key", "panel_key")} for b in bay_rows]
-        bays = []
-        for bay in bay_rows:
-            installation = installations.get(bay.bay_key)
-            installed = None
-            if installation:
-                revision, template = modules[installation.module_revision_id]
-                endpoints = []
-                rows = endpoints_by_installation.get(installation.id, [])
-                validate_layout(installation.layout, bay.panel_key)
-                for mapping, definition in rows:
-                    x, y = endpoint_position(installation.layout, revision.geometry["endpoints"][definition.definition_key], installation.orientation)
-                    endpoints.append({"key": definition.definition_key, "kind": definition.kind, "port_type_id": str(definition.port_type_id), **contexts[str(mapping.connection_point_id)], "x": x, "y": y})
-                installed = {"id": str(installation.id), "module_template_id": str(template.id), "module_revision_id": str(revision.id), "name": revision.name, "orientation": installation.orientation, "layout": installation.layout, "fill_color": revision.geometry["fill_color"], "initial_layout": initial_layout({k: getattr(bay, k) for k in ("kind", "bay_key", "panel_key", "x", "y", "width", "height")}, revision.geometry, installation.orientation, {"width": panel_rows[bay.panel_key].width, "height": panel_rows[bay.panel_key].height}, places), "endpoints": endpoints}
-            bays.append({"bay_key": bay.bay_key, "display_name": bay.display_name, **row_mount(bay), "panel_key": bay.panel_key, "kind": bay.kind, "x": bay.x, "y": bay.y, "width": bay.width, "height": bay.height, "installation": installed})
-        panels = [{k: getattr(p, k) for k in ("panel_key", "display_name", "width", "height")} for p in panel_rows.values()]
-        return {"configuration_id": str(config.id), "base_revision_id": str(config.base_revision_id), "panels": panels, "bays": bays}
+        panels = [{k: getattr(p, k) for k in ("panel_key", "display_name", "width", "height")}
+                  for p in self.session.scalars(select(PresentationPanel).where(
+                      PresentationPanel.base_revision_id == config.base_revision_id))]
+        panel_by_key = {p["panel_key"]: p for p in panels}
+        bays = [_base_place(row) for row in self.session.scalars(select(ModuleBay).where(
+            ModuleBay.base_revision_id == config.base_revision_id).order_by(ModuleBay.bay_key))]
+        pending = deque((bay, None, panel_by_key[bay["panel_key"]], bays, None, 0, ()) for bay in bays)
+        nested_installations = []
+        while pending:
+            place, parent_id, frame, siblings, parent_layout, parent_turns, parent_path = pending.popleft()
+            installation = occupied.get((parent_id, place["bay_key"]))
+            if parent_id is None:
+                place["installation"] = None
+            else:
+                place["installation_id"] = str(installation.id) if installation else None
+                global_place = compose_layout(parent_layout, parent_turns, {
+                    **place, "width": place["width"] or 0, "height": place["height"] or 0,
+                })
+                if place["width"] is None:
+                    global_place.update(width=None, height=None)
+                place["global_position"] = global_place
+            if installation is None:
+                continue
+            revision, template = modules[installation.module_revision_id]
+            validate_layout(installation.layout, place["panel_key"])
+            global_layout = (compose_layout(parent_layout, parent_turns, installation.layout)
+                             if parent_layout is not None else installation.layout)
+            turns = (parent_turns + (installation.orientation == "VERTICAL")) % 4
+            endpoints = []
+            place_path = (place["display_name"], *parent_path)
+            for mapping, definition in endpoints_by_installation.get(installation.id, []):
+                position = revision.geometry["endpoints"][definition.definition_key]
+                point_position = compose_layout(global_layout, turns, {**position, "width": 0, "height": 0})
+                endpoints.append({"key": definition.definition_key, "kind": definition.kind,
+                                  "port_type_id": str(definition.port_type_id),
+                                  **endpoint_context(mapping, definition, installation, place["panel_key"],
+                                                     panel_by_key[place["panel_key"]]["display_name"], place_path),
+                                  "x": point_position["x"], "y": point_position["y"]})
+            children = [nested_place(child, place["panel_key"]) for child in revision.module_places]
+            installed = {"id": str(installation.id), "parent_installation_id": str(parent_id) if parent_id else None,
+                         "bay_key": installation.bay_key, "module_template_id": str(template.id),
+                         "module_revision_id": str(revision.id), "name": revision.name,
+                         "orientation": installation.orientation, "layout": installation.layout,
+                         "global_layout": global_layout, "fill_color": revision.geometry["fill_color"],
+                         "initial_layout": initial_layout(place, revision.geometry, installation.orientation, frame, siblings),
+                         "endpoints": endpoints, "module_places": children}
+            if parent_id is None:
+                place["installation"] = installed
+            else:
+                nested_installations.append(installed)
+            pending.extend((child, installation.id, revision.geometry, children, global_layout, turns, place_path)
+                           for child in children)
+        return {"configuration_id": str(config.id), "base_revision_id": str(config.base_revision_id),
+                "panels": panels, "bays": bays, "nested_installations": nested_installations}
 
     def _metadata(
         self,
@@ -516,3 +590,8 @@ class HardwareCatalog:
             value=value,
         ))
         self.session.flush()
+
+
+def _base_place(bay):
+    return {**row_mount(bay), **{key: getattr(bay, key) for key in
+            ("bay_key", "display_name", "panel_key", "kind", "x", "y", "width", "height")}}

@@ -245,7 +245,7 @@ def test_forward_migration_preserves_installation_and_seed(legacy_database, prev
             return {table: conn.execute(sa.text(f"SELECT * FROM {table} ORDER BY id")).all() for table in stable_tables}
 
     before = snapshot()
-    result = upgrade(mapping=mapping)
+    result = upgrade("catd05_split_mount_types", mapping=mapping)
     assert result.returncode == 0, result.stderr
     assert snapshot() == before
     with db.connect() as conn:
@@ -270,6 +270,23 @@ def test_forward_migration_preserves_installation_and_seed(legacy_database, prev
         assert conn.scalar(sa.text("SELECT definition->'module_places'->0->>'module_port_type_id' FROM module_template_drafts")) == str(names["SFP+"])
         assert conn.scalar(sa.text("SELECT module_places->0->>'module_port_type_id' FROM module_template_revisions WHERE name = 'Nested marker example'")) == str(names["SFP+"])
         assert conn.scalar(sa.text("SELECT result->'changes'->0->>'key' FROM module_template_candidates")) == "mount"
+    stable_tables = (*stable_tables, "object_configurations", "module_template_revisions",
+                     "network_interface_physical_owners", "entity_metadata")
+
+    def nested_upgrade_snapshot():
+        with db.connect() as conn:
+            return {table: conn.execute(sa.text(
+                f"SELECT to_jsonb(t) - 'parent_installation_id' FROM {table} t ORDER BY id"
+            )).scalars().all() for table in stable_tables}
+
+    before_nested = nested_upgrade_snapshot()
+    upgraded = upgrade()
+    assert upgraded.returncode == 0, upgraded.stderr
+    assert nested_upgrade_snapshot() == before_nested
+    with db.connect() as conn:
+        assert conn.scalar(sa.text("SELECT version_num FROM alembic_version")) == "mod02a_nested_installations"
+        assert conn.scalar(sa.text("SELECT count(*) FROM module_installations WHERE parent_installation_id IS NULL")) == 1
+
     repeated = upgrade()
     assert repeated.returncode == 0, repeated.stderr
     with db.connect() as conn:
@@ -332,9 +349,9 @@ def test_pcie_card_definition_with_sfp_ports_publishes_and_roundtrips():
     bay.update(mount)
     base, _ = create_base(payload)
     obj = create_object(base)["physical_object_ref"]["entity_id"]
-    rejected = install(obj, template, bay["bay_key"])
-    assert rejected.status_code == 409
-    assert rejected.json()["error"]["details"]["reason"] == "NESTED_MODULE_PORTS_UNSUPPORTED"
+    installed = install(obj, template, bay["bay_key"])
+    assert installed.status_code == 201, installed.text
+    assert installed.json()["bays"][0]["installation"]["module_places"][0]["bay_key"] == "sfp-1"
     package = client.get(PACKAGE).json()
     assert client.delete("/v1/workspace/dataset").status_code == 204
     assert client.post(PACKAGE, json=package).status_code == 204

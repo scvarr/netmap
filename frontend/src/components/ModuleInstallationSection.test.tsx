@@ -2,10 +2,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
-import type { HardwareConfiguration, HardwareModuleDataSource } from '../topology/hardwareModules';
+import { HardwareModuleError, initialModuleGeometry, type HardwareConfiguration, type HardwareModuleDataSource, type InstalledModulePlace } from '../topology/hardwareModules';
 import { ModuleInstallationSection } from './ModuleInstallationSection';
 
-const module = { template_id: 'template', revision_id: 'revision', name: 'FC25Gb-2', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'OCP3', endpoints: [] };
+const module = { template_id: 'template', revision_id: 'revision', name: 'FC25Gb-2', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'OCP3', endpoints: [], geometry: initialModuleGeometry() };
 const free: HardwareConfiguration = { configuration_id: 'config', base_revision_id: 'base-revision', bays: [{ bay_key: 'bay-key', display_name: 'PCIe1', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'OCP3', panel_key: 'back', x: .1, y: .1, width: .3, height: .3, installation: null }] };
 const occupied: HardwareConfiguration = { ...free, panels: [{ panel_key: 'back', display_name: 'Back', width: 600, height: 200 }], bays: [{ ...free.bays[0], installation: {
   layout: { panel_key: 'back', x: .1, y: .1, width: .3, height: .2 }, fill_color: '#123456', id: 'stable-installation-id', name: module.name, module_template_id: 'template', module_revision_id: 'revision', orientation: 'HORIZONTAL', endpoints: [{
@@ -137,6 +137,57 @@ describe('ModuleInstallationSection uninstall', () => {
     expect(await screen.findByRole('combobox', { name: 'Выберите совместимый модуль' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Удалить' })).not.toBeInTheDocument();
   });
+});
+
+it('expands nested places, installs and removes a selected leaf, and explains a blocked parent', async () => {
+  const data = source();
+  const tree = structuredClone(occupied);
+  const root = tree.bays[0].installation!;
+  const place: InstalledModulePlace = {
+    mount_kind: 'MODULE_PORT', module_port_type_id: 'SFP', panel_key: 'back',
+    bay_key: 'bay-key', display_name: 'SFP 1', x: .4, y: .6, installation_id: 'child',
+  };
+  root.module_places = [place];
+  tree.nested_installations = [{
+    ...root, id: 'child', name: 'Optical adapter', parent_installation_id: root.id,
+    endpoints: [], module_places: [{ ...place, display_name: 'SFP 2', installation_id: null }],
+  }];
+  const withLeaf = structuredClone(tree);
+  withLeaf.nested_installations![0].module_places![0].installation_id = 'leaf';
+  withLeaf.nested_installations!.push({
+    ...root, id: 'leaf', name: 'SFP optics', parent_installation_id: 'child', endpoints: [], module_places: [],
+  });
+  const optics = { ...module, template_id: 'optics', module_port_type_id: 'SFP', name: 'SFP optics' };
+  vi.mocked(data.listModules).mockResolvedValue({ modules: [module, optics] });
+  vi.mocked(data.loadConfiguration).mockResolvedValue(tree);
+  vi.mocked(data.installModule).mockResolvedValue(withLeaf);
+  vi.mocked(data.uninstallModule)
+    .mockRejectedValueOnce(new HardwareModuleError('Blocked', 'MODULE_INSTALLATION_HAS_CHILDREN'))
+    .mockResolvedValueOnce(tree);
+  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  show(data);
+  const top = await screen.findByRole('row', { name: /^PCIe1/ });
+  expect(screen.queryByRole('rowheader', { name: 'SFP 1' })).not.toBeInTheDocument();
+  await userEvent.click(within(top).getByText('Вложенные места'));
+  const child = await screen.findByRole('row', { name: /^SFP 1/ });
+  expect(within(child).getByText('Optical adapter')).toBeInTheDocument();
+  await userEvent.click(within(child).getByText('Вложенные места'));
+  const leafPlace = await screen.findByRole('row', { name: /^SFP 2/ });
+  const leaf = within(leafPlace);
+  const select = leaf.getByRole('combobox', { name: 'Выберите совместимый модуль' });
+  expect(within(select).queryByRole('option', { name: module.name })).not.toBeInTheDocument();
+  await userEvent.selectOptions(select, 'optics');
+  await userEvent.click(leaf.getByRole('button', { name: 'Установить' }));
+  expect(data.installModule).toHaveBeenCalledWith('object', {
+    bay_key: 'bay-key', parent_installation_id: 'child', module_template_id: 'optics', orientation: 'HORIZONTAL',
+  });
+  expect(await leaf.findByText('SFP optics')).toBeInTheDocument();
+  await userEvent.click(within(top).getAllByRole('button', { name: 'Удалить' }).at(-1)!);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Сначала удалите дочерние установки.');
+  expect(data.uninstallModule).toHaveBeenCalledWith('object', root.id);
+  await userEvent.click(leaf.getByRole('button', { name: 'Удалить' }));
+  expect(data.uninstallModule).toHaveBeenLastCalledWith('object', 'leaf');
+  expect(await leaf.findByRole('combobox', { name: 'Выберите совместимый модуль' })).toBeInTheDocument();
 });
 
 it('renders the installed body and canonical port at projected coordinates', async () => {

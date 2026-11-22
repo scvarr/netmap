@@ -54,7 +54,7 @@ def test_port_type_workspace_round_trip_and_invalid_import():
     archived = create_port({"name": "Optical", "color": "#abcdef",
                                       "description": "SFP+", "is_active": False}).json()
     before = snapshot()
-    assert before["format_version"] == 13
+    assert before["format_version"] == 14
     assert {item["id"]: item for item in before["settings"]["PortType"]} == {
         item["id"]: {k: v for k, v in item.items() if k != "cardinality"} for item in (active, archived)
     }
@@ -150,7 +150,7 @@ def test_assignment_lifecycle_and_workspace_round_trip(template_kind, section):
     assert update_port(original_url, {"name": "Twisted pair", "color": "#112233", "members": ["X"]}).status_code == 409
 
     before = snapshot()
-    assert before["format_version"] == 13
+    assert before["format_version"] == 14
     assert client.delete("/v1/workspace/dataset").status_code == 204
     malformed = copy.deepcopy(before)
     draft_record, = malformed["authoring"][f"{template_kind.capitalize()}TemplateDraft"]

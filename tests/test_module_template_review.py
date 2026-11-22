@@ -311,7 +311,7 @@ def test_workspace_roundtrip():
     definition['endpoints'].append({'key': str(uuid.uuid4()), 'display_name': 'New', 'port_type_id': ensure_port_type_id(), 'kind': 'CONNECTION_POINT'})
     checked = check(module['template_id'], save(module['template_id'], draft, definition))
     package = client.get('/v1/workspace/package').json()
-    assert package['format_version'] == 13
+    assert package['format_version'] == 14
     assert client.delete('/v1/workspace/dataset').status_code == 204
     response = client.post('/v1/workspace/package', json=package)
     assert response.status_code == 204, response.text

@@ -702,11 +702,21 @@ class ModuleEndpointDefinition(Base):
 class ModuleInstallation(Base):
     __tablename__ = "module_installations"
     __table_args__ = (
-        UniqueConstraint("configuration_id", "bay_key"),
+        UniqueConstraint("id", "configuration_id", name="uq_module_installations_id_configuration"),
+        ForeignKeyConstraint(
+            ["parent_installation_id", "configuration_id"],
+            ["module_installations.id", "module_installations.configuration_id"],
+            name="fk_module_installations_parent_configuration",
+        ),
+        Index("uq_module_installations_root_place", "configuration_id", "bay_key",
+              unique=True, postgresql_where=text("parent_installation_id IS NULL")),
+        UniqueConstraint("parent_installation_id", "bay_key", name="uq_module_installations_child_place"),
+        CheckConstraint("parent_installation_id <> id", name="distinct_parent"),
         CheckConstraint("orientation IN ('HORIZONTAL', 'VERTICAL')", name="orientation_valid"),
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     configuration_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("object_configurations.id", ondelete="RESTRICT"), nullable=False)
+    parent_installation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     module_revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_revisions.id", ondelete="RESTRICT"), nullable=False)
     bay_key: Mapped[str] = mapped_column(String(255), nullable=False)
     orientation: Mapped[str] = mapped_column(String(16), nullable=False)

@@ -99,10 +99,13 @@ export interface ModuleReviewDataSource {
   saveDraft(id: string, definition: ModuleTemplateInput, generation: number): Promise<ModuleDraftDocument>;
   checkDraft(id: string, generation: number): Promise<ModuleDraftDocument>;
 }
+export type InstalledModulePlace = PlacedModuleBay & { installation_id: string | null };
 export interface ModuleInstallation {
   id: string; module_template_id: string; module_revision_id: string; name: string;
   layout: { panel_key: string; x: number; y: number; width: number; height: number };
   initial_layout?: ModuleInstallation["layout"];
+  parent_installation_id?: string | null;
+  module_places?: InstalledModulePlace[];
   fill_color: string;
   orientation: 'HORIZONTAL' | 'VERTICAL';
   endpoints: Array<Omit<ModuleEndpoint, 'display_name'> & {
@@ -112,7 +115,7 @@ export interface ModuleInstallation {
     connection_point_id: string; network_interface_id: string | null; x: number; y: number;
   }>;
 }
-export interface HardwareConfiguration { configuration_id: string | null; base_revision_id?: string; panels?: Array<{ panel_key: string; display_name: string; width: number; height: number }>; bays: Array<ModuleBay & { installation: ModuleInstallation | null }> }
+export interface HardwareConfiguration { configuration_id: string | null; base_revision_id?: string; panels?: Array<{ panel_key: string; display_name: string; width: number; height: number }>; bays: Array<ModuleBay & { installation: ModuleInstallation | null }>; nested_installations?: ModuleInstallation[] }
 export interface HardwareModuleDataSource {
   saveLayout?(objectId: string, installationId: string, input: unknown): Promise<HardwareConfiguration>;
   listModules(): Promise<{ modules: ModuleTemplate[] }>;
@@ -120,13 +123,19 @@ export interface HardwareModuleDataSource {
   deleteModule(templateId: string): Promise<void>;
   uninstallModule(objectId: string, installationId: string): Promise<HardwareConfiguration>;
   loadConfiguration(objectId: string): Promise<HardwareConfiguration>;
-  installModule(objectId: string, input: { module_template_id: string; bay_key: string; orientation: 'HORIZONTAL' | 'VERTICAL' }): Promise<HardwareConfiguration>;
+  installModule(objectId: string, input: { module_template_id: string; bay_key: string; parent_installation_id?: string; orientation: 'HORIZONTAL' | 'VERTICAL' }): Promise<HardwareConfiguration>;
 }
+export class HardwareModuleError extends Error {
+  constructor(message: string, readonly reason?: string) {
+    super(message);
+  }
+}
+
 async function request<T>(url: string, input?: unknown, method: 'GET' | 'POST' | 'DELETE' | 'PUT' = input === undefined ? 'GET' : 'POST'): Promise<T> {
   const response = await fetch(url, { method, ...(input === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }) });
   if (response.status === 204) return undefined as T;
   const document = await response.json();
-  if (!response.ok) throw new Error(document.error?.message ?? `HTTP ${response.status}`);
+  if (!response.ok) throw new HardwareModuleError(document.error?.message ?? `HTTP ${response.status}`, document.error?.details?.reason);
   return document as T;
 }
 export const hardwareModuleDataSource: HardwareModuleDataSource = {

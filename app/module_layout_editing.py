@@ -15,6 +15,8 @@ def save_layout(session, object_id, installation_id, query):
         m.ModuleInstallation.configuration_id == config.id).with_for_update()) if config else None
     if installation is None:
         raise ValidationError("Установка не принадлежит конфигурации объекта")
+    if installation.parent_installation_id is not None:
+        raise ValidationError("Компоновка вложенной установки определяется местом родительского модуля")
     for reason, actual, expected in (
         ("CONFIGURATION_CHANGED", (config.id, config.base_revision_id), (query.configuration_id, query.base_revision_id)),
         ("MODULE_REVISION_CHANGED", installation.module_revision_id, query.module_revision_id),

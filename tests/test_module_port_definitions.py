@@ -52,22 +52,20 @@ def test_module_port_revision_copy_and_workspace_roundtrip():
     candidate = checked["review"]
     assert open_draft(template_id)["definition"] == candidate["definition"] == definition
     assert {"section": "module_places", "operation": "added", "key": port["key"], "before": None, "after": port} in candidate["result"]["changes"]
-    assert candidate["result"]["installations"][0]["reasons"] == [{"code": "NESTED_MODULE_PORTS_UNSUPPORTED"}]
+    assert candidate["result"]["installations"][0]["classification"] == "potentially_safe"
     published = client.post(f"/v1/library/module-templates/{template_id}/candidates/{candidate['candidate_id']}/publish")
     assert published.status_code == 200, published.text
     reconciled = client.post(f"/v1/library/module-templates/{template_id}/reconcile")
     assert reconciled.status_code == 200, reconciled.text
     result, = reconciled.json()["installations"]
-    assert result["status"] == "requires_intervention"
-    assert result["reasons"] == [{"code": "NESTED_MODULE_PORTS_UNSUPPORTED"}]
-    assert client.get("/v1/workspace/package").json()["canonical"] == canonical
+    assert result["status"] == "updated"
+    updated_canonical = client.get("/v1/workspace/package").json()["canonical"]
+    assert all(row in updated_canonical[entity] for entity, rows in canonical.items() for row in rows)
 
     fresh_object = create_object(base)["physical_object_ref"]["entity_id"]
-    before = counts()
-    refused = install(fresh_object, template_id, bay_key)
-    assert refused.status_code == 409
-    assert refused.json()["error"]["details"]["reason"] == "NESTED_MODULE_PORTS_UNSUPPORTED"
-    assert counts() == before
+    installed = install(fresh_object, template_id, bay_key)
+    assert installed.status_code == 201, installed.text
+    assert [place["bay_key"] for place in installed.json()["bays"][0]["installation"]["module_places"]] == [port["key"], marker["key"]]
 
     current = next(item for item in client.get("/v1/library/module-templates").json()["modules"] if item["template_id"] == template_id)
     assert {key: current[key] for key in definition} == definition
@@ -117,7 +115,7 @@ def test_base_marker_revision_and_legacy_installation_survive_workspace_roundtri
     assert edited in base_review.open_draft(base)["definition"]["bays"]
     assert client.get(configuration_url).json() == pinned
     package = client.get("/v1/workspace/package").json()
-    assert package["format_version"] == 13
+    assert package["format_version"] == 14
     assert client.delete("/v1/workspace/dataset").status_code == 204
     imported = client.post("/v1/workspace/package", json=package)
     assert imported.status_code == 204, imported.text

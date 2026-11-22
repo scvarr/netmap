@@ -64,6 +64,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
   const reasonLabels = {
     CONCURRENT_CHANGE: 'reconciliation.concurrent', INSTALLATION_CHANGED: 'moduleReconciliation.changed',
     TARGET_REVISION_CHANGED: 'reconciliation.targetChanged', APPLY_FAILED: 'reconciliation.failed',
+    NESTED_INSTALLATION_RECONCILE_BLOCKED: 'review.reason.nestedInstallations',
     NESTED_MODULE_PORTS_UNSUPPORTED: 'moduleReview.nestedPortsUnsupported',
     BAY_COMPATIBILITY_MISMATCH: 'moduleReview.compatibility', PHYSICAL_STRUCTURE_IMMUTABLE: 'review.reason.immutable', ENDPOINT_DEPENDENCIES: 'review.reason.dependencies',
     ENDPOINT_KIND_CHANGE: 'review.reason.kind', MISSING_ENDPOINT_MAPPING: 'review.reason.mapping',

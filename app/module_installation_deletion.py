@@ -33,6 +33,11 @@ class ModuleInstallationDeletionCatalog:
         ).with_for_update())
         if installation is None:
             raise ValidationError("ModuleInstallation does not belong to this object's configuration", {"installation_id": str(installation_id)})
+        if self.session.scalar(select(ModuleInstallation.id).where(
+            ModuleInstallation.parent_installation_id == installation_id,
+        ).limit(1)) is not None:
+            raise ModelError("Сначала удалите дочерние установки",
+                             {"reason": "MODULE_INSTALLATION_HAS_CHILDREN", "installation_id": str(installation_id)})
         mappings = tuple(self.session.scalars(select(ModuleEndpointMapping).where(
             ModuleEndpointMapping.installation_id == installation_id,
         ).order_by(ModuleEndpointMapping.id).with_for_update()))

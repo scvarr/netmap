@@ -26,7 +26,7 @@ from pydantic import ValidationError
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 13
+FORMAT_VERSION = 14
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -84,7 +84,7 @@ ENTITIES = (
     ("authoring", "ModuleTemplateDraft", "ModuleTemplateDraft", "id template_id source_revision_id generation definition"),
     ("authoring", "ModuleTemplateCandidate", "ModuleTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
     ("authoring", "ModuleEndpointDefinition", "ModuleEndpointDefinition", "id module_revision_id definition_key order_index display_name kind port_type_id"),
-    ("authoring", "ModuleInstallation", "ModuleInstallation", "id configuration_id module_revision_id bay_key orientation layout"),
+    ("authoring", "ModuleInstallation", "ModuleInstallation", "id configuration_id parent_installation_id module_revision_id bay_key orientation layout"),
     ("authoring", "ModuleEndpointMapping", "ModuleEndpointMapping", "id installation_id definition_id connection_point_id network_interface_id"),
     ("presentation", "SavedMap", "SavedMap", "id name created_at updated_at"),
     ("presentation", "MapPresentationVariant", "MapPresentationVariant", "id map_id name automatic_layout default_face"),
@@ -343,8 +343,6 @@ def _validate_module_template_reviews(rows):
                 for e in sorted(rows["module_endpoint_definitions"], key=lambda e: e["order_index"]) if e["module_revision_id"] == revision["id"]]})
         except (SchemaError, TypeError) as exc:
             raise PackageError("Invalid module revision definition") from exc
-    if any(revisions[i["module_revision_id"]]["module_places"] for i in rows["module_installations"]):
-        raise PackageError("Installations with nested module ports are unsupported")
     for receipt in receipts:
         candidate = candidates[receipt["id"]]
         revision = revisions[receipt["revision_id"]]
@@ -474,16 +472,46 @@ def _validate_hardware_configuration(rows):
                 if type(index) is not int or index < 1 or index > definitions[link[key]]["cardinality"] or member in occupied:
                     raise PackageError("INTERNAL_MEMBER_OCCUPANCY: incompatible internal wiring; a member is invalid or already occupied. No automatic correction is performed.")
                 occupied.add(member)
+    module_places = {identifier: {place["key"]: place for place in revision["module_places"]}
+                     for identifier, revision in revisions.items()}
+    revisions_with_endpoints = {row["module_revision_id"] for row in module_definitions.values()}
+    occupied_places = set()
+    children = {}
+    ordered_installations = []
     for installation in installations.values():
         config = configs[installation["configuration_id"]]
-        bay = bays.get((config["base_revision_id"], installation["bay_key"]))
-        if bay is None or mount_identity(bay) != mount_identity(revisions[installation["module_revision_id"]]):
-            raise PackageError("Installation has no compatible bay in its owning configuration")
+        revision_id = installation["module_revision_id"]
+        parent_id = installation["parent_installation_id"]
+        key = installation["bay_key"]
+        occupancy = (config["id"], parent_id, key)
+        if occupancy in occupied_places:
+            raise PackageError("Module installation place is occupied more than once")
+        occupied_places.add(occupancy)
+        if parent_id is None:
+            place = bays.get((config["base_revision_id"], key))
+            panel_key = place["panel_key"] if place else None
+            ordered_installations.append(installation)
+        else:
+            parent = installations[parent_id]
+            if parent["configuration_id"] != config["id"]:
+                raise PackageError("Module installation parent belongs to another configuration")
+            place = module_places[parent["module_revision_id"]].get(key)
+            panel_key = parent["layout"].get("panel_key") if isinstance(parent["layout"], dict) else None
+            children.setdefault(parent_id, []).append(installation)
+            if revisions[revision_id]["mount_kind"] == "MODULE_PORT" and revision_id in revisions_with_endpoints:
+                raise PackageError("Nested transceiver endpoints require MOD-03 binding")
+        if place is None or mount_identity(place) != mount_identity(revisions[revision_id]):
+            raise PackageError("Installation has no compatible place in its owning revision")
         from app.module_layout import validate_layout
         try:
-            validate_layout(installation["layout"], bay["panel_key"])
+            validate_layout(installation["layout"], panel_key)
         except ValueError as error:
             raise PackageError(str(error)) from error
+    for installation in ordered_installations:
+        ordered_installations.extend(children.get(installation["id"], ()))
+    if len(ordered_installations) != len(installations):
+        raise PackageError("Module installation hierarchy contains a cycle")
+    rows["module_installations"] = ordered_installations
     seen_points, seen_interfaces = set(), set()
     def validate_mapping(mapping, definition, object_id):
         point_id, interface_id = mapping["connection_point_id"], mapping["network_interface_id"]

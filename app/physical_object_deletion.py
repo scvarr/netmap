@@ -30,6 +30,12 @@ class PhysicalObjectDeletionCatalog:
         )
         if object_ is None:
             raise ValidationError("PhysicalObject does not exist", {"physical_object_id": str(physical_object_id)})
+        if self.session.scalar(select(ModuleInstallation.id).join(
+            ObjectConfiguration, ObjectConfiguration.id == ModuleInstallation.configuration_id
+        ).where(ObjectConfiguration.physical_object_id == physical_object_id,
+                ModuleInstallation.parent_installation_id.is_not(None)).limit(1)) is not None:
+            raise ModelError("Сначала удалите вложенные установки оборудования",
+                             {"reason": "MODULE_INSTALLATION_HAS_CHILDREN"})
 
         point_ids = self._ids(ConnectionPoint.id, ConnectionPoint.physical_object_id == physical_object_id)
         interface_ids = self._ids(
