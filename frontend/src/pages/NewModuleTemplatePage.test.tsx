@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -12,7 +11,7 @@ const catalog = [
   { id: 'fiber', name: 'Fiber', color: '#FFAA00', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
 ];
 beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn(async url => Response.json(String(url).endsWith('/module-port-types') ? ['PCIe', 'Parent A', 'Parent', 'Lab / original', 'Lab / custom', 'Custom / 42'].map(name => ({ id: name, name, is_active: true })) : catalog)));
+  vi.stubGlobal('fetch', vi.fn(async url => Response.json(String(url).endsWith('/module-bay-types') ? ['Parent A', 'Parent'].map(name => ({ id: name, name, is_active: true })) : String(url).endsWith('/module-port-types') ? ['PCIe', 'Parent A', 'Parent', 'Lab / original', 'Lab / custom', 'Custom / 42'].map(name => ({ id: name, name, is_active: true })) : catalog)));
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -74,6 +73,7 @@ it('authors a diamond-shaped module port without assigning a PortType', async ()
     <NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} />
   </MemoryRouter></I18nProvider>);
   fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Carrier' } });
+  fireEvent.change(screen.getByLabelText('Вид посадочного места'), { target: { value: 'MODULE_BAY' } });
   await screen.findByRole('option', { name: 'Parent A' });
   fireEvent.change(screen.getByLabelText('Совместимость'), { target: { value: 'Parent A' } });
   fireEvent.change(screen.getByLabelText('Вид точки'), { target: { value: 'MODULE_PORT' } });
@@ -104,6 +104,7 @@ it.each([2, 48, 256])('creates and reopens %i separate module ports', async coun
     <NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} />
   </MemoryRouter></I18nProvider>);
   fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Carrier' } });
+  fireEvent.change(screen.getByLabelText('Вид посадочного места'), { target: { value: 'MODULE_BAY' } });
   await screen.findByRole('option', { name: 'Parent' });
   fireEvent.change(screen.getByLabelText('Совместимость'), { target: { value: 'Parent' } });
   const chooser = within(container.querySelector('.template-element-creator')! as HTMLElement);
@@ -139,16 +140,18 @@ it.each([2, 48, 256])('creates and reopens %i separate module ports', async coun
 });
 
 
-it('uses separate catalogs for points and placed bays and keeps existing bays editable', async () => {
+it('creates a board with two SFP+ sockets and exposes no bay authoring', async () => {
   vi.stubGlobal('fetch', vi.fn(async url => Response.json(
     String(url).endsWith('/module-bay-types') ? [{ id: 'pcie', name: 'PCIe x16', is_active: true }]
       : String(url).endsWith('/module-port-types') ? [{ id: 'sfpplus', name: 'SFP+', is_active: true }] : catalog,
   )));
   const createModule = vi.fn().mockResolvedValue({});
-  const { container, unmount } = render(<I18nProvider><MemoryRouter>
+  const { container } = render(<I18nProvider><MemoryRouter>
     <NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} />
   </MemoryRouter></I18nProvider>);
   fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'PCIe card' } });
+  const pointKind = screen.getByLabelText('Вид точки');
+  expect(within(pointKind).queryByRole('option', { name: 'Модульный порт' })).toBeNull();
   fireEvent.change(screen.getByLabelText('Вид посадочного места'), { target: { value: 'MODULE_BAY' } });
   const compatibility = screen.getByRole('combobox', { name: 'Совместимость' });
   await within(compatibility).findByRole('option', { name: 'PCIe x16' });
@@ -161,43 +164,16 @@ it('uses separate catalogs for points and placed bays and keeps existing bays ed
   await chooser.findByRole('option', { name: 'SFP+' });
   expect(chooser.queryByRole('option', { name: 'PCIe x16' })).toBeNull();
   fireEvent.change(chooser.getByLabelText('Совместимость модульного порта'), { target: { value: 'sfpplus' } });
+  fireEvent.change(chooser.getByLabelText('Количество'), { target: { value: 2 } });
   fireEvent.click(chooser.getByRole('button', { name: /^Добавить$/ }));
-  fireEvent.click(screen.getByText('Модульные места', { selector: 'summary' }));
-  const bays = within(screen.getByRole('group', { name: 'Размещённые отсеки' }));
-  await bays.findByRole('option', { name: 'PCIe x16' });
-  expect(bays.queryByRole('option', { name: 'SFP+' })).toBeNull();
-  fireEvent.change(bays.getByLabelText('Тип модульного отсека'), { target: { value: 'pcie' } });
-  fireEvent.click(bays.getByRole('button', { name: 'Добавить на панель' }));
+  expect(container.querySelector('[data-module-bay-marker]')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Добавить на панель' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));
   await waitFor(() => expect(createModule).toHaveBeenCalledWith(expect.objectContaining({
     mount_kind: 'MODULE_BAY', module_bay_type_id: 'pcie',
     module_places: [
       expect.objectContaining({ mount_kind: 'MODULE_PORT', module_port_type_id: 'sfpplus' }),
-      expect.objectContaining({ mount_kind: 'MODULE_BAY', module_bay_type_id: 'pcie' }),
+      expect.objectContaining({ mount_kind: 'MODULE_PORT', module_port_type_id: 'sfpplus' }),
     ],
   })));
-  const saved = createModule.mock.calls[0][0];
-  unmount();
-  const changed = vi.fn();
-  function Reopened() {
-    const [value, setValue] = useState(saved);
-    return <ModuleTemplateEditor value={value} onChange={next => { setValue(next); changed(next); }} />;
-  }
-  const reopened = render(<I18nProvider><MemoryRouter><Reopened /></MemoryRouter></I18nProvider>);
-  expect(reopened.container.querySelectorAll('[data-module-bay-marker]')).toHaveLength(1);
-  fireEvent.click(within(reopened.container.querySelector<HTMLElement>('.module-template-editor__ports')!)
-    .getByRole('button', { name: 'Модульный отсек 1' }));
-  const selected = within(screen.getByRole('group', { name: 'Модульный отсек' }));
-  const x = selected.getByLabelText('X (0–1)');
-  fireEvent.change(x, { target: { value: '0.65' } });
-  fireEvent.blur(x);
-  expect(changed.mock.lastCall![0].module_places[1]).toMatchObject({ x: .65, key: saved.module_places[1].key });
-  const duplicate = selected.getByRole('button', { name: 'Дублировать отсек' });
-  await waitFor(() => expect(duplicate).toBeEnabled());
-  fireEvent.click(duplicate);
-  const copied = changed.mock.lastCall![0].module_places;
-  expect(copied[2]).toMatchObject({ mount_kind: 'MODULE_BAY', module_bay_type_id: 'pcie' });
-  expect(copied[2].key).not.toBe(copied[1].key);
-  fireEvent.click(selected.getByRole('button', { name: 'Удалить' }));
-  expect(changed.mock.lastCall![0].module_places).toEqual(copied.slice(0, 2));
 });

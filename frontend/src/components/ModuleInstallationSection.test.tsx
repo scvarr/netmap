@@ -142,23 +142,28 @@ describe('ModuleInstallationSection uninstall', () => {
 it('expands nested places, installs and removes a selected leaf, and explains a blocked parent', async () => {
   const data = source();
   const tree = structuredClone(occupied);
+  tree.bays[0] = { ...tree.bays[0], mount_kind: 'MODULE_BAY', module_port_type_id: null, module_bay_type_id: 'pcie' };
   const root = tree.bays[0].installation!;
   const place: InstalledModulePlace = {
-    mount_kind: 'MODULE_PORT', module_port_type_id: 'SFP', panel_key: 'back',
-    bay_key: 'bay-key', display_name: 'SFP 1', x: .4, y: .6, installation_id: 'child',
+    mount_kind: 'MODULE_BAY', module_bay_type_id: 'pcie', panel_key: 'back',
+    bay_key: 'legacy', display_name: 'Legacy extension', x: .4, y: .6, installation_id: 'child',
   };
-  root.module_places = [place];
+  const socket: InstalledModulePlace = {
+    ...place, mount_kind: 'MODULE_PORT', module_bay_type_id: null, module_port_type_id: 'SFP',
+    bay_key: 'bay-key', display_name: 'SFP 2', installation_id: null,
+  };
+  root.module_places = [place, { ...place, bay_key: 'empty', display_name: 'Legacy empty bay', installation_id: null }, socket];
   tree.nested_installations = [{
-    ...root, id: 'child', name: 'Optical adapter', parent_installation_id: root.id,
-    endpoints: [], module_places: [{ ...place, display_name: 'SFP 2', installation_id: null }],
+    ...root, id: 'child', name: 'Board extension', parent_installation_id: root.id,
+    endpoints: [], module_places: [{ ...socket, display_name: 'Legacy SFP' }],
   }];
   const withLeaf = structuredClone(tree);
-  withLeaf.nested_installations![0].module_places![0].installation_id = 'leaf';
+  withLeaf.bays[0].installation!.module_places![2].installation_id = 'leaf';
   withLeaf.nested_installations!.push({
-    ...root, id: 'leaf', name: 'SFP optics', parent_installation_id: 'child', endpoints: [], module_places: [],
+    ...root, id: 'leaf', name: 'SFP optics', parent_installation_id: root.id, endpoints: [], module_places: [],
   });
   const optics = { ...module, template_id: 'optics', module_port_type_id: 'SFP', name: 'SFP optics' };
-  vi.mocked(data.listModules).mockResolvedValue({ modules: [module, optics] });
+  vi.mocked(data.listModules).mockResolvedValue({ modules: [module, optics, { ...optics, template_id: 'physical', name: 'Physical optics', endpoints: [{ key: 'point', display_name: 'LC', kind: 'CONNECTION_POINT', port_type_id: 'fiber' }] }] });
   vi.mocked(data.loadConfiguration).mockResolvedValue(tree);
   vi.mocked(data.installModule).mockResolvedValue(withLeaf);
   vi.mocked(data.uninstallModule)
@@ -167,19 +172,25 @@ it('expands nested places, installs and removes a selected leaf, and explains a 
   vi.spyOn(window, 'confirm').mockReturnValue(true);
   show(data);
   const top = await screen.findByRole('row', { name: /^PCIe1/ });
-  expect(screen.queryByRole('rowheader', { name: 'SFP 1' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('rowheader', { name: 'Legacy extension' })).not.toBeInTheDocument();
   await userEvent.click(within(top).getByText('Вложенные места'));
-  const child = await screen.findByRole('row', { name: /^SFP 1/ });
-  expect(within(child).getByText('Optical adapter')).toBeInTheDocument();
+  const historical = within(await screen.findByRole('row', { name: /^Legacy empty bay/ }));
+  expect(historical.getByText('Историческое место. Новая установка недоступна.')).toBeInTheDocument();
+  expect(historical.queryByRole('button', { name: 'Установить' })).toBeNull();
+  const child = await screen.findByRole('row', { name: /^Legacy extension/ });
+  expect(within(child).getByText('Board extension')).toBeInTheDocument();
   await userEvent.click(within(child).getByText('Вложенные места'));
+  const nestedSocket = within(await screen.findByRole('row', { name: /^Legacy SFP/ }));
+  expect(nestedSocket.queryByRole('button', { name: 'Установить' })).toBeNull();
   const leafPlace = await screen.findByRole('row', { name: /^SFP 2/ });
   const leaf = within(leafPlace);
   const select = leaf.getByRole('combobox', { name: 'Выберите совместимый модуль' });
   expect(within(select).queryByRole('option', { name: module.name })).not.toBeInTheDocument();
+  expect(within(select).queryByRole('option', { name: 'Physical optics' })).toBeNull();
   await userEvent.selectOptions(select, 'optics');
   await userEvent.click(leaf.getByRole('button', { name: 'Установить' }));
   expect(data.installModule).toHaveBeenCalledWith('object', {
-    bay_key: 'bay-key', parent_installation_id: 'child', module_template_id: 'optics', orientation: 'HORIZONTAL',
+    bay_key: 'bay-key', parent_installation_id: root.id, module_template_id: 'optics', orientation: 'HORIZONTAL',
   });
   expect(await leaf.findByText('SFP optics')).toBeInTheDocument();
   await userEvent.click(within(top).getAllByRole('button', { name: 'Удалить' }).at(-1)!);

@@ -8,28 +8,31 @@ import { moduleMount, type ModuleMount } from '../topology/hardwareModules';
 
 export type TemplateElementKind = BlueprintSlotKind | 'MODULE_PORT';
 
-export function TemplateElementKindSelect({ value, onChange }: {
+export function TemplateElementKindSelect({ value, onChange, allowModulePorts }: {
   value: TemplateElementKind;
+  allowModulePorts: boolean;
   onChange: (kind: TemplateElementKind) => void;
 }) {
   const { t } = useI18n();
   return <label>{t('blueprint.endpoint.kind')}<select value={value} onChange={event => onChange(event.target.value as TemplateElementKind)}>
     <option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option>
     <option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option>
-    <option value="MODULE_PORT">{t('blueprint.endpoint.modulePort')}</option>
+    {allowModulePorts && <option value="MODULE_PORT">{t('blueprint.endpoint.modulePort')}</option>}
   </select></label>;
 }
 
-export function TemplateElementCreator({ catalog, moduleCatalog, onAddEndpoints, onAddModulePlaces, notice, placementScope = '' }: {
+export function TemplateElementCreator({ catalog, moduleCatalog, onAddEndpoints, onAddModulePlaces, notice, placementScope = '', allowModulePorts = true }: {
   catalog: ReturnType<typeof usePortTypes>;
   moduleCatalog: MountCatalogs;
   onAddEndpoints: (kind: BlueprintSlotKind, count: number, portTypeId: string, cardinality: number) => void;
   onAddModulePlaces: (count: number, mount: ModuleMount) => boolean;
   notice?: ReactNode;
   placementScope?: string;
+  allowModulePorts?: boolean;
 }) {
   const { t } = useI18n();
-  const [kind, setKind] = useState<TemplateElementKind>('NETWORK_PORT');
+  const [chosenKind, setKind] = useState<TemplateElementKind>('NETWORK_PORT');
+  const kind = !allowModulePorts && chosenKind === 'MODULE_PORT' ? 'NETWORK_PORT' : chosenKind;
   const [count, setCount] = useState('1');
   const [portTypeId, setPortTypeId] = useState('');
   const [modulePortTypeId, setModulePortTypeId] = useState('');
@@ -42,7 +45,7 @@ export function TemplateElementCreator({ catalog, moduleCatalog, onAddEndpoints,
     && (modulePort ? moduleCatalog.MODULE_PORT.types?.some(type => type.id === modulePortTypeId && type.is_active) : physicalReady);
   return <>
     <div className="template-element-creator">
-      <TemplateElementKindSelect value={kind} onChange={next => { setKind(next); setModulePortTypeId(''); setFailedScope(undefined); }} />
+      <TemplateElementKindSelect allowModulePorts={allowModulePorts} value={kind} onChange={next => { setKind(next); setModulePortTypeId(''); setFailedScope(undefined); }} />
       <label>{t('blueprint.endpoint.count')}<input type="number" min="1" max="256" value={count}
         onChange={event => { setCount(event.target.value); setFailedScope(undefined); }} /></label>
       {modulePort

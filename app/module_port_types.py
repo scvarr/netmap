@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from app.errors import ValidationError
+from app.errors import ModelError, ValidationError
 from app.models import ModuleBayType, ModulePortType
 
 
@@ -40,6 +40,22 @@ def module_assignments(definition):
         (None, *mount_identity(definition)),
         *((place["key"], *mount_identity(place)) for place in definition.get("module_places", ())),
     }
+
+
+def validate_module_authoring(definition):
+    places = definition.get("module_places", ())
+    if any(place["mount_kind"] == "MODULE_BAY" for place in places):
+        raise ValidationError("Шаблон модуля не может содержать отсеки для плат",
+                              {"reason": "NESTED_MODULE_BAY_FORBIDDEN"})
+    if definition["mount_kind"] == "MODULE_PORT" and places:
+        raise ValidationError("Шаблон трансивера не может содержать дочерние посадочные места",
+                              {"reason": "TRANSCEIVER_CHILD_PLACES_FORBIDDEN"})
+
+
+def validate_nested_installation(parent_mount_kind, place_mount_kind, *, parent_is_root):
+    if not parent_is_root or parent_mount_kind != "MODULE_BAY" or place_mount_kind != "MODULE_PORT":
+        raise ModelError("Вложенная установка допустима только для трансивера в порту платы, установленной в базовый отсек",
+                         {"reason": "UNSUPPORTED_NESTED_MODULE_INSTALLATION"})
 
 
 def validate_mount_types(session, assignments, previous=()):

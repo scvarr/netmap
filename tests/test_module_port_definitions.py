@@ -35,8 +35,15 @@ def test_base_template_three_elements_materialize_only_physical_endpoints():
 
 
 def test_module_port_revision_copy_and_workspace_roundtrip():
-    base, payload = create_base()
-    module = create_module(names=("GE",))
+    from tests.test_nested_module_installations import bay_mount, module as create_board
+
+    mount = bay_mount("Board slot")
+    payload = base_payload()
+    bay = payload["bays"][0]
+    bay.pop("module_port_type_id")
+    bay.update(mount, kind="LOGICAL", x=None, y=None, width=None, height=None)
+    base, _ = create_base(payload)
+    module = create_board("Board", mount, has_endpoint=True)
     object_id = create_object(base)["physical_object_ref"]["entity_id"]
     bay_key = payload["bays"][0]["bay_key"]
     template_id = module["template_id"]

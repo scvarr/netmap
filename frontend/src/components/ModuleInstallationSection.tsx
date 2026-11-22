@@ -126,8 +126,12 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
           <th scope="col">{t('hardware.orientation')}</th>
           <th scope="col">{t('hardware.action')}</th>
         </tr>;
-  const renderPlace = (bay: ModuleBay, installation: ModuleInstallation | undefined, parentId?: string) => {
-    const compatible = modules.filter(module => module.mount_kind === bay.mount_kind && mountTypeId(module) === mountTypeId(bay));
+  const renderPlace = (bay: ModuleBay, installation: ModuleInstallation | undefined, parentId?: string, parentIsRootBoard = false) => {
+    const installable = !parentId || (parentIsRootBoard && bay.mount_kind === 'MODULE_PORT');
+    const compatible = installable ? modules.filter(module =>
+      module.mount_kind === bay.mount_kind && mountTypeId(module) === mountTypeId(bay) &&
+      (!parentId || module.endpoints.length === 0)
+    ) : [];
     const choiceKey = placeChoiceKey(bay.bay_key, parentId);
     const choice = choices[choiceKey] ?? { module: '', orientation: 'HORIZONTAL' as const };
     const disabled = pending || editing;
@@ -153,7 +157,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
           {expanded.has(installation.id) && <table className="ports-table" aria-label={t('hardware.nestedPlaces')}>
             <thead>{header}</thead>
             <tbody>{installation.module_places.map(place => renderPlace(
-              place, nested.get(place.installation_id ?? ''), installation.id,
+              place, nested.get(place.installation_id ?? ''), installation.id, !parentId && bay.mount_kind === 'MODULE_BAY',
             ))}</tbody>
           </table>}
         </details>}
@@ -161,16 +165,16 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
         onChange={e => setChoices(old => ({ ...old, [choiceKey]: { ...choice, module: e.target.value } }))}>
         <option value="">{t('hardware.selectModule')}</option>
         {compatible.map(m => <option key={m.template_id} value={m.template_id}>{m.name}</option>)}
-      </select> : t('hardware.noModules')}</td>
+      </select> : t(installable ? 'hardware.noModules' : 'hardware.historicalPlace')}</td>
       <td>{installation ? t(installation.orientation === 'VERTICAL' ? 'hardware.vertical' : 'hardware.horizontal') :
-        <select aria-label={t('hardware.orientation')} disabled={disabled || !compatible.length} value={choice.orientation}
+        installable && <select aria-label={t('hardware.orientation')} disabled={disabled || !compatible.length} value={choice.orientation}
           onChange={e => setChoices(old => ({ ...old, [choiceKey]: { ...choice, orientation: e.target.value as ModuleInstallation['orientation'] } }))}>
           <option value="HORIZONTAL">{t('hardware.horizontal')}</option>
           <option value="VERTICAL">{t('hardware.vertical')}</option>
         </select>}</td>
       <td>{installation ?
         <button type="button" className="text-action" disabled={disabled} onClick={() => void uninstall(installation.id, installation.name, bay.display_name)}>{t('hardware.uninstall')}</button> :
-        <button type="button" className="primary-action" disabled={disabled || !compatible.some(m => m.template_id === choice.module)} onClick={() => void install(bay.bay_key, parentId)}>{t('hardware.install')}</button>}</td>
+        installable && <button type="button" className="primary-action" disabled={disabled || !compatible.some(m => m.template_id === choice.module)} onClick={() => void install(bay.bay_key, parentId)}>{t('hardware.install')}</button>}</td>
     </tr>;
   };
   return <section className="blueprint-editor-controls" aria-label={t('hardware.bays')}><h2>{t('hardware.bays')}</h2>

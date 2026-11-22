@@ -305,10 +305,11 @@ const nextEndpointNumber = (state: BlueprintEditorState, panel: PresentationPane
   return Math.max(state.nextLocalNumberByPanel[panel.panel_key] ?? 1, maximum + 1);
 };
 
-export type CopySelectionError = 'invalidSelection' | 'invalidDestination' | 'capacity';
+export type CopySelectionError = 'invalidSelection' | 'invalidDestination' | 'capacity' | 'placedBoardBay';
 export const copySelectionError = (state: BlueprintEditorState, keys: ReadonlySet<string>, destinationPanelKey: string): CopySelectionError | undefined => {
   if (destinationPanelKey === state.activePanelKey || !state.panels.some((panel) => panel.panel_key === destinationPanelKey)) return 'invalidDestination';
   const sources = selectedSlots(state, keys).filter(slot => slot.panel_key === state.activePanelKey);
+  if (sources.some(source => source.kind === 'MODULE_BAY')) return 'placedBoardBay';
   if (!sources.length || sources.length !== keys.size) return 'invalidSelection';
   if (!hasEndpointCapacity(state, destinationPanelKey, sources.length)) return 'capacity';
 };
@@ -373,6 +374,7 @@ export const addEndpoints = (state: BlueprintEditorState, kind: BlueprintSlotKin
 };
 
 export const addModulePlaces = (state: BlueprintEditorState, panelKey: string, count: number, mount: ModuleMount): BlueprintEditorState => {
+  if (mount.mount_kind !== 'MODULE_PORT') return state;
   const batch = newPanelMarkers(state, count, panelKey);
   if (!batch) return state;
   const bays = batch.markers.map(({ key, rendered_position, ...marker }) => ({

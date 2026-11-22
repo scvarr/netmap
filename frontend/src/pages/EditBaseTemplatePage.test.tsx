@@ -7,7 +7,7 @@ import { EditBaseTemplatePage } from './EditBaseTemplatePage';
 import type { BaseTemplateDataSource, BaseTemplateDraftDocument, BaseTemplateReconciliationResult } from '../topology/baseTemplateTypes';
 
 beforeEach(() => { localStorage.clear();
-  vi.stubGlobal('fetch', vi.fn(async url => Response.json(String(url).endsWith('/module-port-types') ? ['OCP3', 'SFP+', 'QSFP+'].map(name => ({ id: name, name, is_active: true })) : [
+  vi.stubGlobal('fetch', vi.fn(async url => Response.json((String(url).endsWith('/module-port-types') || String(url).endsWith('/module-bay-types')) ? ['OCP3', 'SFP+', 'QSFP+'].map(name => ({ id: name, name, is_active: true })) : [
     { id: 'test-type', name: 'Copper', color: '#336699', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
   ])));
 });
@@ -73,12 +73,12 @@ it('authors exact logical groups and keeps their individual bays through draft r
   doc.definition.panels.push({ ...doc.definition.panels[0], panel_key: 'rear', panel_number: 2, display_name: 'Rear', x: 160 });
   const { mount, source } = setup(doc);
   const view = mount();
-  fireEvent.click(await screen.findByText('Модульные места · 0'));
+  fireEvent.click(await screen.findByText('Логические отсеки · 0'));
   const creation = within(screen.getByRole('group', { name: 'Создать группу' }));
   await creation.findByRole('option', { name: 'OCP3' });
   const create = (module_port_type_id: string, count: string, panel = 'panel') => {
     fireEvent.change(creation.getByLabelText('Панель'), { target: { value: panel } });
-    fireEvent.change(creation.getByLabelText('Совместимость'), { target: { value: module_port_type_id } });
+    fireEvent.change(creation.getByLabelText('Тип модульного отсека'), { target: { value: module_port_type_id } });
     fireEvent.change(creation.getByLabelText('Количество мест'), { target: { value: count } });
     fireEvent.click(creation.getByRole('button', { name: 'Создать группу' }));
   };
@@ -101,15 +101,15 @@ it('authors exact logical groups and keeps their individual bays through draft r
   expect(screen.getByRole('alert')).toHaveTextContent('не более 1024');
   expect(creation.getByLabelText('Количество мест')).toHaveValue('1025');
   const first = await save(1);
-  expect(first.map(bay => [bay.panel_key, bay.module_port_type_id])).toEqual([
+  expect(first.map(bay => [bay.panel_key, bay.mount_kind === 'MODULE_BAY' ? bay.module_bay_type_id : bay.module_port_type_id])).toEqual([
     ['panel', 'OCP3'], ['panel', 'OCP3'], ['panel', 'OCP3'], ['panel', 'SFP+'], ['panel', 'QSFP+'], ['rear', 'OCP3'],
   ]);
   expect(first.slice(1).every(bay => bay.kind === 'LOGICAL' && [bay.x, bay.y, bay.width, bay.height].every(value => value === null))).toBe(true);
   expect(view.container.querySelectorAll('[data-module-port-marker]')).toHaveLength(1);
   view.unmount();
   mount();
-  fireEvent.click(await screen.findByText('Модульные места · 4'));
-  const group = within(screen.getByRole('group', { name: '1 · Front / Модульный порт · OCP3' }));
+  fireEvent.click(await screen.findByText('Логические отсеки · 4'));
+  const group = within(screen.getByRole('group', { name: '1 · Front / Модульный отсек · OCP3' }));
   const count = () => group.getByLabelText('Количество мест');
   const apply = (value: string) => {
     fireEvent.change(count(), { target: { value } });
@@ -127,7 +127,7 @@ it('authors exact logical groups and keeps their individual bays through draft r
   expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeEnabled();
   apply('1024');
   const grown = await save(2);
-  const grownGroup = grown.filter(bay => bay.kind === 'LOGICAL' && bay.panel_key === 'panel' && bay.module_port_type_id === 'OCP3');
+  const grownGroup = grown.filter(bay => bay.kind === 'LOGICAL' && bay.panel_key === 'panel' && bay.module_bay_type_id === 'OCP3');
   expect(grownGroup).toHaveLength(1024);
   expect(grown.slice(0, first.length)).toEqual(first);
   expect(new Set(grown.map(bay => bay.bay_key)).size).toBe(grown.length);

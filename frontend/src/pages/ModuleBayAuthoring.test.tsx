@@ -135,51 +135,34 @@ it('opens the existing naming workspace from a selection of 48 diamonds and save
 });
 
 
-it('creates and reopens placed and logical bays while keeping the point kinds separate', async () => {
+it('creates logical board bays while keeping the three graphical point kinds', async () => {
   const view = show();
   const chooser = within(view.container.querySelector<HTMLElement>('.template-element-creator')!);
   expect(within(chooser.getByRole('combobox', { name: 'Вид точки' })).getAllByRole('option').map(option => option.getAttribute('value')))
     .toEqual(['NETWORK_PORT', 'CONNECTION_POINT', 'MODULE_PORT']);
 
-  fireEvent.click(screen.getByText('Модульные места · 1'));
-  const placed = within(screen.getByRole('group', { name: 'Размещённые отсеки' }));
-  await placed.findByRole('option', { name: 'PCIe x16' });
-  expect(placed.queryByRole('option', { name: 'Open / 42' })).toBeNull();
-  fireEvent.change(placed.getByLabelText('Тип модульного отсека'), { target: { value: 'pcie' } });
-  fireEvent.change(placed.getByLabelText('Количество мест'), { target: { value: '2' } });
-  fireEvent.click(placed.getByRole('button', { name: 'Добавить на панель' }));
-  expect(view.container.querySelectorAll('[data-module-bay-marker]')).toHaveLength(2);
-
+  fireEvent.click(screen.getByText('Логические отсеки · 0'));
   const logicalCreator = within(screen.getByRole('group', { name: 'Создать группу' }));
-  fireEvent.change(logicalCreator.getByLabelText('Вид посадочного места'), { target: { value: 'MODULE_BAY' } });
-  fireEvent.change(logicalCreator.getByLabelText('Совместимость'), { target: { value: 'pcie' } });
+  await logicalCreator.findByRole('option', { name: 'PCIe x16' });
+  expect(logicalCreator.queryByRole('option', { name: 'Open / 42' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Добавить на панель' })).toBeNull();
+  fireEvent.change(logicalCreator.getByLabelText('Тип модульного отсека'), { target: { value: 'pcie' } });
+  fireEvent.change(logicalCreator.getByLabelText('Количество мест'), { target: { value: '3' } });
   fireEvent.click(logicalCreator.getByRole('button', { name: 'Создать группу' }));
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   const saved = view.save.mock.calls[0][0] as BlueprintEditorState;
   const added = saved.bays!.slice(2);
-  expect(added).toMatchObject([
-    { kind: 'PLACED', mount_kind: 'MODULE_BAY', module_bay_type_id: 'pcie', panel_key: 'one' },
-    { kind: 'PLACED', mount_kind: 'MODULE_BAY', module_bay_type_id: 'pcie', panel_key: 'one' },
-    { kind: 'LOGICAL', mount_kind: 'MODULE_BAY', module_bay_type_id: 'pcie', panel_key: 'one', x: null, y: null },
-  ]);
-  expect(saved.individualLinks).toEqual([]);
+  expect(saved.bays!.slice(0, 2)).toEqual(state().bays);
+  expect(added).toHaveLength(3);
+  expect(new Set(added.map(bay => bay.bay_key)).size).toBe(3);
+  for (const bay of added) {
+    expect(bay).toMatchObject({ kind: 'LOGICAL', mount_kind: 'MODULE_BAY', module_bay_type_id: 'pcie', panel_key: 'one', x: null, y: null });
+  }
+  expect(view.container.querySelector('[data-module-bay-marker]')).toBeNull();
 
   view.unmount();
-  const reopened = show(saved);
-  expect(reopened.container.querySelectorAll('[data-module-bay-marker]')).toHaveLength(2);
-  fireEvent.pointerDown(reopened.container.querySelector('[data-module-bay-marker]')!, { button: 0 });
-  const x = screen.getByRole('spinbutton', { name: 'X' });
-  fireEvent.change(x, { target: { value: '0.55' } });
-  fireEvent.blur(x);
-  const copy = screen.getByRole('button', { name: 'Копировать' });
-  await waitFor(() => expect(copy).toBeEnabled());
-  fireEvent.click(copy);
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-  const copied = reopened.save.mock.calls[0][0] as BlueprintEditorState;
-  expect(copied.bays!.find(bay => bay.bay_key === added[0].bay_key)).toMatchObject({ x: .55 });
-  expect(copied.bays!.at(-1)).toMatchObject({ panel_key: 'two', x: .55, module_bay_type_id: 'pcie' });
-  expect(copied.bays!.at(-1)!.bay_key).not.toBe(added[0].bay_key);
-  fireEvent.keyDown(document, { key: 'Delete' });
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-  expect(reopened.save.mock.calls[1][0].bays).toEqual(copied.bays!.slice(0, -1));
+  show(saved);
+  fireEvent.click(screen.getByText('Логические отсеки · 1'));
+  const group = within(await screen.findByRole('group', { name: '1 · Front / Модульный отсек · PCIe x16' }));
+  expect(group.getByLabelText('Количество мест')).toHaveValue('3');
 });

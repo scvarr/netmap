@@ -6,7 +6,10 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.port_types import validate_port_type_assignments
-from app.module_port_types import MOUNT_FIELDS, mount_identity, base_assignments, module_assignments, row_mount, validate_mount_types
+from app.module_port_types import (
+    MOUNT_FIELDS, base_assignments, module_assignments, mount_identity, row_mount,
+    validate_module_authoring, validate_mount_types, validate_nested_installation,
+)
 from app.module_layout import compose_layout, initial_layout, nested_place, validate_layout
 from app.device_catalog import DISPLAY_ALIAS_KEY, PHYSICAL_OBJECT_CLASS_KEY
 from app.errors import ModelError, ValidationError
@@ -92,6 +95,9 @@ class HardwareCatalog:
     def create_initial_version(self, query: object) -> CreatedBlueprint:
         from app.schemas import CreateBaseTemplateRequest
         query = CreateBaseTemplateRequest.model_validate(query.model_dump())
+        if any(bay.mount_kind == "MODULE_BAY" and bay.kind != "LOGICAL" for bay in query.bays):
+            raise ValidationError("Создавайте отсеки для плат как логические места без координат",
+                                  {"reason": "MODULE_BAY_MUST_BE_LOGICAL"})
         definition = query.model_dump(mode="json")
         validate_port_type_assignments(self.session, definition["slots"])
         validate_mount_types(self.session, base_assignments(definition))
@@ -371,6 +377,7 @@ class HardwareCatalog:
 
     def create_module(self, query):
         definition = query.model_dump(mode="json")
+        validate_module_authoring(definition)
         validate_port_type_assignments(self.session, definition["endpoints"])
         validate_mount_types(self.session, module_assignments(definition))
         template = ModuleTemplate(name=query.name)
@@ -454,6 +461,8 @@ class HardwareCatalog:
             if place is None:
                 raise ValidationError("Место отсутствует в закреплённой ревизии родительского модуля",
                                       {"reason": "INVALID_MODULE_PLACE"})
+            validate_nested_installation(parent_revision.mount_kind, place["mount_kind"],
+                                         parent_is_root=parent.parent_installation_id is None)
             frame = parent_revision.geometry
         if self.session.scalar(select(ModuleInstallation.id).where(
             ModuleInstallation.configuration_id == config.id,

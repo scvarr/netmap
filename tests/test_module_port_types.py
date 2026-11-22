@@ -8,7 +8,7 @@ import pytest
 import sqlalchemy as sa
 
 from app.database import engine
-from tests.test_hardware_configuration import base_payload, client, create_base, create_module, create_object, install
+from tests.test_hardware_configuration import base_payload, client, create_base, create_object, install
 
 
 CATALOG = "/v1/module-port-types"
@@ -38,6 +38,8 @@ def test_catalog_rename_archive_installation_and_workspace_roundtrip(catalog, ki
     bay = payload["bays"][0]
     bay.pop("module_port_type_id")
     bay.update(mount_kind=kind, **{field: item["id"]})
+    if kind == "MODULE_BAY":
+        bay.update(kind="LOGICAL", x=None, y=None, width=None, height=None)
     base, _ = create_base(payload)
     def module(type_id, mount_kind=kind, type_field=field):
         response = client.post("/v1/library/module-templates", json={
@@ -100,8 +102,9 @@ def test_catalog_rename_archive_installation_and_workspace_roundtrip(catalog, ki
 def test_archived_type_in_frozen_candidate_is_protected():
     from tests.test_module_template_review import check, open_draft, save
 
-    module = create_module()
-    template_id = module["template_id"]
+    from tests.test_nested_module_installations import bay_mount, module
+
+    template_id = module("Board", bay_mount("Board slot"))["template_id"]
     item = client.post(CATALOG, json={"name": "Draft child slot"}).json()
     item_url = f"{CATALOG}/{item['id']}"
     draft = open_draft(template_id)
@@ -346,7 +349,7 @@ def test_pcie_card_definition_with_sfp_ports_publishes_and_roundtrips():
     payload = base_payload()
     bay = payload["bays"][0]
     bay.pop("module_port_type_id")
-    bay.update(mount)
+    bay.update(mount, kind="LOGICAL", x=None, y=None, width=None, height=None)
     base, _ = create_base(payload)
     obj = create_object(base)["physical_object_ref"]["entity_id"]
     installed = install(obj, template, bay["bay_key"])

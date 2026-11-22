@@ -1,5 +1,5 @@
-import { mountTypeId, type ModuleMount } from '../topology/hardwareModules';
-import { ModuleMountFields, useMountTypes } from '../components/ModulePortTypeSelect';
+import { moduleMount, mountTypeId, type ModuleMount } from '../topology/hardwareModules';
+import { MountTypeSelect, useMountTypes } from '../components/ModulePortTypeSelect';
 import { EndpointLinkWorkspace } from '../components/EndpointLinkWorkspace';
 import { TemplateElementCreator } from '../components/TemplateElementKindSelect';
 import { LogicalModulePlacesEditor } from '../components/LogicalModulePlacesEditor';
@@ -221,7 +221,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
         <section className="blueprint-composer__section blueprint-composer__links"><h2>{t('blueprint.composition.links')}</h2>
           <button ref={linksEntry} type="button" className="secondary-action" onClick={() => { setMenu(undefined); setDistributionAxis(undefined); setWorkspaceSelection(undefined); setLinksOpen(true); }}>{t('endpointWorkspace.title')} · {editor.individualLinks.length}</button>
         </section>
-        <LogicalModulePlacesEditor catalogs={moduleCatalog} panels={editor.panels} activePanelKey={panelKey} bays={editor.bays ?? []} onAddPlaced={addModuleBatch}
+        <LogicalModulePlacesEditor catalogs={moduleCatalog} panels={editor.panels} activePanelKey={panelKey} bays={editor.bays ?? []}
           onChange={bays => setEditor(old => ({ ...old, bays }))} />
         {error && <p role="alert" className="blueprint-editor__error">{error}</p>}
         {onCancel && <button type="button" className="secondary-action" onClick={onCancel}>{t('templateCopy.cancel')}</button>}
@@ -300,6 +300,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
           <label className="blueprint-composer__copy-continuity"><input type="checkbox" disabled={!hasSelectedPhysical} checked={hasSelectedPhysical && createContinuity} onChange={(event) => setCreateContinuity(event.target.checked)} />{t('blueprint.copy.continuity')}</label>
           <button type="button" className="secondary-action" disabled={Boolean(copyError) || (hasSelectedPhysical && !catalog.types) || copyHasArchivedType} onClick={copySelected}>{t('blueprint.copy.action')}</button>
           {copyHasArchivedType && <p role="status" className="blueprint-editor__error">{t('portTypes.copyArchived')}</p>}
+          {copyError === 'placedBoardBay' && <p role="status" className="blueprint-editor__error">{t('blueprint.copy.placedBoardBay')}</p>}
           {copyError === 'capacity'  && <p role="status" className="blueprint-editor__error">{t('blueprint.copy.capacity')}</p>}
         </section>}
         {selectedBay && <aside className="blueprint-composer__selected">
@@ -307,9 +308,9 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
             const display_name = event.target.value;
             setEditor(old => ({ ...old, bays: old.bays?.map(bay => bay.bay_key === selectedBay.bay_key ? { ...bay, display_name } : bay) }));
           }} /></label>
-          <ModuleMountFields catalogs={moduleCatalog} mount={selectedBay}
-            onChange={mount => setEditor(old => ({ ...old, bays: old.bays?.map(bay =>
-              bay.bay_key === selectedBay.bay_key ? { ...bay, ...mount } : bay) }))} />
+          <MountTypeSelect types={moduleCatalog[selectedBay.mount_kind].types} value={mountTypeId(selectedBay)}
+            onChange={id => setEditor(old => ({ ...old, bays: old.bays?.map(bay =>
+              bay.bay_key === selectedBay.bay_key ? { ...bay, ...moduleMount(selectedBay.mount_kind, id) } : bay) }))} />
           <button type="button" className="text-action" onClick={deleteSelected}>{t('blueprint.composition.remove')}</button>
         </aside>}
         {selectedSlot && <aside className="blueprint-composer__selected">

@@ -12,7 +12,10 @@ from app.errors import ModelError, ValidationError
 from app.hardware_catalog import HardwareCatalog
 from app.port_types import validate_port_type_assignments
 from app.module_placement_reconciliation import configuration_installations, plan_module_placements
-from app.module_port_types import MOUNT_FIELDS, module_assignments, mount_document, mount_identity, validate_mount_types
+from app.module_port_types import (
+    MOUNT_FIELDS, module_assignments, mount_document, mount_identity,
+    validate_module_authoring, validate_mount_types,
+)
 from app.schemas import CreateModuleTemplateRequest
 
 
@@ -172,6 +175,7 @@ class ModuleTemplateReview:
         if draft.generation != expected_generation:
             raise ModelError("Draft changed in another session; reopen before saving", {"reason": "DRAFT_CONFLICT"})
         updated = validate_definition(definition)
+        validate_module_authoring(updated)
         validate_port_type_assignments(self.session, updated["endpoints"], draft.definition["endpoints"])
         validate_mount_types(self.session, module_assignments(updated), module_assignments(draft.definition))
         draft.definition = updated
@@ -186,6 +190,7 @@ class ModuleTemplateReview:
             raise ModelError("Draft changed; reload before checking", {"reason": "DRAFT_CONFLICT"})
         published = published_definition(self.session, template_id, draft.source_revision_id)
         definition = validate_definition(draft.definition)
+        validate_module_authoring(definition)
         _require_retained_port_types(published, definition)
         fingerprint = self._inputs()
         installations = self.session.scalars(select(m.ModuleInstallation).join(m.ModuleTemplateRevision,
@@ -247,6 +252,7 @@ class ModuleTemplateReview:
         if candidate.input_fingerprint != self._inputs():
             stale("REVIEW_INPUTS_CHANGED")
         query = CreateModuleTemplateRequest.model_validate(candidate.definition)
+        validate_module_authoring(candidate.definition)
         _require_retained_port_types(published_definition(self.session, template_id, latest.id), candidate.definition)
         revision = HardwareCatalog(self.session)._create_module_revision(template_id, latest.version_number + 1, query)
         self.session.get(m.ModuleTemplate, template_id).name = query.name

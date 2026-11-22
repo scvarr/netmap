@@ -1,6 +1,5 @@
 import { moduleMount, mountTypeId, type ModuleMount } from '../topology/hardwareModules';
-import { ModuleMountFields, mountKindLabels, mountTypeName, type MountCatalogs } from './ModulePortTypeSelect';
-import { PlacedModuleBaysCreator } from './PlacedModuleBaysCreator';
+import { MountTypeSelect, mountKindLabels, mountTypeName, type MountCatalogs } from './ModulePortTypeSelect';
 import { useState, type FormEvent } from 'react';
 import { useI18n } from '../i18n';
 import type { BlueprintEditorState } from '../blueprints/editorModel';
@@ -12,19 +11,18 @@ interface Props {
   activePanelKey: string;
   bays: ModuleBay[];
   onChange: (bays: ModuleBay[]) => void;
-  onAddPlaced: (count: number, mount: ModuleMount) => boolean;
 }
 
 const groupKey = (panel: string, mount: ModuleMount) => JSON.stringify([panel, mount.mount_kind, mountTypeId(mount)]);
 const MAX_LOGICAL_PLACES_PER_GROUP = 1024;
 
-export function LogicalModulePlacesEditor({ catalogs, panels, activePanelKey, bays, onChange, onAddPlaced }: Props) {
+export function LogicalModulePlacesEditor({ catalogs, panels, activePanelKey, bays, onChange }: Props) {
   const { t } = useI18n();
-  const [newMount, setNewMount] = useState<ModuleMount>(moduleMount('MODULE_PORT', ''));
+  const [bayTypeId, setBayTypeId] = useState('');
   const [error, setError] = useState<string>();
   const groups = new Map<string, LogicalModuleBay[]>();
   for (const bay of bays) {
-    if (bay.kind !== 'LOGICAL') continue;
+    if (bay.kind !== 'LOGICAL' || bay.mount_kind !== 'MODULE_BAY') continue;
     const key = groupKey(bay.panel_key, bay);
     const group = groups.get(key);
     if (group) group.push(bay);
@@ -81,15 +79,14 @@ export function LogicalModulePlacesEditor({ catalogs, panels, activePanelKey, ba
     event.preventDefault();
     const form = event.currentTarget;
     const fields = new FormData(form);
-    if (apply(String(fields.get('panel')), newMount, String(fields.get('count')), true)) {
+    if (apply(String(fields.get('panel')), moduleMount('MODULE_BAY', bayTypeId), String(fields.get('count')), true)) {
       form.reset();
-      setNewMount(moduleMount(newMount.mount_kind, ''));
+      setBayTypeId('');
     }
   };
 
   return <details className="blueprint-composer__section">
     <summary>{t('logicalPlaces.title')} · {groups.size}</summary>
-    <PlacedModuleBaysCreator key={activePanelKey} catalogs={catalogs} onAdd={onAddPlaced} />
     <p>{t('logicalPlaces.updateNotice')}</p>
     {error && <p role="alert" className="blueprint-editor__error">{error}</p>}
     {[...groups].map(([key, group]) => {
@@ -114,7 +111,7 @@ export function LogicalModulePlacesEditor({ catalogs, panels, activePanelKey, ba
         <label>{t('hardware.panel')}<select key={JSON.stringify(panels.map(panel => panel.panel_key))} name="panel" defaultValue={activePanelKey}>
           {panels.map(panel => <option key={panel.panel_key} value={panel.panel_key}>{panel.panel_number} · {panel.display_name}</option>)}
         </select></label>
-        <ModuleMountFields catalogs={catalogs} mount={newMount} onChange={setNewMount} />
+        <MountTypeSelect types={catalogs.MODULE_BAY.types} label="blueprint.endpoint.bayCompatibility" value={bayTypeId} onChange={setBayTypeId} />
         <label>{t('logicalPlaces.count')}<input name="count" inputMode="numeric" defaultValue="1" /></label>
         <button type="submit" className="secondary-action">{t('logicalPlaces.create')}</button>
       </fieldset>

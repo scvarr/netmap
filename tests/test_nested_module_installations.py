@@ -1,6 +1,7 @@
 import copy
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import insert, select
@@ -8,7 +9,9 @@ from sqlalchemy.exc import IntegrityError
 
 from app.database import SessionLocal
 from app.errors import ModelError
-from app.models import Cable, ModuleInstallation
+from app.hardware_catalog import HardwareCatalog
+from app.models import BaseTemplate, Cable, ModuleInstallation
+from app.schemas import CreateBaseTemplateRequest
 from app.module_geometry import initial_geometry
 from app.module_reconciliation import ModuleReconciliation
 from app.repository import CanonicalRepository, ConnectionMemberInput
@@ -51,16 +54,44 @@ def install(object_id, template, key, parent=None, orientation="HORIZONTAL"):
     })
 
 
-def setup():
+# Seed states that could have been persisted by MOD-02A/02B before this policy.
+def historical_install(*args):
+    with patch("app.hardware_catalog.validate_nested_installation"):
+        return created(install(*args))
+
+
+def historical_revision(template_id, transform):
+    with patch("app.module_template_review.validate_module_authoring"):
+        return revision(template_id, transform)
+
+
+def setup(*, historical=False):
     mount = bay_mount("PCIe")
-    sfp = {"mount_kind": "MODULE_PORT", "module_port_type_id": ensure_module_port_type_id("SFP")}
-    card = module("PCIe card", mount, [place("extension", mount), place("SFP port", sfp)], has_endpoint=True)
+    sfp = {"mount_kind": "MODULE_PORT", "module_port_type_id": ensure_module_port_type_id("SFP+")}
+    places = [place("SFP port", sfp), {**place("SFP port 2", sfp), "x": .75}]
+    if historical:
+        with patch("app.hardware_catalog.validate_module_authoring"):
+            card = module("PCIe card", mount, [place("extension", mount), *places[:1]], has_endpoint=True)
+    else:
+        card = module("PCIe card", mount, places, has_endpoint=True)
     transceiver = module("Structural transceiver", sfp)
     payload = base_payload()
     bay = payload["bays"][0]
     del bay["module_port_type_id"]
     bay.update(mount, bay_key="root")
-    base, _ = create_base(payload)
+    if historical:
+        with SessionLocal.begin() as session:
+            template = BaseTemplate(name=payload["name"])
+            session.add(template)
+            session.flush()
+            base = str(template.id)
+            HardwareCatalog(session)._create_version(template.id, 1, CreateBaseTemplateRequest.model_validate(payload))
+    else:
+        bay.update(kind="LOGICAL", x=None, y=None, width=None, height=None)
+        payload["bays"].append({**bay, "bay_key": "spare"})
+        payload["bays"].append({**sfp, "bay_key": "top-sfp", "display_name": "Direct SFP+",
+                                "panel_key": bay["panel_key"], "kind": "PLACED", "x": .25, "y": .65})
+        base, _ = create_base(payload)
     obj = create_object(base)
     return base, obj, card, transceiver, sfp
 
@@ -81,12 +112,66 @@ def reason(response, status, code):
     assert response.json()["error"]["details"]["reason"] == code
 
 
+
+def test_board_and_structural_transceiver_keep_the_same_physical_object():
+    _, obj, card, optic, _ = setup()
+    oid = obj["physical_object_ref"]["entity_id"]
+    before = package()
+    tree = created(install(oid, card, "root"))
+    root, spare, direct = tree["bays"]
+    assert root["kind"] == spare["kind"] == "LOGICAL"
+    assert root["mount_kind"] == spare["mount_kind"] == "MODULE_BAY"
+    board = root["installation"]
+    assert [place["bay_key"] for place in board["module_places"]] == ["SFP port", "SFP port 2"]
+    assert all(place["installation_id"] is None for place in board["module_places"])
+    with_board = package()
+    assert with_board["canonical"]["PhysicalObject"] == before["canonical"]["PhysicalObject"]
+    assert with_board["authoring"]["ObjectConfiguration"] == before["authoring"]["ObjectConfiguration"]
+    leaf, = created(install(oid, optic, "SFP port 2", board["id"]))["nested_installations"]
+    assert leaf["parent_installation_id"] == board["id"]
+    assert leaf["endpoints"] == []
+    assert created(install(oid, optic, direct["bay_key"]))["bays"][2]["installation"]["endpoints"] == []
+    assert package()["canonical"] == with_board["canonical"]
+    reason(uninstall(oid, board["id"]), 409, "MODULE_INSTALLATION_HAS_CHILDREN")
+
+
+def test_authoring_rejects_invalid_places_even_for_a_preexisting_candidate():
+    mount = bay_mount("PCIe")
+    sfp = {"mount_kind": "MODULE_PORT", "module_port_type_id": ensure_module_port_type_id("SFP+")}
+    definition = {"name": "Test module", **mount, "endpoints": [], "geometry": initial_geometry([]),
+                  "module_places": [place("extension", mount)]}
+    url = "/v1/library/module-templates"
+    reason(client.post(url, json=definition), 422, "NESTED_MODULE_BAY_FORBIDDEN")
+    reason(client.post(url, json={**definition, **sfp, "module_bay_type_id": None,
+                                 "module_places": [place("optic", sfp)]}),
+           422, "TRANSCEIVER_CHILD_PLACES_FORBIDDEN")
+    tid = module("Board", mount)["template_id"]
+    draft = module_review.open_draft(tid)
+    reason(client.put(f"{url}/{tid}/draft?expected_generation={draft['generation']}", json=definition),
+           422, "NESTED_MODULE_BAY_FORBIDDEN")
+    with patch("app.module_template_review.validate_module_authoring"):
+        generation = module_review.save(tid, draft, definition)
+        candidate = module_review.check(tid, generation)["review"]["candidate_id"]
+    before = package()
+    reason(client.post(f"{url}/{tid}/candidates/{candidate}/publish"), 422, "NESTED_MODULE_BAY_FORBIDDEN")
+    assert package() == before
+
+
+def test_new_base_template_rejects_placed_board_bays():
+    payload = base_payload()
+    bay = payload["bays"][0]
+    bay.pop("module_port_type_id")
+    bay.update(bay_mount("PCIe"))
+    reason(client.post("/v1/library/base-templates", json=payload), 422, "MODULE_BAY_MUST_BE_LOGICAL")
+
 def test_nested_reuse_endpoints_geometry_and_bottom_up_removal():
-    _, obj, card, transceiver, _ = setup()
+    _, obj, card, transceiver, _ = setup(historical=True)
     oid = obj["physical_object_ref"]["entity_id"]
     root = created(install(oid, card, "root", orientation="VERTICAL"))["bays"][0]["installation"]
-    child, = created(install(oid, card, "extension", root["id"]))["nested_installations"]
-    tree = created(install(oid, transceiver, "SFP port", child["id"]))
+    reason(install(oid, card, "extension", root["id"]), 409, "UNSUPPORTED_NESTED_MODULE_INSTALLATION")
+    child, = historical_install(oid, card, "extension", root["id"])["nested_installations"]
+    reason(install(oid, transceiver, "SFP port", child["id"]), 409, "UNSUPPORTED_NESTED_MODULE_INSTALLATION")
+    tree = historical_install(oid, transceiver, "SFP port", child["id"])
     leaf = tree["nested_installations"][1]
     tree = created(install(oid, transceiver, "SFP port", root["id"]))
     assert tree == read(oid)
@@ -138,7 +223,7 @@ def test_invalid_targets_and_concurrent_occupancy():
 
 
 def test_reconcile_moves_subtree_preserves_identity_and_round_trips_workspace():
-    base, obj, card, transceiver, sfp = setup()
+    base, obj, card, transceiver, sfp = setup(historical=True)
     oid = obj["physical_object_ref"]["entity_id"]
     child_template = module("Extension", {"mount_kind": card["mount_kind"],
                             "module_bay_type_id": card["module_bay_type_id"]},
@@ -148,8 +233,8 @@ def test_reconcile_moves_subtree_preserves_identity_and_round_trips_workspace():
     layout = layout_request(tree)
     response = client.put(f"/v1/topology/physical-objects/{oid}/module-installations/{root['id']}/layout", json=layout)
     assert response.status_code == 200, response.text
-    child, = created(install(oid, child_template, "extension", root["id"], "VERTICAL"))["nested_installations"]
-    tree = created(install(oid, transceiver, "optics", child["id"], "VERTICAL"))
+    child, = historical_install(oid, child_template, "extension", root["id"], "VERTICAL")["nested_installations"]
+    tree = historical_install(oid, transceiver, "optics", child["id"], "VERTICAL")
     leaf = tree["nested_installations"][1]
     with SessionLocal.begin() as session:
         repository = CanonicalRepository(session)
@@ -162,7 +247,7 @@ def test_reconcile_moves_subtree_preserves_identity_and_round_trips_workspace():
     def move(definition):
         definition["module_places"][0].update(key="moved", x=.8, y=.4, width=.15, height=.2)
 
-    target = revision(card["template_id"], move)
+    target = historical_revision(card["template_id"], move)
     child_target = revision(child_template["template_id"], lambda d: d["geometry"]["endpoints"]["lan"].update(x=.2, y=.3))
     revision(transceiver["template_id"], lambda d: d.update(name="New optics"))
     assert apply(card["template_id"])[0]["status"] == "updated"
@@ -278,16 +363,16 @@ def test_locked_preflight_rechecks_children_added_after_review():
 
 
 def test_unique_swap_is_atomic_when_apply_fails_after_writes(monkeypatch):
-    _, obj, card, transceiver, sfp = setup()
+    _, obj, card, transceiver, sfp = setup(historical=True)
     oid = obj["physical_object_ref"]["entity_id"]
     root = created(install(oid, card, "root"))["bays"][0]["installation"]
     mount = {"mount_kind": card["mount_kind"], "module_bay_type_id": card["module_bay_type_id"]}
     extension = module("Extension", mount)
-    child, = created(install(oid, extension, "extension", root["id"]))["nested_installations"]
+    child, = historical_install(oid, extension, "extension", root["id"])["nested_installations"]
     tree = created(install(oid, transceiver, "SFP port", root["id"]))
     optic = tree["nested_installations"][1]
     tid = card["template_id"]
-    revision(tid, lambda d: d.update(module_places=[place("extension", sfp), place("SFP port", mount)]))
+    historical_revision(tid, lambda d: d.update(module_places=[place("extension", sfp), place("SFP port", mount)]))
     before = package()
     original_apply = ModuleReconciliation.apply
 
@@ -325,13 +410,13 @@ def test_invalid_nested_place_blocks_base_metadata_reconciliation():
 
 
 def test_workspace_tree_round_trip_and_prewrite_rejection():
-    base, obj, card, transceiver, _ = setup()
+    base, obj, card, transceiver, _ = setup(historical=True)
     oid = obj["physical_object_ref"]["entity_id"]
     other = create_object(base)["physical_object_ref"]["entity_id"]
     other_root = created(install(other, card, "root"))["bays"][0]["installation"]
     root = created(install(oid, card, "root"))["bays"][0]["installation"]
-    child, = created(install(oid, card, "extension", root["id"]))["nested_installations"]
-    pinned = created(install(oid, transceiver, "SFP port", child["id"]))
+    child, = historical_install(oid, card, "extension", root["id"])["nested_installations"]
+    pinned = historical_install(oid, transceiver, "SFP port", child["id"])
     original = package()
     assert original["format_version"] == 14
     assert client.delete("/v1/workspace/dataset").status_code == 204
@@ -363,7 +448,7 @@ def test_workspace_tree_round_trip_and_prewrite_rejection():
 
 
 def test_database_rejects_multirow_cycle():
-    _, obj, card, _, _ = setup()
+    _, obj, card, _, _ = setup(historical=True)
     tree = created(install(obj["physical_object_ref"]["entity_id"], card, "root"))
     root = tree["bays"][0]["installation"]
     a, b = uuid.uuid4(), uuid.uuid4()
