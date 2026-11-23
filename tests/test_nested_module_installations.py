@@ -17,7 +17,6 @@ from app.module_reconciliation import ModuleReconciliation
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from tests import test_base_template_review as base_review
 from tests import test_module_template_review as module_review
-from tests.cable_type_fixtures import copper_cable_spec
 from tests.module_port_type_fixtures import ensure_module_port_type_id
 from tests.port_type_fixtures import ensure_port_type_id
 from tests.test_hardware_configuration import base_payload, client, create_base, create_object
@@ -48,7 +47,7 @@ def physical_transceiver(mount, *, medium="FIBER"):
         "name": "Lab termination", "medium": medium, "members": ["1"], "compatibility_mode": "SAME_TYPE",
         "color": "#336699",
     }))
-    return {"name": "Physical transceiver", **mount, "transceiver": {}, "geometry": initial_geometry(["optical"]),
+    return {"name": "Physical transceiver", **mount, "transceiver": {"fiber_type": "SM"} if medium == "FIBER" else {}, "geometry": initial_geometry(["optical"]),
             "endpoints": [{"key": "optical", "display_name": "Optical", "kind": "CONNECTION_POINT", "port_type_id": port["id"]}]}
 
 
@@ -250,7 +249,7 @@ def test_reconcile_moves_subtree_preserves_identity_and_round_trips_workspace():
         peer = repository.add_connection_point(repository.add_physical_object().id, 1)
         connection, _ = repository.add_connection(uuid.UUID(child["endpoints"][0]["connection_point_id"]),
                                                   peer.id, 1, [ConnectionMemberInput(1, 1, 1)])
-        session.add(Cable(connection_id=connection.id, cable_type_id=copper_cable_spec().cable_type_id))
+        session.add(Cable(connection_id=connection.id))
     before = package()
 
     def move(definition):
@@ -298,7 +297,7 @@ def test_reconcile_moves_subtree_preserves_identity_and_round_trips_workspace():
     final_tree = read(oid)
     assert final_tree["nested_installations"] == [updated, updated_leaf]
     exported = package()
-    assert exported["format_version"] == 16
+    assert exported["format_version"] == 17
     assert exported["canonical"] == before["canonical"]
     def mappings(pkg):
         return {row["id"]: (row["installation_id"], row["connection_point_id"], row["network_interface_id"])
@@ -428,7 +427,7 @@ def test_workspace_tree_round_trip_and_prewrite_rejection():
     child, = historical_install(oid, card, "extension", root["id"])["nested_installations"]
     pinned = historical_install(oid, transceiver, "SFP port", child["id"])
     original = package()
-    assert original["format_version"] == 16
+    assert original["format_version"] == 17
     assert client.delete("/v1/workspace/dataset").status_code == 204
     empty = package()
     for target, error in [(str(uuid.uuid4()), "missing"), (other_root["id"], "another configuration"),

@@ -7,7 +7,7 @@ import { PhysicalCatalogPage } from './PhysicalCatalogPage';
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 it('creates a type with palette and HEX input, edits it, archives it, and confirms deletion', async () => {
-  const first = { id: 'type-id', name: 'SFP+', description: null, color: '#00AABB', is_active: true, medium: 'COPPER', members: ['1'], fiber_mode: null, compatibility_mode: 'SAME_TYPE', cardinality: 1 };
+  const first = { id: 'type-id', name: 'SFP+', description: null, color: '#00AABB', is_active: true, medium: 'COPPER', members: ['1'], compatibility_mode: 'SAME_TYPE', cardinality: 1 };
   const edited = { ...first, color: '#123456' };
   const fetchMock = vi.fn()
     .mockResolvedValueOnce({ ok: true, json: async () => [] })
@@ -49,29 +49,10 @@ it('creates a type with palette and HEX input, edits it, archives it, and confir
 });
 
 
-it('saves structured SM/MM independently of the line name and construction', async () => {
-  const payload = { name: 'Custom', color: '#64748B', description: null, is_active: true,
-    medium: 'FIBER', construction: 'Glass', fiber_mode: 'MM' };
-  const fetchMock = vi.fn()
-    .mockResolvedValueOnce({ ok: true, json: async () => [] })
-    .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'test-id', ...payload }) });
-  vi.stubGlobal('fetch', fetchMock);
-  render(<MemoryRouter><I18nProvider><PhysicalCatalogPage catalog="cable-types" /></I18nProvider></MemoryRouter>);
-  await screen.findByText('Справочник пуст.');
-  fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Custom' } });
-  fireEvent.change(screen.getByLabelText('Среда'), { target: { value: 'FIBER' } });
-  fireEvent.change(screen.getByLabelText('Конструкция'), { target: { value: 'Glass' } });
-  fireEvent.change(screen.getByLabelText('Режим волокна'), { target: { value: 'MM' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
-  expect(await screen.findByText('Custom')).toBeVisible();
-  expect(fetchMock.mock.calls[1][0]).toBe('/api/v1/cable-types');
-  expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual(payload);
-});
-
 it('edits one matrix cell and shows the same decision from either port type', async () => {
   const types = ['A', 'B'].map(name => ({
     id: name.toLowerCase(), name, color: '#64748B', description: null, is_active: true,
-    medium: 'COPPER', members: ['1'], cardinality: 1, compatibility_mode: 'MATRIX', fiber_mode: null,
+    medium: 'COPPER', members: ['1'], cardinality: 1, compatibility_mode: 'MATRIX',
   }));
   const fetchMock = vi.fn()
     .mockResolvedValueOnce({ ok: true, json: async () => types })

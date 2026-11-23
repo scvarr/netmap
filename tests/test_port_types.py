@@ -8,7 +8,7 @@ from tests.test_workspace_portability import client, isolated_workspace, snapsho
 
 pytestmark = pytest.mark.no_database
 URL = "/v1/port-types"
-PORT = {"medium": "COPPER", "members": ["1"], "fiber_mode": None, "compatibility_mode": "UNDEFINED"}
+PORT = {"medium": "COPPER", "members": ["1"], "compatibility_mode": "UNDEFINED"}
 
 
 def create_port(fields):
@@ -54,7 +54,7 @@ def test_port_type_workspace_round_trip_and_invalid_import():
     archived = create_port({"name": "Optical", "color": "#abcdef",
                                       "description": "SFP+", "is_active": False}).json()
     before = snapshot()
-    assert before["format_version"] == 16
+    assert before["format_version"] == 17
     assert {item["id"]: item for item in before["settings"]["PortType"]} == {
         item["id"]: {k: v for k, v in item.items() if k != "cardinality"} for item in (active, archived)
     }
@@ -150,7 +150,7 @@ def test_assignment_lifecycle_and_workspace_round_trip(template_kind, section):
     assert update_port(original_url, {"name": "Twisted pair", "color": "#112233", "members": ["X"]}).status_code == 409
 
     before = snapshot()
-    assert before["format_version"] == 16
+    assert before["format_version"] == 17
     assert client.delete("/v1/workspace/dataset").status_code == 204
     malformed = copy.deepcopy(before)
     draft_record, = malformed["authoring"][f"{template_kind.capitalize()}TemplateDraft"]
@@ -273,22 +273,6 @@ def test_connected_retained_endpoint_type_is_immutable(template_kind, replacemen
     after = snapshot()
     assert after["canonical"] == before["canonical"]
     assert after["authoring"] == pinned["authoring"]
-
-
-def test_cable_type_fiber_mode_validation_and_lifecycle():
-    cables = "/v1/cable-types"
-    cable = {"name": "Custom fiber", "color": "#223344", "medium": "FIBER", "construction": "CUSTOM", "fiber_mode": "SM"}
-    assert client.post(cables, json={**cable, "cardinality": 12}).status_code == 422
-    assert client.post(cables, json={**cable, "fiber_mode": None}).status_code == 422
-    assert client.post(cables, json={**cable, "medium": "COPPER"}).status_code == 422
-    created = client.post(cables, json=cable)
-    assert created.status_code == 201, created.text
-    cable_id = created.json()["id"]
-    url = f"{cables}/{cable_id}"
-    assert client.put(url, json={**cable, "construction": "SINGLE_MODE", "is_active": False}).status_code == 200
-    assert client.get(url).json()["construction"] == "SINGLE_MODE"
-    assert client.get(cables).json()[0]["id"] == cable_id
-    assert client.delete(url).status_code == 204
 
 
 def test_structural_edit_waits_for_concurrent_template_assignment():

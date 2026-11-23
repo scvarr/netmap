@@ -4,7 +4,6 @@ from tests.module_port_type_fixtures import ensure_module_port_type_id
 import copy
 import uuid
 
-from tests.cable_type_fixtures import copper_cable_spec
 from tests.port_type_fixtures import ensure_port_type_id
 
 import pytest
@@ -60,7 +59,7 @@ def connect(session, point_id):
     point = repository.add_connection_point(remote.id, 1)
     connection, _ = repository.add_connection(point_id, point.id, 1,
         [ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)])
-    session.add(m.Cable(connection_id=connection.id, label='User cable', cable_type_id=copper_cable_spec().cable_type_id))
+    session.add(m.Cable(connection_id=connection.id, label='User cable'))
     return connection
 
 

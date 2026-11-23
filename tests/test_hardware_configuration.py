@@ -1,6 +1,5 @@
 from tests.module_port_type_fixtures import ensure_module_bay_type_id, ensure_module_port_type_id
 from tests.l1_builders import post_confirmed_physical
-from tests.cable_type_fixtures import copper_cable_fields
 from tests.port_type_fixtures import ensure_port_type_id
 import copy
 import uuid
@@ -118,7 +117,7 @@ def test_materialization_identity_binding_geometry_and_round_trip(orientation):
     assert len({e['connection_point_id'] for e in endpoints}) == 4
     assert len({e['network_interface_id'] for e in endpoints}) == 4
     package = client.get('/v1/workspace/package').json()
-    assert package['format_version'] == 16
+    assert package['format_version'] == 17
     assert 'ModuleInstallation' in package['authoring']
     assert 'ObjectBlueprint' not in package['authoring']
     before = client.get(f'/v1/topology/physical-objects/{object_ids[0]}/configuration').json()
@@ -219,7 +218,6 @@ def test_two_installations_in_one_object_have_distinct_definition_mappings_and_p
     remote_id = remote['physical_object_ref']['entity_id']
     source = endpoints[0]
     connection = post_confirmed_physical(client,'/v1/topology/physical-connections', json={
-        **copper_cable_fields(),
         'source': {'kind': 'CONNECTION_POINT', 'connection_point_id': source['connection_point_id'], 'member_index': 1},
         'target': {'kind': 'CONNECTION_POINT', 'connection_point_id': remote['slots'][0]['connection_point_ref']['entity_id'], 'member_index': 1},
     })

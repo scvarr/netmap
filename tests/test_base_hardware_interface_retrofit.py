@@ -84,7 +84,7 @@ def test_reconcile_materializes_only_new_declarations_and_preserves_workspace():
         row["id"] for row in before["authoring"]["ObjectConfiguration"]}
     assert reconcile(template)[touched]["status"] == "already_current"
     assert package() == after
-    assert after["format_version"] == 16
+    assert after["format_version"] == 17
     assert client.delete("/v1/workspace/dataset").status_code == 204
     imported = client.post("/v1/workspace/package", json=after)
     assert imported.status_code == 204, imported.text

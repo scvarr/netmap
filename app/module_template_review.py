@@ -185,7 +185,8 @@ class ModuleTemplateReview:
         updated = validate_definition(definition)
         validate_module_authoring(updated)
         validate_transceiver_authoring(updated, published_definition(self.session, template_id, draft.source_revision_id))
-        validate_port_type_assignments(self.session, updated["endpoints"], draft.definition["endpoints"])
+        validate_port_type_assignments(self.session, updated["endpoints"], draft.definition["endpoints"],
+                                       transceiver=updated.get("transceiver"))
         validate_mount_types(self.session, module_assignments(updated), module_assignments(draft.definition))
         draft.definition = updated
         draft.generation += 1
@@ -202,6 +203,9 @@ class ModuleTemplateReview:
         validate_module_authoring(definition)
         validate_transceiver_authoring(definition, published)
         _require_retained_port_types(published, definition)
+        if definition.get("transceiver") is not None:
+            endpoints = definition["endpoints"]
+            validate_port_type_assignments(self.session, endpoints, endpoints, transceiver=definition["transceiver"])
         fingerprint = self._inputs()
         installations = self.session.scalars(select(m.ModuleInstallation).join(m.ModuleTemplateRevision,
             m.ModuleInstallation.module_revision_id == m.ModuleTemplateRevision.id).where(
@@ -266,6 +270,9 @@ class ModuleTemplateReview:
         published = published_definition(self.session, template_id, latest.id)
         validate_transceiver_authoring(candidate.definition, published)
         _require_retained_port_types(published, candidate.definition)
+        if candidate.definition.get("transceiver") is not None:
+            endpoints = candidate.definition["endpoints"]
+            validate_port_type_assignments(self.session, endpoints, endpoints, transceiver=candidate.definition["transceiver"])
         revision = HardwareCatalog(self.session)._create_module_revision(template_id, latest.version_number + 1, query)
         self.session.get(m.ModuleTemplate, template_id).name = query.name
         receipt = m.ModuleTemplatePublication(id=candidate.id, revision_id=revision.id)

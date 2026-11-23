@@ -56,23 +56,24 @@ def test_install_and_protect_physical_transceiver(hardware, nested):
     assert package()["canonical"]["InterfacePhysicalBinding"] == []
 
 
-def test_cable_and_workspace_roundtrip(hardware):
+def test_opposite_transceiver_modes_allow_cable_and_workspace_roundtrip(hardware):
     object_id, board, _ = create_installation(hardware)
     peer_id, _, _ = create_installation(hardware)
-    definition = physical_transceiver(hardware[-1], medium="COPPER")
+    definition = physical_transceiver(hardware[-1])
     optic = created(client.post("/v1/library/module-templates", json=definition))
-    a = created(install(object_id, optic, "socket", board["id"]))["nested_installations"][0]["endpoints"][0]
-    b = created(install(peer_id, optic, "direct"))["bays"][1]["installation"]["endpoints"][0]
-    cable = created(client.post("/v1/cable-types", json={
-        "name": "Lab copper", "color": "#336699", "medium": "COPPER", "construction": "TWISTED_PAIR",
+    mm = created(client.post("/v1/library/module-templates", json={
+        **definition, "name": "Multimode model", "transceiver": {"fiber_type": "MM"},
     }))
-    data = {"source": point_end(a["connection_point_id"]), "target": point_end(b["connection_point_id"]),
-            "cable_type_id": cable["id"]}
+    a = created(install(object_id, optic, "socket", board["id"]))["nested_installations"][0]["endpoints"][0]
+    b = created(install(peer_id, mm, "direct"))["bays"][1]["installation"]["endpoints"][0]
+    data = {"source": point_end(a["connection_point_id"]), "target": point_end(b["connection_point_id"])}
+    preview = client.post("/v1/topology/physical-connections?preview=true", json=data)
+    assert preview.status_code == 200 and preview.json()["verdict"] == "ALLOW", preview.text
     connected = created(client.post("/v1/topology/physical-connections", json=data))
     reason(client.post("/v1/topology/physical-connections", json=data), 422, "CONNECTION_POINT_MEMBER_OCCUPIED")
     reason(client.delete(f"/v1/topology/physical-objects/{object_id}"), 409, "PHYSICAL_OBJECT_IN_USE")
     snapshot = package()
-    assert snapshot["format_version"] == 16
+    assert snapshot["format_version"] == 17
     assert client.delete("/v1/workspace/dataset").status_code == 204
     empty = package()
     for invalid_member in (None, 2):

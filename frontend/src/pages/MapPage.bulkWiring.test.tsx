@@ -1,4 +1,3 @@
-import { selectCableType, stubCableCatalog } from '../testCableCatalog';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { BulkPhysicalConnectionError } from '../topology/apiPhysicalEndpointConnectionWriteDataSource';
@@ -8,7 +7,6 @@ import type { TopologyProjectionDocument } from '../topology/types';
 import { MapPage } from './MapPage';
 import { createMapPageHarness } from './MapPage.testHarness';
 
-beforeEach(stubCableCatalog);
 afterEach(() => vi.unstubAllGlobals());
 
 vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => <div data-testid="bulk-canvas">
@@ -87,7 +85,7 @@ async function selectOne() {
   check(right(), 1);
   match();
   review();
-  await selectCableType();
+
 }
 
 describe('MapPage bulk cable editor', () => {
@@ -111,7 +109,7 @@ describe('MapPage bulk cable editor', () => {
     expect(left().getByRole('checkbox', { name: 'P48' })).toBeChecked();
     match();
     review();
-    await selectCableType();
+
     expect(screen.getByText('Кабели к созданию (48)')).toBeVisible();
     expect(screen.getByText(`B / Без панели / P${firstTarget}`)).toBeVisible();
     expect(create).not.toHaveBeenCalled();
@@ -138,7 +136,7 @@ describe('MapPage bulk cable editor', () => {
     expect(screen.getByRole('combobox', { name: /Назначение для A .* P8$/ })).toHaveValue('b4');
     fireEvent.click(screen.getAllByRole('button', { name: 'Исключить' })[2]);
     review();
-    await selectCableType();
+
     expect(screen.getByText('Кабели к созданию (11)')).toBeVisible();
     await waitFor(() => expect(button('Подтвердить создание')).toBeEnabled());
     confirm();
@@ -200,30 +198,35 @@ describe('MapPage bulk cable editor', () => {
     const { create } = setup(compatibility);
     await start();
     await selectOne();
+    await waitFor(() => expect(button('Проверить совместимость')).toBeEnabled());
     fireEvent.click(button('Проверить совместимость'));
     expect(await screen.findByRole('alert')).toHaveTextContent('DENY');
-    expect(screen.getByText(/среды кабеля и порта различаются.*пар: 1/)).toBeVisible();
+    expect(screen.getByText(/среды физических окончаний различаются.*пар: 1/)).toBeVisible();
     expect(button('Подтвердить создание')).toBeDisabled();
     fireEvent.click(screen.getByText('Подробности по парам'));
     select(screen.getByLabelText('Номер пары'), '1');
-    expect(screen.getByText(/Пара 1.*DENY.*среды кабеля и порта различаются/)).toBeVisible();
+    expect(screen.getByText(/Пара 1.*DENY.*среды физических окончаний различаются/)).toBeVisible();
     expect(create).not.toHaveBeenCalled();
 
     fireEvent.click(button('Назад'));
     review();
     await waitFor(() => expect(button('Проверить совместимость')).toBeEnabled());
     fireEvent.click(button('Проверить совместимость'));
-    const consent = 'Продолжить с неподтверждённой совместимостью';
-    fireEvent.click(await screen.findByRole('checkbox', { name: consent }));
+    const consent = 'Подтверждение физической совместимости';
+    await screen.findByText('Совместимость · UNKNOWN');
+    confirm();
+    const first = await screen.findByRole('dialog', { name: consent });
+    fireEvent.click(within(first).getByRole('button', { name: 'Отмена' }));
+    expect(create).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByLabelText('Имена кабелей')).toBeEnabled());
     await screen.findByRole('option', { name: 'Bulk' });
     select(screen.getByLabelText('Имена кабелей'), 'template');
     expect(await screen.findByText('B001')).toBeVisible();
-    expect(screen.queryByRole('checkbox', { name: consent })).not.toBeInTheDocument();
     fireEvent.click(button('Проверить совместимость'));
-    const fresh = await screen.findByRole('checkbox', { name: consent });
-    expect(fresh).not.toBeChecked();
-    fireEvent.click(fresh);
+    await screen.findByText('Совместимость · UNKNOWN');
     confirm();
+    const fresh = await screen.findByRole('dialog', { name: consent });
+    fireEvent.click(within(fresh).getByRole('button', { name: 'Подтвердить и создать' }));
     await waitFor(() => expect(create).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       compatibility: { token: 'second', accept_unknown: true },
     })));

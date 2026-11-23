@@ -1,11 +1,9 @@
-import { CableSpecificationFields } from "./CableSpecificationFields";
 import { useEffect, useMemo, useState } from "react";
 import type {
   DeviceDetailsDataSource,
   DeviceDetailsDocument,
 } from "../topology/deviceDetailsTypes";
 import type {
-  CableSpecification,
   CreatePhysicalEndpointConnectionRequest,
   PhysicalEndpointConnectionWriteDataSource,
   PhysicalEndpointRequest,
@@ -19,7 +17,8 @@ import { displayNodeLabel, numericAttribute } from "../topology/presentation";
 import type { TopologyProjectionNode } from "../topology/types";
 import { isAvailablePhysicalPort } from "../topology/physicalPortAvailability";
 import { useI18n } from "../i18n";
-import { confirmPhysicalCompatibility, PhysicalCompatibilityError } from '../topology/physicalCompatibility';
+import { usePhysicalCompatibilityConfirmation } from './PhysicalCompatibilityDialog';
+import { PhysicalCompatibilityError } from '../topology/physicalCompatibility';
 import { CableNamingFields } from './CableNamingFields';
 import type { CableLabelDataSource, CableNamingInput } from '../topology/cableLabelTypes';
 
@@ -86,9 +85,10 @@ export function ConnectPhysicalEndpoint({
   const [query, setQuery] = useState("");
   const [targetState, setTargetState] = useState<TargetState>({ kind: "idle" });
   const [retry, setRetry] = useState(0);
+  const [busy, setBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const { confirm, confirmationDialog } = usePhysicalCompatibilityConfirmation();
   const [error, setError] = useState<string | null>(null);
-  const [cableSpec, setCableSpec] = useState<CableSpecification>({ cable_type_id: "" });
   const [cableNaming, setCableNaming] = useState<CableNamingInput>({ cable_label: null, cable_label_template_id: null, generate_cable_label: false });
   const reset = () => {
     setOpen(false);
@@ -98,7 +98,6 @@ export function ConnectPhysicalEndpoint({
     setQuery("");
     setTargetState({ kind: "idle" });
     setError(null);
-    setCableSpec({ cable_type_id: "" });
     setCableNaming({ cable_label: null, cable_label_template_id: null, generate_cable_label: false });
   };
   const candidates = useMemo(
@@ -207,8 +206,8 @@ export function ConnectPhysicalEndpoint({
         )
       : [];
   const submit = async () => {
-    if (!targetEntityId || !cableSpec.cable_type_id || submitting || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
-    setSubmitting(true);
+    if (!targetEntityId || busy || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
+    setBusy(true);
     setError(null);
     const target: PhysicalEndpointRequest =
       mode === "PORT"
@@ -226,14 +225,14 @@ export function ConnectPhysicalEndpoint({
           member_index: 1,
         },
         target,
-        ...cableSpec,
         ...cableNaming,
       };
       if (writeDataSource.previewPhysicalEndpointConnection) {
-        const compatibility = confirmPhysicalCompatibility(await writeDataSource.previewPhysicalEndpointConnection(request), t);
+        const compatibility = await confirm(await writeDataSource.previewPhysicalEndpointConnection(request));
         if (!compatibility) return;
         request.compatibility = compatibility;
       }
+      setSubmitting(true);
       await writeDataSource.createPhysicalEndpointConnection(request);
       reset();
       onConnected();
@@ -241,6 +240,7 @@ export function ConnectPhysicalEndpoint({
       setError(reason instanceof PhysicalCompatibilityError ? reason.message : t('physical.connectFailed'));
     } finally {
       setSubmitting(false);
+      setBusy(false);
     }
   };
   return (
@@ -252,7 +252,7 @@ export function ConnectPhysicalEndpoint({
         title={t("connect.connectPort")}
         aria-expanded={open}
         disabled={
-          (sourcePoint.external_connection_count ?? 0) >=
+          busy || (sourcePoint.external_connection_count ?? 0) >=
           sourcePoint.cardinality
         }
         onClick={() => {
@@ -279,7 +279,7 @@ export function ConnectPhysicalEndpoint({
                 <input
                   aria-label={t("connect.searchTarget")}
                   value={query}
-                  disabled={submitting}
+                  disabled={busy}
                   onChange={(event) => setQuery(event.target.value)}
                 />
               </label>
@@ -288,7 +288,7 @@ export function ConnectPhysicalEndpoint({
                 <select
                   aria-label={t("connect.targetObject")}
                   value={targetObjectId}
-                  disabled={submitting}
+                  disabled={busy}
                   onChange={(event) => setTargetObjectId(event.target.value)}
                 >
                   <option value="">{t("connect.selectObject")}</option>
@@ -304,7 +304,7 @@ export function ConnectPhysicalEndpoint({
                 <select
                   aria-label={t("connect.freePort")}
                   value={targetEntityId}
-                  disabled={submitting || targetState.kind !== "points"}
+                  disabled={busy || targetState.kind !== "points"}
                   onChange={(event) => setTargetEntityId(event.target.value)}
                 >
                   <option value="">{t("connect.selectPort")}</option>
@@ -324,7 +324,7 @@ export function ConnectPhysicalEndpoint({
               <button
                 type="button"
                 className="connect-interface__advanced"
-                disabled={submitting}
+                disabled={busy}
                 onClick={() => {
                   setQuery("");
                   setMode("INTERFACE");
@@ -341,7 +341,7 @@ export function ConnectPhysicalEndpoint({
                 <select
                   aria-label={t("connect.targetObject")}
                   value={targetObjectId}
-                  disabled={submitting}
+                  disabled={busy}
                   onChange={(event) => setTargetObjectId(event.target.value)}
                 >
                   <option value="">{t("connect.selectObject")}</option>
@@ -357,7 +357,7 @@ export function ConnectPhysicalEndpoint({
                 <select
                   aria-label={t("connect.interface")}
                   value={targetEntityId}
-                  disabled={submitting || targetState.kind !== "interfaces"}
+                  disabled={busy || targetState.kind !== "interfaces"}
                   onChange={(event) => setTargetEntityId(event.target.value)}
                 >
                   <option value="">{t("connect.selectInterface")}</option>
@@ -374,7 +374,7 @@ export function ConnectPhysicalEndpoint({
               <button
                 type="button"
                 className="connect-interface__advanced"
-                disabled={submitting}
+                disabled={busy}
                 onClick={() => {
                   setQuery("");
                   setMode("PORT");
@@ -404,23 +404,23 @@ export function ConnectPhysicalEndpoint({
               {error}
             </p>
           )}
-          <CableSpecificationFields value={cableSpec} onChange={setCableSpec} disabled={submitting} />
-          <CableNamingFields dataSource={cableLabelDataSource} disabled={submitting} value={cableNaming} onChange={setCableNaming} />
+          <CableNamingFields dataSource={cableLabelDataSource} disabled={busy} value={cableNaming} onChange={setCableNaming} />
           <div className="connect-interface__actions">
-            <button type="button" disabled={submitting} onClick={reset}>
+            <button type="button" disabled={busy} onClick={reset}>
               {t("action.cancel")}
             </button>
             <button
               type="submit"
               disabled={
-                !targetEntityId || !cableSpec.cable_type_id || !selectedObjectIsVisible || submitting || (cableNaming.generate_cable_label === true && !cableNaming.cable_label_template_id)
+                !targetEntityId || !selectedObjectIsVisible || busy || (cableNaming.generate_cable_label === true && !cableNaming.cable_label_template_id)
               }
             >
-              {submitting ? t("connect.connecting") : error ? t("action.retry") : t("connect.connect")}
+              {submitting ? t("connect.connecting") : busy ? t('compatibility.checking') : error ? t("action.retry") : t("connect.connect")}
             </button>
           </div>
         </form>
       )}
+      {confirmationDialog}
     </div>
   );
 }

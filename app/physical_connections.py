@@ -9,14 +9,14 @@ from app.errors import NetMapError, ValidationError
 from app.cable_labels import CableLabelCatalog, resolved_cable_label
 from app.module_endpoint_names import EndpointNames
 from app.models import (
-    Cable, CableLabelTemplate, CableType, Connection, ConnectionMember,
+    Cable, CableLabelTemplate, Connection, ConnectionMember,
     ConnectionPoint, HardwareInterfaceAssociation, NetworkInterface, NetworkInterfacePhysicalOwner,
 )
 from app.physical_compatibility import verify_compatibility
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from app.schemas import (
     BulkCableDeleteCandidate, BulkCableDeleteExpectation, BulkCableDeleteMember,
-    CableReconnectExpectation, CableReconnectRequest, CableReconnectSnapshot, CableSpecification,
+    CableReconnectExpectation, CableReconnectRequest, CableReconnectSnapshot,
     PhysicalCompatibilityConfirmation, PhysicalCompatibilityPreview,
 )
 
@@ -71,7 +71,6 @@ class PhysicalConnectionCatalog:
         source_interface_id: uuid.UUID,
         target_interface_id: uuid.UUID,
         *,
-        cable_spec: CableSpecification,
         cable_label: str | None = None,
         cable_label_template_id: uuid.UUID | None = None,
         generate_cable_label: bool = False,
@@ -86,7 +85,6 @@ class PhysicalConnectionCatalog:
         created = self.create_endpoint_link(
             NetworkInterfaceEndpoint(source_interface_id),
             NetworkInterfaceEndpoint(target_interface_id),
-            cable_spec=cable_spec,
             cable_label=cable_label,
             cable_label_template_id=cable_label_template_id,
             generate_cable_label=generate_cable_label,
@@ -111,7 +109,6 @@ class PhysicalConnectionCatalog:
         source: PhysicalEndpoint,
         target: PhysicalEndpoint,
         *,
-        cable_spec: CableSpecification,
         cable_label: str | None = None,
         cable_label_template_id: uuid.UUID | None = None,
         generate_cable_label: bool = False,
@@ -124,7 +121,6 @@ class PhysicalConnectionCatalog:
                 {"endpoint": self._endpoint_description(source)},
             )
 
-        self._validate_cable_spec(cable_spec)
         interface_ids = tuple(
             sorted(
                 {
@@ -250,7 +246,7 @@ class PhysicalConnectionCatalog:
                 raise ValidationError("Cable label template is required when generation is enabled")
             generated = self._generated_label_preview(cable_label_template_id, 1)
         result = verify_compatibility(
-            self.session, cable_spec, [(endpoint_points[0], endpoint_points[1])],
+            self.session, [(endpoint_points[0], endpoint_points[1])],
             intent=["create", self._endpoint_description(source), self._endpoint_description(target),
                     endpoint_owners, cable_label, cable_label_template_id, generate_cable_label,
                     generated],
@@ -271,7 +267,7 @@ class PhysicalConnectionCatalog:
             cardinality=1,
             members=member,
         )
-        cable = self._add_cable(connection.id, cable_spec)
+        cable = self._add_cable(connection.id)
         CableLabelCatalog(self.session).assign_new_cable(
             cable,
             label=cable_label,
@@ -290,7 +286,6 @@ class PhysicalConnectionCatalog:
         self,
         pairs: list[tuple[ConnectionPointEndpoint, ConnectionPointEndpoint]],
         *,
-        cable_spec: CableSpecification,
         template_id: uuid.UUID | None,
         expected_generated_labels: list[str],
         preview: bool = False,
@@ -298,7 +293,6 @@ class PhysicalConnectionCatalog:
     ) -> list[CreatedEndpointPhysicalConnection] | PhysicalCompatibilityPreview:
         if not 1 <= len(pairs) <= 256:
             raise ValidationError("Bulk pairing requires 1 to 256 pairs")
-        self._validate_cable_spec(cable_spec)
         ids = [endpoint.connection_point_id for pair in pairs for endpoint in pair]
         if len(set(ids)) != len(ids):
             raise ValidationError("Duplicate ConnectionPoint in bulk pairing")
@@ -339,7 +333,7 @@ class PhysicalConnectionCatalog:
             if labels != expected_generated_labels:
                 raise ValidationError("Bulk label preview is stale", {"reason": "BULK_LABEL_PREVIEW_STALE"})
         result = verify_compatibility(
-            self.session, cable_spec, [(by_id[a.connection_point_id], by_id[b.connection_point_id]) for a, b in pairs],
+            self.session, [(by_id[a.connection_point_id], by_id[b.connection_point_id]) for a, b in pairs],
             intent=["bulk", ids, template_id, labels],
             preview=preview, confirmation=compatibility,
         )
@@ -352,7 +346,7 @@ class PhysicalConnectionCatalog:
                 source.connection_point_id, target.connection_point_id,
                 cardinality=1, members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
             )
-            cable = self._add_cable(connection.id, cable_spec)
+            cable = self._add_cable(connection.id)
             catalog.assign_new_cable(cable, label=label, template_id=None, generate=False)
             created.append(CreatedEndpointPhysicalConnection(
                 source=MaterializedPhysicalEndpoint(source, source.connection_point_id, None),
@@ -369,25 +363,11 @@ class PhysicalConnectionCatalog:
         ).all()
         return catalog.preview_batch(template_id, count)
 
-    def _add_cable(self, connection_id: uuid.UUID, spec: CableSpecification) -> Cable:
-        cable = Cable(
-            connection_id=connection_id,
-            cable_type_id=spec.cable_type_id,
-        )
+    def _add_cable(self, connection_id: uuid.UUID) -> Cable:
+        cable = Cable(connection_id=connection_id)
         self.session.add(cable)
         self.session.flush()
         return cable
-
-    def _validate_cable_spec(self, spec: CableSpecification) -> None:
-        # Serialize assignment against archive, deletion and structural updates.
-        cable_type = self.session.scalar(
-            select(CableType).where(CableType.id == spec.cable_type_id)
-            .with_for_update(read=True).execution_options(populate_existing=True)
-        )
-        if cable_type is None:
-            raise ValidationError("Cable type not found")
-        if not cable_type.is_active:
-            raise ValidationError("Cable type is archived")
 
     def _reconnect_snapshot(
         self, cable_id: uuid.UUID, new_point_id: uuid.UUID | None = None,
@@ -454,15 +434,12 @@ class PhysicalConnectionCatalog:
                 raise ValidationError("A cable requires endpoints on two different PhysicalObjects")
             if self._has_external_member_connection(new_point, 1):
                 raise NetMapError("CABLE_RECONNECT_OCCUPIED", "ConnectionPoint member is already occupied")
-            cable = self.session.get(Cable, cable_id)
-            assert cable is not None
-            spec = CableSpecification(cable_type_id=cable.cable_type_id)
             pair = (
                 new_point if request.side == "A" else points[connection.point_a_id],
                 new_point if request.side == "B" else points[connection.point_b_id],
             )
             result = verify_compatibility(
-                self.session, spec, [pair],
+                self.session, [pair],
                 intent=["reconnect", cable_id, request.expected.model_dump(mode="json"), request.side, new_point.id],
                 preview=preview, confirmation=request.compatibility,
             )

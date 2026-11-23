@@ -6,11 +6,7 @@ export type PhysicalEndpointRequest =
   | { kind: 'NETWORK_INTERFACE'; network_interface_id: string }
   | { kind: 'CONNECTION_POINT'; connection_point_id: string; member_index: 1 };
 
-export interface CableSpecification {
-  cable_type_id: string;
-}
-
-export interface CreatePhysicalEndpointConnectionRequest extends CableNamingInput, CableSpecification {
+export interface CreatePhysicalEndpointConnectionRequest extends CableNamingInput {
   source: PhysicalEndpointRequest;
   target: PhysicalEndpointRequest;
   compatibility?: PhysicalCompatibilityConfirmation;
@@ -32,7 +28,7 @@ export interface PhysicalEndpointConnectionCreationDocument {
   connection_ref: ProjectionSourceRef;
 }
 
-export interface CreateBulkPhysicalConnectionsRequest extends CableSpecification {
+export interface CreateBulkPhysicalConnectionsRequest {
   pairs: { source: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }>; target: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }> }[];
   template_id: string | null;
   expected_generated_labels: string[];

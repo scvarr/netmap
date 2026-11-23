@@ -19,7 +19,7 @@ from sqlalchemy.sql.sqltypes import JSON
 
 from app.database import Base
 from app import models
-from app.port_types import CableTypeInput, MountTypeInput, PortTypeInput
+from app.port_types import MountTypeInput, PortTypeInput
 from app.module_port_types import MOUNT_CATALOGS, MOUNT_FIELDS, mount_identity, result_mounts
 from app.schemas import ModuleBayRequest, ModuleMount, AutomaticLocationLayout
 from app.hardware_interfaces import declared_interfaces
@@ -27,7 +27,7 @@ from pydantic import ValidationError
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 16
+FORMAT_VERSION = 17
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -41,7 +41,7 @@ ENTITIES = (
     ("canonical", "InterfacePhysicalBinding", "InterfacePhysicalBinding", "id interface_id point_id point_member"),
     ("canonical", "Connection", "Connection", "id point_a_id point_b_id cardinality"),
     ("canonical", "ConnectionMember", "ConnectionMember", "id connection_id index point_a_member point_b_member"),
-    ("canonical", "Cable", "Cable", "id connection_id cable_type_id label"),
+    ("canonical", "Cable", "Cable", "id connection_id label"),
     ("canonical", "EntityMetadata", "EntityMetadata", "id physical_object_id network_interface_id connection_point_id key value"),
     ("canonical", "L2ForwardingContext", "L2ForwardingContext", "id"),
     ("canonical", "L2Binding", "L2Binding", "id interface_id forwarding_context_id"),
@@ -94,11 +94,10 @@ ENTITIES = (
     ("presentation", "MapViewPosition", "MapViewPosition", "id placement_id variant_id view_key x y locked display_width face_override"),
     ("presentation", "MapLocationState", "MapLocationState", "id variant_id location_id collapsed visible_direct_elements geometry manual_bounds face_override"),
     ("presentation", "MapTextAnnotation", "MapTextAnnotation", "id map_id text position text_color font_size"),
-    ("settings", "PortType", "PortType", "id name description color is_active medium members fiber_mode compatibility_mode"),
+    ("settings", "PortType", "PortType", "id name description color is_active medium members compatibility_mode"),
     ("settings", "PortTypeCompatibility", "PortTypeCompatibility", "port_type_a_id port_type_b_id"),
     ("settings", "ModuleBayType", "ModuleBayType", "id name is_active"),
     ("settings", "ModulePortType", "ModulePortType", "id name is_active"),
-    ("settings", "CableType", "CableType", "id name description color is_active medium construction fiber_mode"),
     ("settings", "CableLabelSettings", "CableLabelSettings", "id unique_labels"),
     ("settings", "CableLabelTemplate", "CableLabelTemplate", "id name description pattern start_at"),
     ("settings", "CableLabelHistory", "CableLabelHistory", "id label cable_id assigned_at released_at"),
@@ -216,7 +215,7 @@ def validate_package(package: object) -> dict:
                 except ValidationError as error:
                     raise PackageError("Invalid MapPresentationVariant.automatic_layout settings") from error
             catalog_schema = {models.PortType: PortTypeInput,
-                              models.CableType: CableTypeInput, models.ModulePortType: MountTypeInput,
+                              models.ModulePortType: MountTypeInput,
                               models.ModuleBayType: MountTypeInput}.get(model)
             if catalog_schema:
                 try:

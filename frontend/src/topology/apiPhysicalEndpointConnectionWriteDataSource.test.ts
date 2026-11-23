@@ -34,7 +34,7 @@ describe('ApiPhysicalEndpointConnectionWriteDataSource', () => {
     }));
     vi.stubGlobal('fetch', fetchMock);
     const request = {
-      cable_type_id: 'copper',
+
       source: { kind: 'CONNECTION_POINT' as const, connection_point_id: 'point-a', member_index: 1 as const },
       target: { kind: 'NETWORK_INTERFACE' as const, network_interface_id: 'interface-b' },
     };
@@ -58,7 +58,7 @@ describe('ApiPhysicalEndpointConnectionWriteDataSource', () => {
 
     await expect(
       new ApiPhysicalEndpointConnectionWriteDataSource().createPhysicalEndpointConnection({
-        cable_type_id: 'copper',
+
         source: { kind: 'CONNECTION_POINT', connection_point_id: 'point-a', member_index: 1 },
         target: { kind: 'NETWORK_INTERFACE', network_interface_id: 'interface-b' },
       }),
@@ -72,7 +72,7 @@ describe('ApiPhysicalEndpointConnectionWriteDataSource', () => {
 
     await expect(
       new ApiPhysicalEndpointConnectionWriteDataSource().createPhysicalEndpointConnection({
-        cable_type_id: 'copper',
+
         source: { kind: 'CONNECTION_POINT', connection_point_id: 'point-a', member_index: 1 },
         target: { kind: 'NETWORK_INTERFACE', network_interface_id: 'interface-b' },
       }),
@@ -94,7 +94,7 @@ describe('ApiPhysicalEndpointConnectionWriteDataSource', () => {
     vi.stubGlobal('fetch', fetchMock);
     const api = new ApiPhysicalEndpointConnectionWriteDataSource();
     expect(await api.previewBulkCableLabels('template', 1)).toEqual({ labels: ['B001'] });
-    const request = { cable_type_id: 'copper', pairs: [{ source: { kind: 'CONNECTION_POINT' as const, connection_point_id: 'a', member_index: 1 as const }, target: { kind: 'CONNECTION_POINT' as const, connection_point_id: 'b', member_index: 1 as const } }], template_id: 'template', expected_generated_labels: ['B001'] };
+    const request = { pairs: [{ source: { kind: 'CONNECTION_POINT' as const, connection_point_id: 'a', member_index: 1 as const }, target: { kind: 'CONNECTION_POINT' as const, connection_point_id: 'b', member_index: 1 as const } }], template_id: 'template', expected_generated_labels: ['B001'] };
     expect(await api.createBulkPhysicalConnections(request)).toEqual({ created: [{ connection_id: 'connection', cable_id: 'cable' }] });
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/topology/physical-connections/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) });
   });

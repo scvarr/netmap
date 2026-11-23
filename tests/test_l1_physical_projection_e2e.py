@@ -1,4 +1,3 @@
-from tests.cable_type_fixtures import copper_cable_fields, copper_cable_spec
 from tests.l1_builders import create_device as build_device, post_confirmed_physical
 import uuid
 
@@ -50,7 +49,6 @@ def create_w3_link() -> tuple[dict, dict, dict]:
     response = post_confirmed_physical(client,
         "/v1/topology/physical-links",
         json={
-            **copper_cable_fields(),
             "source_interface_id": interface_id(core),
             "target_interface_id": interface_id(firewall),
             "cable_display_name": "CORE-FW-01",
@@ -206,7 +204,7 @@ def test_switch_blueprint_exposes_network_port_mapping_without_self_edge():
 
 def test_cable_backed_direct_connection_projects_between_physical_objects():
     core, firewall = create_device("CORE"), create_device("FW")
-    created = post_confirmed_physical(client,"/v1/topology/physical-links", json={**copper_cable_fields(), "source_interface_id": core["interfaces"][0]["interface_ref"]["entity_id"], "target_interface_id": firewall["interfaces"][0]["interface_ref"]["entity_id"]})
+    created = post_confirmed_physical(client,"/v1/topology/physical-links", json={"source_interface_id": core["interfaces"][0]["interface_ref"]["entity_id"], "target_interface_id": firewall["interfaces"][0]["interface_ref"]["entity_id"]})
     assert created.status_code == 201
     cable_id = created.json()["cable_ref"]["entity_id"]
     projected = client.post("/v1/topology/projection", json=projection_query()).json()
@@ -224,7 +222,7 @@ def test_same_object_cable_has_one_selectable_projection_edge_with_exact_endpoin
         front = repository.add_connection_point(panel.id, 1)
         rear = repository.add_connection_point(panel.id, 1)
         connection, _ = repository.add_connection(front.id, rear.id, 1, [ConnectionMemberInput(1, 1, 1)])
-        cable = Cable(connection_id=connection.id, cable_type_id=copper_cable_spec().cable_type_id)
+        cable = Cable(connection_id=connection.id)
         session.add(cable)
         session.flush()
         cable_id = str(cable.id)

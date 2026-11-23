@@ -13,10 +13,10 @@
 
 ## Переносимые определения
 
-Отдельные файлы определений для PortType, правил матрицы, CableType,
+Отдельные файлы определений для PortType, правил матрицы,
 BaseTemplate и ModuleTemplate остаются целевым форматом. Это определения создаваемых сущностей с необходимыми
 зависимостями через локальные семантические ключи, не экспорт таблиц и не
-полный снимок Workspace v16. Исходные UUID не становятся identity новых записей.
+полный снимок Workspace v17. Исходные UUID не становятся identity новых записей.
 
 Импорт проверяет файл, версию, определения и зависимости; сопоставляет типы
 с текущими справочниками, предлагает создать отсутствующие, показывает preview
@@ -29,10 +29,9 @@ module places и PortType assignments. Неподдерживаемое реда
 отклонить; универсальная legacy compatibility не требуется. JSON schema,
 маршруты API и UX-компоненты требуют будущих implementation contracts.
 
-## CableType
+## Внешние линии
 
-Fixture использует типизированные внешние Cable. Backbone состоит из 20
-независимых Cable типа `ct-fiber1` с отдельными Connections и mappings из
+Backbone состоит из 20 независимых Cable с отдельными Connections и mappings из
 таблицы ниже. Метки `CAB01/1/24` … `CAB01/20/24` документируют общую оболочку
 и номера волокон для оператора. Правила типизации, совместимости и
 границы реализации определены в [L1-CONTRACT-03](L1_CONNECTIVITY.md#справочники-и-совместимость).
@@ -60,10 +59,6 @@ site → F01 → serverroom → F01-R01, F01-R02, F01-R03.
 NetworkInterface; пассивные endpoints — CONNECTION_POINT без interface.
 Пассивные ODF, патч-панели и кроссы проводят только через явно заданные internal
 mappings. PortType keys: pt-rj45, pt-fiber, pt-multipair, pt-pair-terminal, pt-fc.
-CableType keys: ct-rj45 (4 пары, одна сетевая линия), ct-fiber1 (одномодовая оптическая линия),
-ct-pair (одна документируемая медная пара с пассивными окончаниями),
-ct-fc-line (синтетическая FC линия; не спецификация duplex optics).
-
 | BaseTemplate / ModuleTemplate | Порты, места и явная внутренняя continuity |
 |---|---|
 | BT-PC, BT-PHONE, BT-PRINTER, BT-AP | eth: pt-rj45 NETWORK_PORT |
@@ -101,30 +96,30 @@ ModuleTemplate internal continuity не требуется этим активн
 нет Cable. REACHABLE ниже означает задокументированную continuity по canonical
 evidence.
 
-| Cable key | Endpoints / mapping / CableType |
+| Cable key | Endpoints / mapping |
 |---|---|
-| desk.i (i=1..3) | pc.eth, phone.eth, printer.eth соответственно → outlet.front i; ct-rj45 |
-| horizontal.i (1..3) | outlet.rear i → patch02.rear i; ct-rj45 |
-| access.i (1..3) | patch02.front i → access.eth i; ct-rj45 |
-| ap-link | ap.eth → patch02.rear4; ct-rj45 |
-| ap-patch | patch02.front4 → access.eth4; ct-rj45 |
-| backbone.i (1..20) | odf02.rear/i → odf01.rear/j; j=2 для i=1, j=1 для i=2, j=i для 3..20; ct-fiber1 |
-| uplink02.i (1..2) | access.opt i → odf02.front i; ct-fiber1 |
-| uplink01.i (1..2) | odf01.front i → optical.in i; ct-fiber1 |
-| core-opt.i (1..2) | optical.out i → core.opt i; ct-fiber1 |
-| multipair.i (i=1,3) | pair02.rear/i → pair01.rear/(4−i); ct-pair; members 2,4 свободны |
-| optical-switch-in | core.opt3 → opticalSwitch.opt1; ct-fiber1 |
-| optical-switch-out | opticalSwitch.opt2 → core.opt4; ct-fiber1 |
-| srv-eth.i (1..2) | srv i.nic.eth1 → patch01.rear i; ct-rj45 |
-| srv-core.i (1..2) | patch01.front i → core.eth i; ct-rj45 |
-| san-a.i (1..2) | srv i.hba.a → sanA.fc i; ct-fc-line |
-| san-b.i (1..2) | srv i.hba.b → sanB.fc i; ct-fc-line |
-| storage-a.i (1..2) | controllerA.fcA, controllerB.fcA → sanA.fc3, fc4 соответственно; ct-fc-line |
-| storage-b.i (1..2) | controllerA.fcB, controllerB.fcB → sanB.fc3, fc4 соответственно; ct-fc-line |
-| nas-core | nas.eth1 → core.eth3; ct-rj45 |
-| edge-core | core.eth4 → router.eth1; ct-rj45 |
-| edge-fw | router.eth2 → firewall.eth1; ct-rj45 |
-| management.i (1..5) | srv1.mgmt, srv2.mgmt, storage.mgmt, sanA.mgmt, sanB.mgmt → mgmt.eth2..6; ct-rj45 |
+| desk.i (i=1..3) | pc.eth, phone.eth, printer.eth соответственно → outlet.front i |
+| horizontal.i (1..3) | outlet.rear i → patch02.rear i |
+| access.i (1..3) | patch02.front i → access.eth i |
+| ap-link | ap.eth → patch02.rear4 |
+| ap-patch | patch02.front4 → access.eth4 |
+| backbone.i (1..20) | odf02.rear/i → odf01.rear/j; j=2 для i=1, j=1 для i=2, j=i для 3..20 |
+| uplink02.i (1..2) | access.opt i → odf02.front i |
+| uplink01.i (1..2) | odf01.front i → optical.in i |
+| core-opt.i (1..2) | optical.out i → core.opt i |
+| multipair.i (i=1,3) | pair02.rear/i → pair01.rear/(4−i); members 2,4 свободны |
+| optical-switch-in | core.opt3 → opticalSwitch.opt1 |
+| optical-switch-out | opticalSwitch.opt2 → core.opt4 |
+| srv-eth.i (1..2) | srv i.nic.eth1 → patch01.rear i |
+| srv-core.i (1..2) | patch01.front i → core.eth i |
+| san-a.i (1..2) | srv i.hba.a → sanA.fc i |
+| san-b.i (1..2) | srv i.hba.b → sanB.fc i |
+| storage-a.i (1..2) | controllerA.fcA, controllerB.fcA → sanA.fc3, fc4 соответственно |
+| storage-b.i (1..2) | controllerA.fcB, controllerB.fcB → sanB.fc3, fc4 соответственно |
+| nas-core | nas.eth1 → core.eth3 |
+| edge-core | core.eth4 → router.eth1 |
+| edge-fw | router.eth2 → firewall.eth1 |
+| management.i (1..5) | srv1.mgmt, srv2.mgmt, storage.mgmt, sanA.mgmt, sanB.mgmt → mgmt.eth2..6 |
 
 SAN Fabric A/B физически независимы: никаких A↔B связей. B — подключённый
 резервный путь, не ошибка полноты. sanA/B.fc5..8 и srv1/2.nic.eth2 свободны.

@@ -1,3 +1,4 @@
+import { usePhysicalCompatibilityConfirmation } from './PhysicalCompatibilityDialog';
 import { useEffect, useState } from 'react';
 import { useI18n } from '../i18n';
 import { compatibilityMessage, type PhysicalCompatibilityPreview } from '../topology/physicalCompatibility';
@@ -25,9 +26,9 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
   const [target, setTarget] = useState<PhysicalObjectDetailsDocument>();
   const [panel, setPanel] = useState<string>();
   const [port, setPort] = useState('');
-  const [step, setStep] = useState<'edit' | 'checking' | 'review' | 'writing' | 'refreshing' | 'refresh-failed' | 'conflict'>('edit');
+  const [step, setStep] = useState<'edit' | 'checking' | 'review' | 'confirming' | 'writing' | 'refreshing' | 'refresh-failed' | 'conflict'>('edit');
   const [compatibility, setCompatibility] = useState<PhysicalCompatibilityPreview>();
-  const [acceptUnknown, setAcceptUnknown] = useState(false);
+  const { confirm: confirmCompatibility, confirmationDialog } = usePhysicalCompatibilityConfirmation('compatibility.confirmReconnect');
   const [error, setError] = useState<'load' | 'target' | 'write' | 'unsupported'>();
   const [retry, setRetry] = useState(0);
 
@@ -119,11 +120,10 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
   const available = (point: ConnectionPointDetails) =>
     point.cardinality === 1 && point.external_connection_count === 0 && objectId !== opposite;
   const selected = points.find(point => pointId(point) === port && available(point));
-  const busy = step === 'checking' || step === 'writing' || step === 'refreshing';
+  const busy = step === 'checking' || step === 'confirming' || step === 'writing' || step === 'refreshing';
   const review = async () => {
     if (!current || !selected) return;
     setCompatibility(undefined);
-    setAcceptUnknown(false);
     if (writer.previewCompatibility) {
       setStep('checking');
       try {
@@ -135,16 +135,20 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
     }
     setStep('review');
   };
-  const canReconnect = compatibility?.verdict !== 'DENY' && (compatibility?.verdict !== 'UNKNOWN' || acceptUnknown);
+  const canReconnect = compatibility?.verdict !== 'DENY';
   const confirm = async () => {
     if (step !== 'review' || !current || !selected || !canReconnect) return;
-    setStep('writing');
+    setStep('confirming');
     setError(undefined);
     try {
-      if (compatibility?.token) {
-        await writer.reconnect(cableId, current.snapshot.expected, side, pointId(selected), {
-          token: compatibility.token, accept_unknown: compatibility.verdict === 'UNKNOWN' && acceptUnknown,
-        });
+      const confirmation = compatibility ? await confirmCompatibility(compatibility) : undefined;
+      if (confirmation === null) {
+        setStep('review');
+        return;
+      }
+      setStep('writing');
+      if (confirmation) {
+        await writer.reconnect(cableId, current.snapshot.expected, side, pointId(selected), confirmation);
       } else {
         await writer.reconnect(cableId, current.snapshot.expected, side, pointId(selected));
       }
@@ -213,10 +217,6 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
             {ends(side === 'A' ? [endpoint(target, selected), current.ends[1]] : [current.ends[0], endpoint(target, selected)])}
             {compatibility &&
               <p role={compatibility.verdict === 'ALLOW' ? 'status' : 'alert'}>{compatibilityMessage(compatibility, t)}</p>}
-            {compatibility?.verdict === 'UNKNOWN' && <label>
-              <input type="checkbox" checked={acceptUnknown} disabled={busy} onChange={event => setAcceptUnknown(event.target.checked)} />
-              {t('compatibility.accept')}
-            </label>}
           </>}
         </>}
       </>}
@@ -236,5 +236,6 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
           <button type="button" onClick={() => void refreshMap()}>{t('map.retryRefresh')}</button>}
       </div>
     </div>
+    {confirmationDialog}
   </section>;
 }

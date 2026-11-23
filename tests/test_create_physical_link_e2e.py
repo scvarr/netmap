@@ -1,7 +1,6 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
-from tests.cable_type_fixtures import copper_cable_fields
 from tests.l1_builders import create_device, interface_id, post_confirmed_physical
 
 
@@ -13,7 +12,7 @@ def test_create_physical_link_materializes_a_canonical_cable_and_reachable_l1_pa
 
     response = post_confirmed_physical(client,
         "/v1/topology/physical-links",
-        json={**copper_cable_fields(), "source_interface_id": interface_id(source), "target_interface_id": interface_id(target)},
+        json={"source_interface_id": interface_id(source), "target_interface_id": interface_id(target)},
     )
 
     assert response.status_code == 201

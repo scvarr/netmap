@@ -16,3 +16,9 @@ Object.defineProperty(globalThis, 'fetch', {
   writable: true,
   value: () => Promise.resolve(new Response('{"status":"ok"}', { status: 200 })),
 });
+
+// JSDOM has no top layer. The Chromium checks exercise the native modal behavior.
+if (!HTMLDialogElement.prototype.showModal) {
+  HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  HTMLDialogElement.prototype.close = function () { this.open = false; };
+}

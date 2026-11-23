@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app import models as m
 from app.errors import NetMapError
 from app.schemas import (
-    CableSpecification, PhysicalCompatibilityConfirmation, PhysicalCompatibilityPair,
+    PhysicalCompatibilityConfirmation, PhysicalCompatibilityPair,
     PhysicalCompatibilityPreview, PhysicalCompatibilityReason, PhysicalCompatibilityVerdict,
 )
 
@@ -23,25 +23,17 @@ _PRIORITY = {"ALLOW": 0, "UNKNOWN": 1, "DENY": 2}
 
 
 def check_pair(
-    index: int, cable: m.CableType, a: m.PortType | None, b: m.PortType | None, marked: bool,
+    index: int, a: m.PortType | None, b: m.PortType | None, marked: bool,
 ) -> PhysicalCompatibilityPair:
     contradictions: list[PhysicalCompatibilityReason] = []
     unknowns: list[PhysicalCompatibilityReason] = []
-    known = [port for port in (a, b) if port is not None]
     if a is None:
         unknowns.append("PORT_A_TYPE_UNRESOLVED")
     if b is None:
         unknowns.append("PORT_B_TYPE_UNRESOLVED")
-    if any(port.medium != cable.medium for port in known):
-        contradictions.append("MEDIUM_MISMATCH")
-    if cable.medium == "FIBER":
-        optical = [port for port in known if port.medium == "FIBER"]
-        if any(port.fiber_mode not in (None, cable.fiber_mode) for port in optical):
-            contradictions.append("FIBER_MODE_MISMATCH")
-        if any(port.fiber_mode is None for port in optical):
-            unknowns.append("FIBER_MODE_UNDOCUMENTED")
-
     if a is not None and b is not None:
+        if a.medium != b.medium:
+            contradictions.append("MEDIUM_MISMATCH")
         modes = {a.compatibility_mode, b.compatibility_mode}
         if (a.id != b.id and "SAME_TYPE" in modes) or ("MATRIX" in modes and (modes != {"MATRIX"} or not marked)):
             contradictions.append("PORT_TYPES_NOT_ALLOWED")
@@ -100,7 +92,7 @@ def _port_provenance(session: Session, points: dict[uuid.UUID, m.ConnectionPoint
 
 
 def verify_compatibility(
-    session: Session, spec: CableSpecification,
+    session: Session,
     pairs: list[tuple[m.ConnectionPoint | None, m.ConnectionPoint | None]],
     *, intent: object, preview: bool, confirmation: PhysicalCompatibilityConfirmation | None,
 ) -> PhysicalCompatibilityPreview:
@@ -108,7 +100,6 @@ def verify_compatibility(
         points = {point.id: point for pair in pairs for point in pair if point is not None}
         provenance = _port_provenance(session, points)
         ports = _locked_types(session, m.PortType, {row[2] for row in provenance.values()})
-        cable = _locked_types(session, m.CableType, {spec.cable_type_id})[spec.cable_type_id]
         marked_pairs = set(session.execute(
             select(m.PortTypeCompatibility.port_type_a_id, m.PortTypeCompatibility.port_type_b_id)
             .where(m.PortTypeCompatibility.port_type_a_id.in_(ports),
@@ -132,17 +123,17 @@ def verify_compatibility(
             state.append((
                 (point.id, point.physical_object_id, point.cardinality) if point is not None else None,
                 row,
-                (port.medium, port.members, port.fiber_mode, port.compatibility_mode, port.is_active)
+                (port.medium, port.members, port.compatibility_mode, port.is_active)
                 if port is not None else None,
             ))
         a, b = pair_types
         marked = a is not None and b is not None and tuple(sorted((a.id, b.id))) in marked_pairs
-        results.append(check_pair(index, cable, a, b, marked))
+        results.append(check_pair(index, a, b, marked))
         state.append(marked)
 
     verdict: PhysicalCompatibilityVerdict = max((pair.verdict for pair in results), key=_PRIORITY.__getitem__)
     payload = json.dumps(
-        [intent, spec.cable_type_id, cable.medium, cable.construction, cable.fiber_mode, cable.is_active, state, verdict],
+        [intent, state, verdict],
         default=str, separators=(",", ":"),
     ).encode()
     token = hmac.digest(_TOKEN_KEY, payload, "sha256").hex()

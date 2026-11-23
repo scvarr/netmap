@@ -9,8 +9,7 @@ test('install a vertical board and fixed SFP transceivers, then keep their cable
     expect(response.ok(), await response.text()).toBe(true);
     return response.json();
   };
-  const port = await post('/port-types', { name, color: '#336699', medium: 'COPPER', members: ['1'], compatibility_mode: 'SAME_TYPE' });
-  const cable = await post('/cable-types', { name, color: '#336699', medium: 'COPPER', construction: 'TWISTED_PAIR' });
+  const port = await post('/port-types', { name, color: '#336699', medium: 'FIBER', members: ['1'], compatibility_mode: 'SAME_TYPE' });
   const mounts = await (await request.get('/api/v1/module-port-types')).json();
   const sfp = mounts.find((mount: { name: string }) => mount.name === 'SFP')
     ?? await post('/module-port-types', { name: 'SFP' });
@@ -41,7 +40,11 @@ test('install a vertical board and fixed SFP transceivers, then keep their cable
   await page.getByLabel('Модель', { exact: true }).fill(name + ' optic');
   await page.getByLabel('Тип гнезда трансивера').selectOption(sfp.id);
   await page.getByRole('combobox', { name: 'Тип порта', exact: true }).selectOption(port.id);
+  await page.getByLabel('Тип волокна').selectOption('SM');
+  const published = page.waitForResponse(result => result.request().method() === 'POST' && result.url().endsWith('/module-templates'));
   await page.getByRole('button', { name: 'Создать шаблон', exact: true }).click();
+  const model = await (await published).json();
+  expect(model.transceiver.fiber_type).toBe('SM');
   await expect(page).toHaveURL(/tab=transceivers/);
 
   const installOptic = async (suffix: string, onBoard = false) => {
@@ -79,7 +82,10 @@ test('install a vertical board and fixed SFP transceivers, then keep their cable
     const installation = page.waitForRequest(candidate =>
       candidate.method() === 'POST' && candidate.url().endsWith('/module-installations'));
     await equipment.getByRole('button', { name: 'Установить', exact: true }).click();
-    expect((await installation).postDataJSON().orientation).toBe('HORIZONTAL');
+    const installRequest = (await installation).postDataJSON();
+    expect(installRequest.orientation).toBe('HORIZONTAL');
+    expect(installRequest).not.toHaveProperty('fiber_type');
+    await expect(equipment.getByLabel('Тип волокна')).toHaveCount(0);
     const marker = page.locator('rect[data-endpoint-id]');
     await expect(marker).toHaveCount(1);
     const outline = page.locator('rect[data-transceiver-outline]');
@@ -96,10 +102,18 @@ test('install a vertical board and fixed SFP transceivers, then keep their cable
   };
   const peer = await installOptic(' B');
   const source = await installOptic(' A', true);
+  const workspace = await (await request.get('/api/v1/workspace/package')).json();
+  const installed = workspace.authoring.ModuleInstallation.filter(
+    (item: { module_revision_id: string }) => item.module_revision_id === model.revision_id,
+  );
+  expect(installed).toHaveLength(2);
+  expect(workspace.authoring.ModuleTemplateRevision.find(
+    (revision: { id: string }) => revision.id === model.revision_id,
+  ).transceiver.fiber_type).toBe('SM');
+
   await page.getByRole('button', { name: 'Подключить порт', exact: true }).click();
   await page.getByLabel('Целевой физический объект').selectOption(peer.objectId);
   await page.getByLabel('Свободный физический порт').selectOption(peer.pointId);
-  await page.getByLabel('Тип кабеля').selectOption(cable.id);
   await page.getByLabel('Имя кабеля').fill(name + ' cable');
   await page.getByRole('button', { name: 'Подключить', exact: true }).click();
   await expect(page.getByText(name + ' cable', { exact: false })).toBeVisible();

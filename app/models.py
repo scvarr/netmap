@@ -249,9 +249,6 @@ class Cable(Base):
     connection_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("connections.id", ondelete="CASCADE"), nullable=False
     )
-    cable_type_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("cable_types.id", ondelete="RESTRICT"), index=True,
-    )
     # Mutable user-facing metadata.  It is deliberately not identity or topology.
     label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     connection: Mapped[Connection] = relationship(back_populates="cable")
@@ -1370,37 +1367,12 @@ class ModuleTemplatePublication(Base):
     id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_candidates.id", ondelete="CASCADE"), primary_key=True)
     revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_revisions.id", ondelete="CASCADE"), unique=True, nullable=False)
 
-class CableType(Base):
-    __tablename__ = "cable_types"
-    __table_args__ = (
-        Index("uq_cable_types_normalized_name", func.lower(sa.text("name")), unique=True),
-        CheckConstraint("name <> ''", name="nonempty_name"),
-        CheckConstraint("color ~ '^#[0-9A-F]{6}$'", name="hex_color"),
-        CheckConstraint("medium IN ('COPPER', 'FIBER')", name="medium"),
-        CheckConstraint("construction <> ''", name="nonempty_construction"),
-        CheckConstraint("(medium = 'COPPER' AND fiber_mode IS NULL) OR "
-                        "(medium = 'FIBER' AND fiber_mode IS NOT NULL AND fiber_mode IN ('SM', 'MM'))",
-                        name="fiber_mode"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[str | None] = mapped_column(sa.Text)
-    color: Mapped[str] = mapped_column(String(7), nullable=False)
-    is_active: Mapped[bool] = mapped_column(nullable=False)
-    medium: Mapped[str] = mapped_column(String(6))
-    construction: Mapped[str] = mapped_column(String(255))
-    fiber_mode: Mapped[str | None] = mapped_column(String(2))
-
-
 class PortType(Base):
     __tablename__ = "port_types"
     __table_args__ = (
         Index("uq_port_types_normalized_name", func.lower(sa.text("name")), unique=True),
         CheckConstraint("medium IN ('COPPER', 'FIBER')", name="medium"),
         CheckConstraint("jsonb_array_length(members) >= 1", name="nonempty_members"),
-        CheckConstraint("fiber_mode IS NULL OR (medium = 'FIBER' AND fiber_mode IN ('SM', 'MM'))",
-                        name="fiber_mode"),
         CheckConstraint("compatibility_mode IN ('SAME_TYPE', 'MATRIX', 'UNDEFINED')", name="compatibility_mode"),
         CheckConstraint("name <> ''", name="nonempty_name"),
         CheckConstraint("color ~ '^#[0-9A-F]{6}$'", name="hex_color"),
@@ -1413,7 +1385,6 @@ class PortType(Base):
     is_active: Mapped[bool] = mapped_column(nullable=False)
     medium: Mapped[str] = mapped_column(String(6))
     members: Mapped[list[str]] = mapped_column(JSONB)
-    fiber_mode: Mapped[str | None] = mapped_column(String(2))
     compatibility_mode: Mapped[str] = mapped_column(String(9), default="UNDEFINED")
 
     @property

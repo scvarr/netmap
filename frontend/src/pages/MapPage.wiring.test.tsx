@@ -1,10 +1,8 @@
-import { selectCableType, stubCableCatalog } from '../testCableCatalog';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { MapPage } from './MapPage';
 import { createMapPageHarness } from './MapPage.testHarness';
 
-beforeEach(stubCableCatalog);
 afterEach(() => vi.unstubAllGlobals());
 
 vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (p: any) => <div data-testid="canvas"><button onClick={() => p.onPhysicalPortClick?.({ physicalObjectId: 'a', connectionPointId: 'a-cp', label: 'A01' })}>blueprint port</button><button onClick={() => p.onPhysicalPortClick?.({ physicalObjectId: 'b', connectionPointId: 'b-cp', label: 'B01' })}>generic port</button><button onClick={() => p.onPaneClick?.({ x: 10, y: 20 })}>pane 1</button><span data-states={JSON.stringify(p.physicalPortStates)} data-preview={JSON.stringify(p.wiringRoute)} /></div> }));
@@ -44,16 +42,16 @@ describe('MapPage visual wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'blueprint port' }));
     expect(screen.getByText('Выберите конечный свободный порт')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'generic port' }));
-    expect(screen.getByRole('button', { name: 'Создать кабель' })).toBeDisabled();
-    await selectCableType();
-    expect(screen.queryByRole('option', { name: 'Archived fiber' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Создать кабель' })).toBeEnabled();
+
+
     expect(screen.queryByLabelText(/Разъём [AB]/)).not.toBeInTheDocument();
     expect(screen.getByText('Source / A01 → Target / B01')).toBeInTheDocument();
     expect(screen.queryByText('Источник: Source / A01')).not.toBeInTheDocument();
     expect(screen.queryByText('Назначение: Target / B01')).not.toBeInTheDocument();
     expect(write).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
-    await waitFor(() => expect(write).toHaveBeenCalledWith({ cable_type_id: 'copper', source: { kind: 'CONNECTION_POINT', connection_point_id: 'a-cp', member_index: 1 }, target: { kind: 'CONNECTION_POINT', connection_point_id: 'b-cp', member_index: 1 }, cable_label: null, cable_label_template_id: null, generate_cable_label: false }));
+    await waitFor(() => expect(write).toHaveBeenCalledWith({ source: { kind: 'CONNECTION_POINT', connection_point_id: 'a-cp', member_index: 1 }, target: { kind: 'CONNECTION_POINT', connection_point_id: 'b-cp', member_index: 1 }, cable_label: null, cable_label_template_id: null, generate_cable_label: false }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Соединить порты' })).not.toBeInTheDocument());
     expect(write).toHaveBeenCalledTimes(1);
     expect(maps.loadMap).toHaveBeenCalledTimes(mapReads + 1);
@@ -62,7 +60,7 @@ describe('MapPage visual wiring', () => {
 
   it('retries only projection refresh after a successful write', async () => {
     const write = vi.fn().mockResolvedValue(creation); let physicalReads = 0; const loadProjection = vi.fn((request: any) => request.layer === 'L1' && ++physicalReads === 2 ? Promise.reject(new Error('refresh')) : Promise.resolve(doc));
-    renderPage(write, loadProjection); await screen.findByTestId('canvas'); startWiring(); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); await selectCableType(); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
+    renderPage(write, loadProjection); await screen.findByTestId('canvas'); startWiring(); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
     expect(await screen.findByText('Кабель создан, но карту не удалось обновить.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Соединить порты' })).not.toBeInTheDocument());
@@ -72,7 +70,7 @@ describe('MapPage visual wiring', () => {
 
   it('passes generated and manual Cable naming through the map create request and requires a template for generation', async () => {
     const { write } = renderPage(); await screen.findByTestId('canvas');
-    startWiring(); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); await selectCableType();
+    startWiring(); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' }));
     fireEvent.click(screen.getByRole('radio', { name: 'Сгенерировать по шаблону' })); await screen.findByRole('option', { name: 'FC' }); expect(screen.getByRole('button', { name: 'Создать кабель' })).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Шаблон'), { target: { value: 'template-1' } }); expect(screen.getByRole('button', { name: 'Создать кабель' })).not.toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
@@ -80,7 +78,7 @@ describe('MapPage visual wiring', () => {
   });
   it('passes a manual Cable label through the map create request without generation', async () => {
     const { write } = renderPage(); await screen.findByTestId('canvas');
-    startWiring(); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); await selectCableType();
+    startWiring(); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' }));
     fireEvent.change(screen.getByLabelText('Имя кабеля'), { target: { value: 'MANUAL-01' } }); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
     await waitFor(() => expect(write).toHaveBeenCalledWith(expect.objectContaining({ cable_label: 'MANUAL-01', cable_label_template_id: null, generate_cable_label: false })));
   });
@@ -92,7 +90,7 @@ describe('MapPage visual wiring', () => {
     startWiring();
     fireEvent.click(screen.getByText('blueprint port'));
     fireEvent.click(screen.getByText('pane 1'));
-    fireEvent.click(screen.getByText('generic port')); await selectCableType();
+    fireEvent.click(screen.getByText('generic port'));
     const preview = JSON.parse(canvas.querySelector('span')!.dataset.preview!);
     expect(Object.keys(preview)).toEqual(['source', 'target']);
     expect(preview.source.connectionPointId).toBe('a-cp');
@@ -108,7 +106,7 @@ describe('MapPage visual wiring', () => {
     await screen.findByTestId('canvas');
     startWiring();
     fireEvent.click(screen.getByText('blueprint port'));
-    fireEvent.click(screen.getByText('generic port')); await selectCableType();
+    fireEvent.click(screen.getByText('generic port'));
     fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
     await screen.findByRole('alert');
     expect(screen.getByText('Source / A01 → Target / B01')).toBeInTheDocument();

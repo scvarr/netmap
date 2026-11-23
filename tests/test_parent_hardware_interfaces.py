@@ -9,7 +9,6 @@ from app.database import SessionLocal
 from app.models import HardwareInterfaceAssociation
 from app.repository import CanonicalRepository
 from tests import test_base_template_review as base_review
-from tests.cable_type_fixtures import copper_cable_fields
 from tests.test_base_template_publication import publish
 from tests.test_hardware_configuration import base_payload, client, create_base, create_object
 from tests.test_module_reconciliation import apply, package, revision
@@ -68,7 +67,6 @@ def test_empty_ports_have_distinct_owned_interfaces_and_no_physical_endings(hard
     assert uninstall(object_id, leaf["id"]).status_code == 200
     assert package()["canonical"] == canonical
     response = client.post("/v1/topology/physical-connections", json={
-        **copper_cable_fields(),
         "source": {"kind": "NETWORK_INTERFACE", "network_interface_id": child["network_interface_id"]},
         "target": {"kind": "NETWORK_INTERFACE", "network_interface_id": direct["network_interface_id"]},
     })
@@ -80,7 +78,7 @@ def test_roundtrip_and_prewrite_validation(hardware):
     object_id, board, direct = create_installation(hardware)
     other_id, other_board, _ = create_installation(hardware)
     original = package()
-    assert original["format_version"] == 16
+    assert original["format_version"] == 17
     assert client.delete("/v1/workspace/dataset").status_code == 204
     empty = package()
     for mutation in ("foreign_owner", "foreign_parent", "wrong_place", "wrong_key", "duplicate", "missing",

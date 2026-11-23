@@ -873,6 +873,8 @@ class TransceiverSpecifications(BaseModel):
     reach_m: FiniteFloat | None = Field(default=None, gt=0)
     tx_wavelength_nm: FiniteFloat | None = Field(default=None, gt=0)
     rx_wavelength_nm: FiniteFloat | None = Field(default=None, gt=0)
+    # Immutable revisions can contain previously recorded text. New authoring
+    # validates SM/MM against the selected PortType's medium.
     fiber_type: str | None = Field(default=None, max_length=255)
     notes: str | None = Field(default=None, max_length=4000)
 
@@ -1167,12 +1169,6 @@ class BaseTemplateRevisionDocument(BaseModel):
     bays: list[ModuleBayRequest]
 
 
-class CableSpecification(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    cable_type_id: uuid.UUID
-
-
 class PhysicalCompatibilityConfirmation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1183,8 +1179,7 @@ class PhysicalCompatibilityConfirmation(BaseModel):
 PhysicalCompatibilityVerdict = Literal["ALLOW", "DENY", "UNKNOWN"]
 PhysicalCompatibilityReason = Literal[
     "MEDIUM_MISMATCH", "PORT_TYPES_NOT_ALLOWED", "PORT_COMPATIBILITY_UNDEFINED",
-    "PORT_A_TYPE_UNRESOLVED", "PORT_B_TYPE_UNRESOLVED", "FIBER_MODE_MISMATCH",
-    "FIBER_MODE_UNDOCUMENTED", "COMPATIBLE",
+    "PORT_A_TYPE_UNRESOLVED", "PORT_B_TYPE_UNRESOLVED", "COMPATIBLE",
 ]
 
 
@@ -1200,7 +1195,7 @@ class PhysicalCompatibilityPreview(BaseModel):
     token: str | None
 
 
-class CreatePhysicalLinkRequest(CableSpecification):
+class CreatePhysicalLinkRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     source_interface_id: uuid.UUID
@@ -1244,7 +1239,7 @@ PhysicalEndpointRequest = Annotated[
 ]
 
 
-class CreatePhysicalEndpointConnectionRequest(CableSpecification):
+class CreatePhysicalEndpointConnectionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     source: PhysicalEndpointRequest
@@ -1261,7 +1256,7 @@ class BulkPhysicalPointPair(BaseModel):
     target: ConnectionPointPhysicalEndpointRequest
 
 
-class CreateBulkPhysicalConnectionsRequest(CableSpecification):
+class CreateBulkPhysicalConnectionsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     pairs: list[BulkPhysicalPointPair] = Field(min_length=1, max_length=256)
     template_id: uuid.UUID | None = None

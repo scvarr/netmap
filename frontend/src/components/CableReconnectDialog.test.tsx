@@ -57,15 +57,17 @@ it.each(['DENY', 'UNKNOWN'] as const)('gates reconnect confirmation for %s', asy
   const warning = await screen.findByRole('alert');
   const submit = screen.getByRole('button', { name: 'Подтвердить переподключение' });
   expect(check).toHaveBeenCalledExactlyOnceWith('cable', expected, 'B', 'c1');
-  expect(submit).toBeDisabled();
+  if (verdict === 'DENY') expect(submit).toBeDisabled();
   expect(reconnect).not.toHaveBeenCalled();
   if (verdict === 'DENY') {
     expect(warning).toHaveTextContent('режим или матрица запрещает пару типов');
     expect(screen.queryByRole('checkbox')).toBeNull();
   } else {
     expect(warning).toHaveTextContent('достоверный тип окончания B отсутствует');
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Продолжить с неподтверждённой совместимостью' }));
     fireEvent.click(submit);
+    await screen.findByRole('dialog', { name: 'Подтверждение физической совместимости' });
+    expect(reconnect).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Подтвердить и переподключить' }));
     await waitFor(() => expect(reconnect).toHaveBeenCalledExactlyOnceWith('cable', expected, 'B', 'c1', {
       token: 'preview-token', accept_unknown: true,
     }));

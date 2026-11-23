@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../i18n';
-import { confirmPhysicalCompatibility } from '../topology/physicalCompatibility';
+import { usePhysicalCompatibilityConfirmation } from './PhysicalCompatibilityDialog';
 import type {
   DeviceDetailsDataSource,
   DeviceDetailsDocument,
   DeviceInterfaceDetails,
 } from '../topology/deviceDetailsTypes';
 import type { CreatePhysicalLinkRequest, PhysicalLinkWriteDataSource } from '../topology/physicalLinkWriteTypes';
-import type { CableSpecification } from '../topology/physicalEndpointConnectionWriteTypes';
-import { CableSpecificationFields } from './CableSpecificationFields';
 import { CableNamingFields } from './CableNamingFields';
 import type { CableLabelDataSource, CableNamingInput } from '../topology/cableLabelTypes';
 
@@ -46,9 +44,10 @@ export function ConnectPhysicalInterface({
   const [targetInterfaceId, setTargetInterfaceId] = useState('');
   const [targetState, setTargetState] = useState<TargetState>({ kind: 'idle' });
   const [targetRetryKey, setTargetRetryKey] = useState(0);
+  const [busy, setBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const { confirm, confirmationDialog } = usePhysicalCompatibilityConfirmation();
   const [error, setError] = useState<string | null>(null);
-  const [cableSpec, setCableSpec] = useState<CableSpecification>({ cable_type_id: "" });
   const [cableNaming, setCableNaming] = useState<CableNamingInput>({ cable_label: null, cable_label_template_id: null, generate_cable_label: false });
 
   useEffect(() => {
@@ -83,24 +82,23 @@ export function ConnectPhysicalInterface({
   ), [sourceInterface.interface_ref.entity_id, targetState]);
 
   const submit = async () => {
-    if (!targetInterfaceId || !cableSpec.cable_type_id || submitting || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
-    setSubmitting(true);
+    if (!targetInterfaceId || busy || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
+    setBusy(true);
     setError(null);
     try {
       const request: CreatePhysicalLinkRequest = {
         source_interface_id: sourceInterface.interface_ref.entity_id,
         target_interface_id: targetInterfaceId,
-        ...cableSpec,
         ...cableNaming,
       };
       if (writeDataSource.previewPhysicalLink) {
-        const compatibility = confirmPhysicalCompatibility(await writeDataSource.previewPhysicalLink(request), t);
+        const compatibility = await confirm(await writeDataSource.previewPhysicalLink(request));
         if (!compatibility) return;
         request.compatibility = compatibility;
       }
+      setSubmitting(true);
       await writeDataSource.createPhysicalLink(request);
       setOpen(false);
-      setCableSpec({ cable_type_id: "" });
       setTargetDeviceId('');
       setTargetInterfaceId('');
       onConnected();
@@ -108,6 +106,7 @@ export function ConnectPhysicalInterface({
       setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
     } finally {
       setSubmitting(false);
+      setBusy(false);
     }
   };
 
@@ -117,6 +116,7 @@ export function ConnectPhysicalInterface({
         type="button"
         className="connect-interface__trigger"
         aria-expanded={open}
+        disabled={busy}
         onClick={() => {
           setOpen((value) => !value);
           setError(null);
@@ -132,7 +132,7 @@ export function ConnectPhysicalInterface({
             <select
               value={targetDeviceId}
               onChange={(event) => setTargetDeviceId(event.target.value)}
-              disabled={submitting}
+              disabled={busy}
             >
               <option value="">Выберите устройство</option>
               {targetDevices.map((device) => (
@@ -147,7 +147,7 @@ export function ConnectPhysicalInterface({
             <select
               value={targetInterfaceId}
               onChange={(event) => setTargetInterfaceId(event.target.value)}
-              disabled={submitting || targetState.kind !== 'loaded'}
+              disabled={busy || targetState.kind !== 'loaded'}
             >
               <option value="">Выберите интерфейс</option>
               {targetInterfaces.map((item) => (
@@ -174,18 +174,18 @@ export function ConnectPhysicalInterface({
               Не удалось подключить интерфейс. {error}
             </p>
           )}
-          <CableSpecificationFields value={cableSpec} onChange={setCableSpec} disabled={submitting} />
-          <CableNamingFields dataSource={cableLabelDataSource} disabled={submitting} value={cableNaming} onChange={setCableNaming} />
+          <CableNamingFields dataSource={cableLabelDataSource} disabled={busy} value={cableNaming} onChange={setCableNaming} />
           <div className="connect-interface__actions">
-            <button type="button" onClick={() => setOpen(false)} disabled={submitting}>
+            <button type="button" onClick={() => setOpen(false)} disabled={busy}>
               Отмена
             </button>
-            <button type="submit" disabled={!targetInterfaceId || !cableSpec.cable_type_id || submitting || (cableNaming.generate_cable_label === true && !cableNaming.cable_label_template_id)}>
-              {submitting ? 'Подключаем…' : error ? 'Повторить' : 'Подключить'}
+            <button type="submit" disabled={!targetInterfaceId || busy || (cableNaming.generate_cable_label === true && !cableNaming.cable_label_template_id)}>
+              {submitting ? 'Подключаем…' : busy ? t('compatibility.checking') : error ? 'Повторить' : 'Подключить'}
             </button>
           </div>
         </form>
       )}
+      {confirmationDialog}
     </div>
   );
 }

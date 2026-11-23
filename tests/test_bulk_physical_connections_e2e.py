@@ -7,7 +7,6 @@ from app.database import SessionLocal
 from app.main import app
 from app.models import Cable, CableLabelHistory, Connection, ConnectionMember
 from app.repository import CanonicalRepository, ConnectionMemberInput
-from tests.cable_type_fixtures import copper_cable_fields
 from tests.l1_builders import confirmed_payload, create_object_with_point, point_endpoint, post_confirmed_physical
 
 
@@ -26,7 +25,7 @@ def points(name: str, count: int) -> list[str]:
 
 
 def request(source: list[str], target: list[str], **naming):
-    return {**copper_cable_fields(), "pairs": [{"source": point_endpoint(a), "target": point_endpoint(b)} for a, b in zip(source, target)], **naming}
+    return {"pairs": [{"source": point_endpoint(a), "target": point_endpoint(b)} for a, b in zip(source, target)], **naming}
 
 
 def counts():
@@ -47,7 +46,7 @@ def test_ordered_reverse_batch_creates_independent_connections_and_cables():
 def test_occupied_duplicate_and_missing_point_reject_entire_batch():
     source, target = points("source", 2), points("target", 2)
     other = points("other", 1)[0]
-    assert post_confirmed_physical(client,"/v1/topology/physical-connections", json={**copper_cable_fields(), "source": point_endpoint(source[1]), "target": point_endpoint(other)}).status_code == 201
+    assert post_confirmed_physical(client,"/v1/topology/physical-connections", json={"source": point_endpoint(source[1]), "target": point_endpoint(other)}).status_code == 201
     before = counts()
     for body in (
         request(source, target),

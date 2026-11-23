@@ -8,10 +8,10 @@ from app.database import SessionLocal
 from app.models import BuiltInEndpointMapping, ObjectConfiguration
 from app.module_geometry import initial_geometry
 from app.physical_connections import ConnectionPointEndpoint, PhysicalConnectionCatalog
-from app.schemas import CableSpecification, PhysicalCompatibilityConfirmation
+from app.schemas import PhysicalCompatibilityConfirmation
 from tests.module_port_type_fixtures import ensure_module_bay_type_id
 from tests.l1_builders import confirmed_payload, create_object_with_point, point_endpoint
-from tests.test_typed_cables_e2e import CREATE, catalog_item
+from tests.test_cable_lines_e2e import CREATE, catalog_item
 from tests.test_workspace_portability import client, isolated_workspace, snapshot
 
 
@@ -41,15 +41,9 @@ def typed_points(name, *types):
     ]
 
 
-def port(name, medium, mode="UNDEFINED", fiber_mode=None):
+def port(name, medium, mode="UNDEFINED"):
     return catalog_item("port-types", name=name, medium=medium, members=["1"],
-                        compatibility_mode=mode, fiber_mode=fiber_mode)["id"]
-
-
-def cable_spec(medium, fiber_mode=None):
-    cable = catalog_item("cable-types", name="Line", medium=medium, construction="Documented line",
-                         fiber_mode=fiber_mode)
-    return {"cable_type_id": cable["id"]}
+                        compatibility_mode=mode)["id"]
 
 
 def pair(a, b):
@@ -63,19 +57,18 @@ def preview(url, payload):
     return response.json()
 
 
-@pytest.mark.parametrize(("medium", "port_medium", "mode", "line_fiber", "port_fiber", "reason", "verdict"), [
-    ("COPPER", "COPPER", "SAME_TYPE", None, None, "COMPATIBLE", "ALLOW"),
-    ("COPPER", "COPPER", "UNDEFINED", None, None, "PORT_COMPATIBILITY_UNDEFINED", "UNKNOWN"),
-    ("COPPER", "FIBER", "UNDEFINED", None, None, "MEDIUM_MISMATCH", "DENY"),
-    ("FIBER", "FIBER", "SAME_TYPE", "MM", "SM", "FIBER_MODE_MISMATCH", "DENY"),
-    ("FIBER", "FIBER", "SAME_TYPE", "SM", "SM", "COMPATIBLE", "ALLOW"),
-    ("FIBER", "FIBER", "SAME_TYPE", "SM", None, "FIBER_MODE_UNDOCUMENTED", "UNKNOWN"),
+@pytest.mark.parametrize(("medium_a", "medium_b", "mode", "reason", "verdict"), [
+    ("FIBER", "FIBER", "SAME_TYPE", "COMPATIBLE", "ALLOW"),
+    ("COPPER", "COPPER", "SAME_TYPE", "COMPATIBLE", "ALLOW"),
+    ("COPPER", "COPPER", "UNDEFINED", "PORT_COMPATIBILITY_UNDEFINED", "UNKNOWN"),
+    ("COPPER", "FIBER", "UNDEFINED", "MEDIUM_MISMATCH", "DENY"),
 ])
-def test_pair_compatibility(medium, port_medium, mode, line_fiber, port_fiber, reason, verdict):
-    type_id = port("Documented port", port_medium, mode, port_fiber)
-    _, (a,) = typed_points("A", type_id)
-    _, (b,) = typed_points("B", type_id)
-    payload = {**pair(a, b), **cable_spec(medium, line_fiber)}
+def test_pair_compatibility(medium_a, medium_b, mode, reason, verdict):
+    type_a = port("LC Simplex" if medium_a == "FIBER" else "RJ45", medium_a, mode)
+    type_b = type_a if medium_a == medium_b else port("LC Simplex", medium_b, mode)
+    _, (a,) = typed_points("A", type_a)
+    _, (b,) = typed_points("B", type_b)
+    payload = pair(a, b)
     before = snapshot()
     check = preview(CREATE, payload)
     assert check["verdict"] == verdict and reason in check["pairs"][0]["reasons"]
@@ -104,9 +97,8 @@ def test_bulk_is_atomic_and_requires_a_fresh_operation_confirmation():
     fiber = port("Fiber", "FIBER")
     _, (a, b) = typed_points("Source", copper, copper)
     _, (c, d, e) = typed_points("Target", copper, copper, fiber)
-    spec = cable_spec("COPPER")
     url = f"{CREATE}/bulk"
-    valid = {"pairs": [pair(a, c), pair(b, d)], **spec}
+    valid = {"pairs": [pair(a, c), pair(b, d)]}
     before = snapshot()
     check = preview(url, valid)
     assert check["verdict"] == "UNKNOWN"
@@ -131,17 +123,15 @@ def test_bulk_is_atomic_and_requires_a_fresh_operation_confirmation():
 def test_bulk_conflict_with_concurrent_single_create_leaves_other_pair_free():
     _, (a, b) = typed_points("Source", *(port("Copper", "COPPER"),) * 2)
     _, (c, d) = typed_points("Target", *(port("Target copper", "COPPER"),) * 2)
-    spec = cable_spec("COPPER")
     url = f"{CREATE}/bulk"
-    payload = {"pairs": [pair(a, c), pair(b, d)], **spec}
+    payload = {"pairs": [pair(a, c), pair(b, d)]}
     confirmed = confirmed_payload(preview(url, payload), payload)
-    single = {**pair(b, d), **spec}
+    single = pair(b, d)
     single_token = confirmed_payload(preview(CREATE, single), single)["compatibility"]
     with ThreadPoolExecutor(max_workers=1) as worker:
         with SessionLocal.begin() as session:
             PhysicalConnectionCatalog(session).create_endpoint_link(
                 ConnectionPointEndpoint(uuid.UUID(b)), ConnectionPointEndpoint(uuid.UUID(d)),
-                cable_spec=CableSpecification.model_validate(spec),
                 compatibility=PhysicalCompatibilityConfirmation.model_validate(single_token),
             )
             competing = worker.submit(client.post, url, json=confirmed)
@@ -178,7 +168,7 @@ def test_module_endpoint_uses_the_installed_revision_port_type():
     })
     assert installation.status_code == 201, installation.text
     (endpoint,) = installation.json()["bays"][0]["installation"]["endpoints"]
-    payload = {**pair(endpoint["connection_point_id"], peer), **cable_spec("COPPER")}
+    payload = {**pair(endpoint["connection_point_id"], peer)}
     assert preview(CREATE, payload)["verdict"] == "ALLOW"
 
 
@@ -187,7 +177,7 @@ def test_reconnect_checks_the_matching_end_and_rechecks_changed_data_under_locks
     _, (a,) = typed_points("Source", type_id)
     _, b = create_object_with_point(client, "Passive ODF")
     owner, (destination,) = typed_points("Destination", type_id)
-    payload = {**pair(a, b), **cable_spec("COPPER"), "cable_label": "CAB01/1/48"}
+    payload = {**pair(a, b), "cable_label": "CAB01/1/48"}
     response = client.post(CREATE, json=confirmed_payload(preview(CREATE, payload), payload))
     assert response.status_code == 201, response.text
     cable_id = response.json()["cable_ref"]["entity_id"]
@@ -239,10 +229,9 @@ def test_matrix_is_symmetric_and_preview_tracks_rules_not_names():
     third = port("Fiber", "FIBER", "MATRIX")
     _, (a,) = typed_points("A", first)
     _, (b,) = typed_points("B", second)
-    spec = cable_spec("COPPER")
     matrix = "/v1/port-type-compatibilities"
-    left = {**pair(a, b), **spec}
-    right = {**pair(b, a), **spec}
+    left = pair(a, b)
+    right = pair(b, a)
 
     def update(port_id, **changes):
         url = f"/v1/port-types/{port_id}"

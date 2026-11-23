@@ -386,7 +386,7 @@ class HardwareCatalog:
         definition = query.model_dump(mode="json")
         validate_module_authoring(definition)
         validate_transceiver_authoring(definition)
-        validate_port_type_assignments(self.session, definition["endpoints"])
+        validate_port_type_assignments(self.session, definition["endpoints"], transceiver=definition.get("transceiver"))
         validate_mount_types(self.session, module_assignments(definition))
         template = ModuleTemplate(name=query.name)
         self.session.add(template)

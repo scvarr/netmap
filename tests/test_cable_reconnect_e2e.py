@@ -12,7 +12,6 @@ from app.models import CableLabelHistory, Connection, ConnectionMember, Connecti
 from app.physical_connections import ConnectionPointEndpoint, PhysicalConnectionCatalog
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from app.schemas import CableReconnectRequest, PhysicalCompatibilityConfirmation
-from tests.cable_type_fixtures import copper_cable_fields, copper_cable_spec
 from tests.l1_builders import confirmed_payload, create_object_with_point, point_endpoint, post_confirmed_physical
 
 
@@ -21,7 +20,7 @@ CREATE = "/v1/topology/physical-connections"
 
 
 def create(a, b, **naming):
-    return post_confirmed_physical(client, CREATE, json={**copper_cable_fields(), "source": point_endpoint(a), "target": point_endpoint(b), **naming})
+    return post_confirmed_physical(client, CREATE, json={"source": point_endpoint(a), "target": point_endpoint(b), **naming})
 
 
 def preview(url):
@@ -175,14 +174,14 @@ def test_reconnect_and_create_serialize_on_new_point(cable, first_writer):
     _, peer = create_object_with_point(client, "peer")
     payload = {"expected": preview(url), "side": "A", "new_point_id": destination}
     payload = reconnect_payload(url, payload)
-    create_request = {"source": point_endpoint(destination), "target": point_endpoint(peer), **copper_cable_fields()}
+    create_request = {"source": point_endpoint(destination), "target": point_endpoint(peer)}
     create_confirmation = confirmed_payload(client.post(f"{CREATE}?preview=true", json=create_request).json(), {})
     with ThreadPoolExecutor(max_workers=1) as worker:
         with SessionLocal.begin() as session:
             catalog = PhysicalConnectionCatalog(session)
             if first_writer == "create":
                 catalog.create_endpoint_link(ConnectionPointEndpoint(uuid.UUID(destination)),
-                                             ConnectionPointEndpoint(uuid.UUID(peer)), cable_spec=copper_cable_spec(),
+                                             ConnectionPointEndpoint(uuid.UUID(peer)),
                                              compatibility=PhysicalCompatibilityConfirmation.model_validate(create_confirmation["compatibility"]))
                 competing = worker.submit(client.post, url, json=payload).result(timeout=5)
                 assert competing.status_code == 409

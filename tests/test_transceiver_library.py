@@ -32,9 +32,9 @@ def physical_definition(mount, model, connector, medium, members, specifications
 
 @pytest.mark.parametrize("model,connector,medium,members,specifications", [
     ("SFP+ 10G LR", "LC Duplex", "FIBER", ["TX", "RX"],
-     {"speed_mbps": 10000, "reach_m": 10000, "tx_wavelength_nm": 1310, "rx_wavelength_nm": 1310, "fiber_type": "OS2"}),
+     {"speed_mbps": 10000, "reach_m": 10000, "tx_wavelength_nm": 1310, "rx_wavelength_nm": 1310, "fiber_type": "SM"}),
     ("SFP BiDi", "LC Simplex", "FIBER", ["BiDi"],
-     {"speed_mbps": 1000, "tx_wavelength_nm": 1310, "rx_wavelength_nm": 1490}),
+     {"speed_mbps": 1000, "tx_wavelength_nm": 1310, "rx_wavelength_nm": 1490, "fiber_type": "MM"}),
     ("SFP 1000BASE-T", "RJ45", "COPPER", ["Pair group"], {"speed_mbps": 1000, "reach_m": 100}),
 ])
 def test_transceiver_library_lifecycle(model, connector, medium, members, specifications):
@@ -43,6 +43,9 @@ def test_transceiver_library_lifecycle(model, connector, medium, members, specif
     board_installation = created(install(object_id, board, "root"))["bays"][0]["installation"]["id"]
     definition, port_type = physical_definition(mount, model, connector, medium, members, specifications)
     before = package()
+    if medium == "COPPER":
+        invalid = client.post(LIBRARY, json={**definition, "transceiver": {"fiber_type": "SM"}})
+        reason(invalid, 422, "TRANSCEIVER_FIBER_MODE")
     transceiver = created(client.post(LIBRARY, json=definition))
     tid = transceiver["template_id"]
     assert transceiver["mount_kind"] == "MODULE_PORT"
@@ -59,6 +62,8 @@ def test_transceiver_library_lifecycle(model, connector, medium, members, specif
     draft = open_draft(tid)
     revised_specifications = {**specifications, "manufacturer": "Example", "part_number": "A-1",
                               "description": "Field model", "notes": "Qualified at the lab"}
+    if medium == "FIBER":
+        revised_specifications["fiber_type"] = "MM" if specifications["fiber_type"] == "SM" else "SM"
     saved = save(tid, draft, {**draft["definition"], "transceiver": revised_specifications})
     assert open_draft(tid)["definition"]["transceiver"] == revised_specifications
     checked = check(tid, saved)
@@ -76,7 +81,7 @@ def test_transceiver_library_lifecycle(model, connector, medium, members, specif
     assert "transceiver" not in latest[structural["template_id"]]
 
     exported = package()
-    assert exported["format_version"] == 16
+    assert exported["format_version"] == 17
     assert exported["canonical"] == before["canonical"]
     assert exported["authoring"]["ModuleInstallation"] == before["authoring"]["ModuleInstallation"]
     historical = next(row for row in exported["authoring"]["ModuleTemplateRevision"]
@@ -101,10 +106,10 @@ def test_structural_installation_stays_pinned_after_physical_revision():
     created(install(object_id, structural, "SFP port", parent))
     created(install(object_id, structural, "top-sfp"))
     tid = structural["template_id"]
-    definition, _ = physical_definition(mount, "Updated model", "Lab duplex", "FIBER", ["Duplex"], {})
+    definition, _ = physical_definition(mount, "Updated model", "Lab duplex", "FIBER", ["Duplex"], {"fiber_type": "MM"})
     before = package()
     checked = check(tid, save(tid, open_draft(tid), definition))
-    assert checked["review"]["definition"]["transceiver"] == {}
+    assert checked["review"]["definition"]["transceiver"] == {"fiber_type": "MM"}
     for impact in checked["review"]["result"]["installations"]:
         assert {entry["code"] for entry in impact["reasons"]} == {"TRANSCEIVER_BINDING_REQUIRED"}
     assert len(checked["review"]["result"]["installations"]) == 2
@@ -119,10 +124,12 @@ def test_structural_installation_stays_pinned_after_physical_revision():
 
 def test_incompatible_definitions_and_historical_endings():
     _, obj, board, _, mount = setup()
-    definition, port_type = physical_definition(mount, "Optic", "Lab negative", "FIBER", ["TX", "RX"], {})
+    definition, port_type = physical_definition(mount, "Optic", "Lab negative", "FIBER", ["TX", "RX"], {"fiber_type": "SM"})
     before = package()
     for change in (
         {"transceiver": None},
+        {"transceiver": {}},
+        {"transceiver": {"fiber_type": "OS2"}},
         {"transceiver": {"reach_m": -10}},
         {"transceiver": {"speed_mbps": "10"}},
         {"endpoints": [], "geometry": initial_geometry([])},

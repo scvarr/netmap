@@ -88,7 +88,6 @@ export function App(props: AppProps) {
         <Route path="catalogs/port-types" element={<PhysicalCatalogPage key="port-types" catalog="port-types" />} />
         <Route path="catalogs/module-port-types" element={<PhysicalCatalogPage key="module-port-types" catalog="module-port-types" />} />
         <Route path="catalogs/module-bay-types" element={<PhysicalCatalogPage key="module-bay-types" catalog="module-bay-types" />} />
-        <Route path="catalogs/cable-types" element={<PhysicalCatalogPage key="cable-types" catalog="cable-types" />} />
         <Route path="settings/data" element={<WorkspaceDataPage />} />
         <Route path="library/base-templates" element={props.baseTemplateDataSource ? <BaseTemplateLibraryPage dataSource={props.baseTemplateDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/module-templates/new" element={<NewModuleTemplatePage />} />

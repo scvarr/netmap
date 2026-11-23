@@ -21,42 +21,7 @@ def catalog_item(path, **fields):
     return response.json()
 
 
-def test_requires_active_type_before_single_or_bulk_writes():
-    _, a = create_object_with_point(client, "A")
-    _, b = create_object_with_point(client, "B")
-    pair = {"source": point_endpoint(a), "target": point_endpoint(b)}
-    cable_type = catalog_item("cable-types", name="Twisted pair", medium="COPPER",
-                              construction="TWISTED_PAIR", is_active=False)
-    type_url = f"/v1/cable-types/{cable_type['id']}"
-    before = snapshot()
-    for fields in ({}, {"cable_type_id": str(uuid.uuid4())}, {"cable_type_id": cable_type["id"]}):
-        assert client.post(CREATE, json={**pair, **fields}).status_code == 422
-        assert client.post(f"{CREATE}/bulk", json={"pairs": [pair], **fields}).status_code == 422
-        assert snapshot() == before
-
-    assert client.delete(type_url).status_code == 204
-    before = snapshot()
-    assert client.post(CREATE, json={**pair, "cable_type_id": cable_type["id"]}).status_code == 422
-    assert snapshot() == before
-
-    copper = catalog_item("cable-types", name="Copper", medium="COPPER", construction="TWISTED_PAIR")
-    before = snapshot()
-    assert client.post(CREATE, json={
-        **pair, "cable_type_id": copper["id"], "connector_b_type_id": str(uuid.uuid4()),
-    }).status_code == 422
-    assert snapshot() == before
-    response = post_confirmed_physical(client, CREATE, json={**pair, "cable_type_id": copper["id"]})
-    assert response.status_code == 201, response.text
-    graph = snapshot()["canonical"]
-    cable, = graph["Cable"]
-    connection, = graph["Connection"]
-    member, = graph["ConnectionMember"]
-    assert cable["cable_type_id"] == copper["id"]
-    assert connection["cardinality"] == member["point_a_member"] == member["point_b_member"] == 1
-
-
-def test_independent_fibers_keep_ids_types_and_history_after_reconnect_and_import():
-    fiber = catalog_item("cable-types", name="Single mode", medium="FIBER", construction="Glass", fiber_mode="SM")
+def test_independent_fibers_keep_ids_and_history_after_reconnect_and_import():
     with SessionLocal.begin() as session:
         device_catalog = DeviceCatalog(session)
         repo = CanonicalRepository(session)
@@ -69,7 +34,6 @@ def test_independent_fibers_keep_ids_types_and_history_after_reconnect_and_impor
     for index in range(2):
         response = post_confirmed_physical(client, CREATE, json={
             "source": point_endpoint(str(a[index])), "target": point_endpoint(str(b[index])),
-            "cable_type_id": fiber["id"],
             "cable_label": f"CAB01/{index + 1}/24",
         })
         assert response.status_code == 201, response.text
@@ -80,14 +44,7 @@ def test_independent_fibers_keep_ids_types_and_history_after_reconnect_and_impor
     assert len(set(ids)) == len(graph["Cable"]) == len(graph["Connection"]) == len(graph["ConnectionMember"]) == 2
     assert all(member["point_a_member"] == member["point_b_member"] == 1 for member in graph["ConnectionMember"])
     assert {c["label"] for c in graph["Cable"]} == {"CAB01/1/24", "CAB01/2/24"}
-    assert {c["cable_type_id"] for c in graph["Cable"]} == {fiber["id"]}
-    assert all(set(c) == {"id", "connection_id", "cable_type_id", "label"} for c in graph["Cable"])
-
-    url = f"/v1/cable-types/{fiber['id']}"
-    payload = {key: value for key, value in fiber.items() if key != "id"}
-    assert client.put(url, json={**payload, "fiber_mode": "MM"}).status_code == 409
-    assert client.put(url, json={**payload, "is_active": False}).status_code == 200
-    assert client.delete(url).status_code == 409
+    assert all(set(cable) == {"id", "connection_id", "label"} for cable in graph["Cable"])
 
     cable_url = f"/v1/cables/{ids[0]}"
     assert client.put(f"{cable_url}/label", json={"label": "CAB01/Renamed/24"}).status_code == 204
@@ -105,16 +62,16 @@ def test_independent_fibers_keep_ids_types_and_history_after_reconnect_and_impor
     assert client.delete("/v1/workspace/dataset").status_code == 204
     empty = snapshot()
     bad = copy.deepcopy(reloaded)
-    del bad["canonical"]["Cable"][0]["cable_type_id"]
+    bad["canonical"]["Cable"][0]["cable_type_id"] = str(uuid.uuid4())
     assert client.post(PACKAGE, json=bad).status_code == 422
     assert snapshot() == empty
     bad = copy.deepcopy(reloaded)
-    bad["canonical"]["Cable"][0]["cable_type_id"] = str(uuid.uuid4())
+    bad["canonical"]["Cable"][0]["connection_id"] = str(uuid.uuid4())
     assert client.post(PACKAGE, json=bad).status_code == 422
     bad = copy.deepcopy(reloaded)
     bad["canonical"]["Connection"][0]["cardinality"] = 2
     assert client.post(PACKAGE, json=bad).status_code == 422
-    assert client.post(PACKAGE, json={**reloaded, "format_version": 9}).status_code == 422
+    assert client.post(PACKAGE, json={**reloaded, "format_version": 16}).status_code == 422
     assert snapshot() == empty
     response = client.post(PACKAGE, json=reloaded)
     assert response.status_code == 204, response.text

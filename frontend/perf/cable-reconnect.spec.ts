@@ -10,7 +10,6 @@ test('moves an existing cable on a saved physical variant and rereads after a pr
     return response.json();
   };
   const portType = await api('/port-types', { name, color: '#336699', medium: 'COPPER', members: ['1'] });
-  const cableType = await api('/cable-types', { name, color: '#336699', medium: 'COPPER', construction: 'TWISTED_PAIR' });
   const numbers = Array.from({ length: 48 }, (_, index) => index + 1);
   const shuffled = numbers.map((_, index) => numbers[(index * 17 + 12) % numbers.length]);
   const slotKey = (index: number) => `slot-${String(index + 1).padStart(2, '0')}`;
@@ -32,7 +31,7 @@ test('moves an existing cable on a saved physical variant and rereads after a pr
     };
   }));
   const endpoint = (connection_point_id: string) => ({ kind: 'CONNECTION_POINT', connection_point_id, member_index: 1 });
-  const wiring = { cable_type_id: cableType.id, source: endpoint(a.ports[0]), target: endpoint(b.ports[0]), cable_label: name };
+  const wiring = { source: endpoint(a.ports[0]), target: endpoint(b.ports[0]), cable_label: name };
   const compatibility = await api('/topology/physical-connections?preview=true', wiring);
   const cable = await api('/topology/physical-connections', {
     ...wiring, compatibility: { token: compatibility.token, accept_unknown: true },
@@ -93,8 +92,8 @@ test('moves an existing cable on a saved physical variant and rereads after a pr
   let writes = 0;
   page.on('request', req => { if (req.method() === 'POST' && req.url().endsWith(reconnectUrl)) writes++; });
   await page.route('**/api/v1/topology/projection', route => route.abort(), { times: 1 });
-  await dialog.getByRole('checkbox', { name: 'Продолжить с неподтверждённой совместимостью' }).check();
   await dialog.getByRole('button', { name: 'Подтвердить переподключение' }).click();
+  await page.getByRole('button', { name: 'Подтвердить и переподключить' }).click();
   await expect(dialog.getByRole('alert')).toContainText('Кабель переподключён');
   await dialog.getByRole('button', { name: 'Повторить обновление' }).click();
   await expect(dialog).toBeHidden();

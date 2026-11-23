@@ -12,7 +12,7 @@ beforeEach(() => {
     if (path === 'module-port-types') return Response.json([{ id: 'sfp-plus', name: 'SFP+', is_active: true }]);
     if (path === 'port-types') return Response.json([{
       id: 'lr', name: 'Optical LR', color: '#336699', medium: 'FIBER', is_active: true,
-      cardinality: 2, members: ['TX', 'RX'], fiber_mode: 'SM', compatibility_mode: 'SAME_TYPE',
+      cardinality: 2, members: ['TX', 'RX'], compatibility_mode: 'SAME_TYPE',
     }]);
     return Response.json([]);
   }));
@@ -30,7 +30,8 @@ it('creates a physical transceiver with catalog UUIDs and optional typed charact
   fireEvent.change(screen.getByLabelText('Тип гнезда трансивера'), { target: { value: 'sfp-plus' } });
   expect(submit).toBeDisabled();
   fireEvent.change(screen.getByLabelText('Тип порта', { selector: 'select' }), { target: { value: 'lr' } });
-  expect(await screen.findByText('SM')).toBeInTheDocument();
+  expect(screen.getByLabelText('Тип волокна')).toHaveValue('');
+  fireEvent.change(screen.getByLabelText('Тип волокна'), { target: { value: 'SM' } });
   expect(screen.getByText('Физические каналы (2)')).toBeInTheDocument();
   expect(screen.getByText('TX · RX')).toBeInTheDocument();
   expect(screen.getByText(/с одним физическим каналом/)).toBeInTheDocument();
@@ -41,7 +42,7 @@ it('creates a physical transceiver with catalog UUIDs and optional typed charact
   await waitFor(() => expect(createModule).toHaveBeenCalledWith(expect.objectContaining({
     name: 'SFP+ 10G LR', mount_kind: 'MODULE_PORT', module_port_type_id: 'sfp-plus',
     endpoints: [expect.objectContaining({ kind: 'CONNECTION_POINT', port_type_id: 'lr' })],
-    transceiver: { speed_mbps: 10000 },
+    transceiver: { speed_mbps: 10000, fiber_type: 'SM' },
   })));
 });
 
@@ -52,7 +53,7 @@ it('saves a characteristics-only edit and publishes the checked generation', asy
       name: 'SFP+ 10G LR', mount_kind: 'MODULE_PORT', module_port_type_id: 'sfp-plus',
       geometry: { ...initialModuleGeometry(), endpoints: { external: { x: 0.5, y: 0.5 } } },
       endpoints: [{ key: 'external', kind: 'CONNECTION_POINT', display_name: 'External', port_type_id: 'lr' }],
-      transceiver: { speed_mbps: 10000 },
+      transceiver: { speed_mbps: 10000, fiber_type: 'SM' },
     },
   };
   const dataSource: ModuleReviewDataSource = {
@@ -72,6 +73,7 @@ it('saves a characteristics-only edit and publishes the checked generation', asy
       element={<EditModuleTemplatePage transceiverRoute dataSource={dataSource} />} /></Routes>
   </MemoryRouter></I18nProvider>);
   fireEvent.change(await screen.findByLabelText('Артикул'), { target: { value: 'OPT-1310' } });
+  fireEvent.change(await screen.findByLabelText('Тип волокна'), { target: { value: 'MM' } });
   const check = screen.getByRole('button', { name: 'Проверить изменения' });
   expect(check).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
@@ -84,5 +86,6 @@ it('saves a characteristics-only edit and publishes the checked generation', asy
   expect(dataSource.checkDraft).toHaveBeenCalledWith('optic', 2);
   expect(dataSource.publishCandidate).toHaveBeenCalledWith('optic', 'approved');
   expect(screen.getByLabelText('Артикул')).toHaveValue('OPT-1310');
+  expect(screen.getByLabelText('Тип волокна')).toHaveValue('MM');
   unmount();
 });

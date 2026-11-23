@@ -1,4 +1,3 @@
-from tests.cable_type_fixtures import copper_cable_fields
 from tests.l1_builders import create_device as build_device, create_object_details, post_confirmed_physical
 from fastapi.testclient import TestClient
 
@@ -13,7 +12,7 @@ def device(name: str) -> tuple[str, str]:
 def test_inventory_authoritatively_separates_equipment_from_canonical_cables():
     source_object, source_interface = device('SW1')
     target_object, target_interface = device('FW1')
-    created = post_confirmed_physical(client,'/v1/topology/physical-links', json={**copper_cable_fields(), 'source_interface_id': source_interface, 'target_interface_id': target_interface})
+    created = post_confirmed_physical(client,'/v1/topology/physical-links', json={'source_interface_id': source_interface, 'target_interface_id': target_interface})
     assert created.status_code == 201
     cable_id = created.json()['cable_ref']['entity_id']
     document = client.get('/v1/catalog/inventory')
@@ -31,7 +30,7 @@ def test_inventory_authoritatively_separates_equipment_from_canonical_cables():
 def test_inventory_has_no_cable_as_physical_object_rows():
     first, first_interface = device('A')
     second, second_interface = device('B')
-    created = post_confirmed_physical(client,'/v1/topology/physical-links', json={**copper_cable_fields(), 'source_interface_id': first_interface, 'target_interface_id': second_interface}).json()
+    created = post_confirmed_physical(client,'/v1/topology/physical-links', json={'source_interface_id': first_interface, 'target_interface_id': second_interface}).json()
     cable_id = created['cable_ref']['entity_id']
     body = client.get('/v1/catalog/inventory').json()
     assert cable_id not in {item['physical_object_ref']['entity_id'] for item in body['equipment']}

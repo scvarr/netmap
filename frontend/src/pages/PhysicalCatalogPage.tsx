@@ -4,28 +4,27 @@ import { useSearchParams } from 'react-router-dom';
 import { useI18n } from '../i18n';
 import { PageHeader, PageShell } from '../components/PageChrome';
 
-import { compatibilityModes, type CableType, type CatalogType, type CompatibilityMode, type FiberMode, type Medium, type PortType } from '../components/PortTypeSelect';
+import { compatibilityModes, type CatalogType, type CompatibilityMode, type Medium, type PortType } from '../components/PortTypeSelect';
 
 import type { MountType } from '../components/ModulePortTypeSelect';
 
-type Catalog = 'module-bay-types' | 'module-port-types' | 'port-types' | 'cable-types';
-type Item = PortType | CableType | MountType;
+type Catalog = 'module-bay-types' | 'module-port-types' | 'port-types';
+type Item = PortType | MountType;
 type Fields = Omit<CatalogType, 'id'>;
 type Payload = Omit<MountType, 'id'> & Partial<Fields> & ReturnType<typeof structureOf>;
-const titles = { 'module-bay-types': 'moduleBayTypes.title', 'module-port-types': 'modulePortTypes.title', 'port-types': 'portTypes.title', 'cable-types': 'physicalCatalog.cableTypes' } as const;
-const createLabels = { 'module-bay-types': 'moduleBayTypes.create', 'module-port-types': 'modulePortTypes.create', 'port-types': 'portTypes.create', 'cable-types': 'physicalCatalog.createCable' } as const;
+const titles = { 'module-bay-types': 'moduleBayTypes.title', 'module-port-types': 'modulePortTypes.title', 'port-types': 'portTypes.title', } as const;
+const createLabels = { 'module-bay-types': 'moduleBayTypes.create', 'module-port-types': 'modulePortTypes.create', 'port-types': 'portTypes.create', } as const;
 const emptyStructure = {
-  medium: 'COPPER' as Medium, members: '', fiber_mode: '' as FiberMode | '',
-  compatibility_mode: 'UNDEFINED' as CompatibilityMode, construction: '',
+  medium: 'COPPER' as Medium, members: '',
+  compatibility_mode: 'UNDEFINED' as CompatibilityMode,
 };
 const matrixUrl = '/api/v1/port-type-compatibilities';
 type CompatibilityPair = { port_type_a_id: string; port_type_b_id: string };
 
 function structureOf(item: Item) {
   if ('members' in item) {
-    return { medium: item.medium, members: item.members, fiber_mode: item.fiber_mode, compatibility_mode: item.compatibility_mode };
+    return { medium: item.medium, members: item.members, compatibility_mode: item.compatibility_mode };
   }
-  if ('construction' in item) return { medium: item.medium, construction: item.construction, fiber_mode: item.fiber_mode };
   return {};
 }
 
@@ -141,12 +140,12 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
   function save(event: FormEvent) {
     event.preventDefault();
     const fields = modular ? { name: form.name, is_active: form.is_active } : form;
-    const physical = { medium: structure.medium, fiber_mode: structure.fiber_mode || null };
-    const payload = modular ? {} : catalog === 'port-types'
-      ? { ...physical, members: structure.members.split('\n').map(member => member.trim()).filter(Boolean),
-          compatibility_mode: structure.compatibility_mode }
-      : { ...physical, construction: structure.construction };
-    void mutate(editingId ? 'PUT' : 'POST', editingId, { ...fields, ...payload });
+    const structurePayload = modular ? {} : {
+      medium: structure.medium,
+      members: structure.members.split('\n').map(member => member.trim()).filter(Boolean),
+      compatibility_mode: structure.compatibility_mode,
+    };
+    void mutate(editingId ? 'PUT' : 'POST', editingId, { ...fields, ...structurePayload });
   }
 
   const query = search.trim().toLocaleLowerCase(locale);
@@ -177,19 +176,11 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
           </div>
           {!modular && <><div className="port-types-form__fields">
             <label>{t('physicalCatalog.medium')}
-              <select value={structure.medium} onChange={event => setStructure({ ...structure, medium: event.target.value as Medium, fiber_mode: '' })}>
+              <select value={structure.medium} onChange={event => setStructure({ ...structure, medium: event.target.value as Medium })}>
                 <option value="COPPER">{t('physicalCatalog.COPPER')}</option>
                 <option value="FIBER">{t('physicalCatalog.FIBER')}</option>
               </select>
             </label>
-            {structure.medium === 'FIBER' && <label>{t('physicalCatalog.fiberMode')}
-              <select required={catalog === 'cable-types'} value={structure.fiber_mode}
-                onChange={event => setStructure({ ...structure, fiber_mode: event.target.value as FiberMode | '' })}>
-                <option value="">{t('physicalCatalog.UNDEFINED')}</option>
-                <option value="SM">SM</option>
-                <option value="MM">MM</option>
-              </select>
-            </label>}
             {catalog === 'port-types' && <>
               <label>{t('physicalCatalog.members')}
                 <textarea required rows={3} value={structure.members} onChange={event => setStructure({ ...structure, members: event.target.value })} />
@@ -201,9 +192,6 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
                 </select>
               </label>
             </>}
-            {catalog === 'cable-types' && <label>{t('physicalCatalog.construction')}
-              <input required maxLength={255} value={structure.construction} onChange={event => setStructure({ ...structure, construction: event.target.value })} />
-            </label>}
           </div>
           <div className="blueprint-editor-color">
             <label>{t('portTypes.palette')} <input type="color" value={hex.test(form.color) ? form.color : emptyForm.color} onChange={(event) => setForm({ ...form, color: event.target.value.toUpperCase() })} /></label>
@@ -289,8 +277,6 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
                 {'members' in item && <> · {item.cardinality} <small>{item.members.join(', ')}</small>
                   <small>{t(`physicalCatalog.${item.compatibility_mode}`)}</small>
                 </>}
-                {'construction' in item && <> · {item.construction}</>}
-                {'fiber_mode' in item && item.fiber_mode && <> · {item.fiber_mode}</>}
               </td>
               <td><span className="port-types-swatch">
                 <span aria-hidden="true" style={{ backgroundColor: appearance.color }} />
@@ -300,9 +286,7 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
               <td><div className="catalog-table__actions">
                 <button className="secondary-action" type="button" disabled={busy} onClick={() => { setEditingId(id); setForm({ ...emptyForm, ...fields, ...appearance }); setStructure('members' in item ? {
                   ...emptyStructure, medium: item.medium, members: item.members.join('\n'),
-                  compatibility_mode: item.compatibility_mode, fiber_mode: item.fiber_mode ?? '',
-                } : 'construction' in item ? {
-                  ...emptyStructure, medium: item.medium, construction: item.construction, fiber_mode: item.fiber_mode ?? '',
+                  compatibility_mode: item.compatibility_mode,
                 } : emptyStructure); setError(null); }}>{t('portTypes.edit')}</button>
                 <button className="secondary-action" type="button" disabled={busy} onClick={() => void mutate('PUT', id, { ...physicalFields, ...appearance, ...fields, is_active: !fields.is_active })}>{t(fields.is_active ? 'portTypes.archive' : 'portTypes.restore')}</button>
                 {!fields.is_active && <button className="danger-action" type="button" disabled={busy} onClick={() => {

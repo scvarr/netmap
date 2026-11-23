@@ -7,7 +7,6 @@ import pytest
 from pydantic import ValidationError
 from app.schemas import ModuleBayRequest
 from app.workspace_portability import validate_package, PackageError
-from tests.cable_type_fixtures import copper_cable_fields
 from tests.test_hardware_configuration import base_payload, board_base_payload, create_base, create_object, create_module, install, client
 from tests.test_module_reconciliation import package
 from tests.test_module_layout import setup, revision, reconcile
@@ -31,7 +30,6 @@ def test_logical_configuration_atomic_install_and_archive():
     source = bays[payload['bays'][1]['bay_key']]['installation']['endpoints'][0]
     remote = create_object(base)
     connection = post_confirmed_physical(client,'/v1/topology/physical-connections', json={
-        **copper_cable_fields(),
         'source': {'kind': 'CONNECTION_POINT', 'connection_point_id': source['connection_point_id'], 'member_index': 1},
         'target': {'kind': 'CONNECTION_POINT', 'connection_point_id': remote['slots'][0]['connection_point_ref']['entity_id'], 'member_index': 1},
     })

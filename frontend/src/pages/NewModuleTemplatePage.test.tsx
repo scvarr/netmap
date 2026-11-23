@@ -8,8 +8,8 @@ import { hardwareModuleDataSource, initialModuleGeometry, type ModuleTemplateInp
 import { ModuleTemplateEditor } from '../components/ModuleTemplateEditor';
 
 const catalog = [
-  { id: 'test-type', name: 'Copper', color: '#336699', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, fiber_mode: null, compatibility_mode: 'UNDEFINED' },
-  { id: 'fiber', name: 'Fiber', color: '#FFAA00', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, fiber_mode: null, compatibility_mode: 'UNDEFINED' },
+  { id: 'test-type', name: 'Copper', color: '#336699', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, compatibility_mode: 'UNDEFINED' },
+  { id: 'fiber', name: 'Fiber', color: '#FFAA00', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, compatibility_mode: 'UNDEFINED' },
 ];
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async url => Response.json(String(url).endsWith('/module-bay-types') ? ['Parent A', 'Parent', 'PCIe'].map(name => ({ id: name, name, is_active: true })) : String(url).endsWith('/module-port-types') ? ['PCIe', 'Parent A', 'Parent', 'Lab / original', 'Lab / custom', 'Custom / 42'].map(name => ({ id: name, name, is_active: true })) : catalog)));

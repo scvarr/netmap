@@ -12,7 +12,6 @@ from app import models as m
 from app.base_template_review import BaseTemplateReview, published_definition
 from app.database import SessionLocal
 from app.hardware_catalog import HardwareCatalog
-from tests.cable_type_fixtures import copper_cable_spec
 from tests.test_base_template_review import check, open_draft, save
 from tests.test_hardware_configuration import client, create_base, create_board_base, create_object, create_module, install
 
@@ -45,7 +44,7 @@ def test_publication_preserves_old_objects_and_revisions_and_new_objects_pin_cur
         connection, _ = repository.add_connection(
             uuid.UUID(old['slots'][0]['connection_point_ref']['entity_id']), remote_point.id, 1,
             [ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)])
-        session.add(m.Cable(connection_id=connection.id, label='Preserved cable label', cable_type_id=copper_cable_spec().cable_type_id))
+        session.add(m.Cable(connection_id=connection.id, label='Preserved cable label'))
     checked = prepared(template_id)
     before = client.get('/v1/workspace/package').json()
     configuration = client.get(f'/v1/topology/physical-objects/{object_id}/configuration').json()
@@ -229,7 +228,7 @@ def test_published_workspace_v6_roundtrip_preserves_receipt_and_rebased_draft():
     create_object(template_id)
     draft = open_draft(template_id)
     package = client.get('/v1/workspace/package').json()
-    assert package['format_version'] == 16
+    assert package['format_version'] == 17
     assert client.delete('/v1/workspace/dataset').status_code == 204
     assert client.post('/v1/workspace/package', json=package).status_code == 204
     assert client.get('/v1/workspace/package').json() == package

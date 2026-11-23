@@ -12,8 +12,6 @@ export const compatibilityReasonKeys = {
   PORT_COMPATIBILITY_UNDEFINED: 'compatibility.portRuleUndefined',
   PORT_A_TYPE_UNRESOLVED: 'compatibility.portAType',
   PORT_B_TYPE_UNRESOLVED: 'compatibility.portBType',
-  FIBER_MODE_MISMATCH: 'compatibility.fiberMismatch',
-  FIBER_MODE_UNDOCUMENTED: 'compatibility.fiberMode',
   COMPATIBLE: 'compatibility.compatible',
 } as const;
 
@@ -34,20 +32,6 @@ export function compatibilityReasons(preview: PhysicalCompatibilityPreview, t: R
 export function compatibilityMessage(preview: PhysicalCompatibilityPreview, t: ReturnType<typeof useI18n>['t']): string {
   const headline = { ALLOW: 'compatibility.allowed', DENY: 'compatibility.denied', UNKNOWN: 'compatibility.unknown' } as const;
   return [t(headline[preview.verdict]), ...compatibilityReasons(preview, t)].join('\n');
-}
-
-export function confirmPhysicalCompatibility(
-  preview: PhysicalCompatibilityPreview,
-  t: ReturnType<typeof useI18n>['t'],
-): PhysicalCompatibilityConfirmation | null {
-  const { verdict, token } = preview;
-  if (verdict === 'ALLOW' && token) return { token, accept_unknown: false };
-  if (verdict === 'DENY') {
-    throw new PhysicalCompatibilityError(compatibilityMessage(preview, t));
-  }
-  return token && window.confirm(compatibilityMessage(preview, t))
-    ? { token, accept_unknown: true }
-    : null;
 }
 
 export async function requestPhysicalCompatibility(

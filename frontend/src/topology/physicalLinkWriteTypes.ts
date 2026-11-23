@@ -1,10 +1,9 @@
 import type { ProjectionSourceRef } from './types';
 import type { CableNamingInput } from './cableLabelTypes';
 
-import type { CableSpecification } from './physicalEndpointConnectionWriteTypes';
 import type { PhysicalCompatibilityConfirmation, PhysicalCompatibilityPreview } from './physicalCompatibility';
 
-export interface CreatePhysicalLinkRequest extends CableNamingInput, CableSpecification {
+export interface CreatePhysicalLinkRequest extends CableNamingInput {
   source_interface_id: string;
   target_interface_id: string;
   compatibility?: PhysicalCompatibilityConfirmation;

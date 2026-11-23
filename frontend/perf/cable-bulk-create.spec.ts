@@ -11,9 +11,7 @@ test('reviews, creates, deletes and recreates 48 lines with the same labels', as
     expect(response.ok(), await response.text()).toBe(true);
     return response.json();
   };
-  const portType = await post('/port-types', { name, color: '#336699', medium: 'COPPER', members: ['1'], compatibility_mode: 'SAME_TYPE' });
-  const cableType = await post('/cable-types', { name: `Витая пара · ${stamp}`, color: '#336699', medium: 'COPPER', construction: 'TWISTED_PAIR' });
-  const incompatibleType = await post('/cable-types', { name: `Оптическое волокно · ${stamp}`, color: '#336699', medium: 'FIBER', construction: 'Glass', fiber_mode: 'SM' });
+  const portType = await post('/port-types', { name, color: '#336699', medium: 'COPPER', members: ['1'], compatibility_mode: 'MATRIX' });
   const labelTemplate = await post('/cable-label-templates', { name: `C01/##/48 · ${stamp}`, pattern: 'C01/##/48', start_at: 1 });
   const numbers = Array.from({ length: 48 }, (_, index) => index + 1);
   const labels = numbers.map(number => `C01/${String(number).padStart(2, '0')}/48`);
@@ -112,7 +110,6 @@ test('reviews, creates, deletes and recreates 48 lines with the same labels', as
   };
   await previewLabels();
   await page.setViewportSize({ width: 1440, height: 900 });
-  await dialog.getByLabel('Тип кабеля').selectOption(incompatibleType.id);
   await button('Проверить совместимость').click();
   await expect(dialog.getByRole('alert')).toHaveText('Совместимость · DENY');
   await expect(button('Подтвердить создание')).toBeDisabled();
@@ -122,27 +119,30 @@ test('reviews, creates, deletes and recreates 48 lines with the same labels', as
   expect(await detail.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
   await dialog.getByLabel('Номер пары').selectOption('48');
   await expect(detail.getByRole('listitem')).toHaveCount(1);
-  await expect(detail.getByText(/Пара 48.*DENY.*среды кабеля и порта различаются/)).toBeVisible();
+  await expect(detail.getByText(/Пара 48.*DENY.*режим или матрица запрещает пару типов/)).toBeVisible();
   await checkLayout(300, 'Подтвердить создание');
   await capture('04-deny-detail-1440x900.png');
 
-  await dialog.getByLabel('Тип кабеля').selectOption(cableType.id);
+  const { id: portTypeId, cardinality: _cardinality, ...portFields } = portType;
+  const changeMode = async (mode: string) => {
+    const changed = await request.put(`/api/v1/port-types/${portTypeId}`, {
+      data: { ...portFields, compatibility_mode: mode },
+    });
+    expect(changed.ok(), await changed.text()).toBe(true);
+    await button('Назад').click();
+    await button('Предпросмотр').click();
+    await previewLabels();
+  };
+  await changeMode('SAME_TYPE');
   await button('Проверить совместимость').click();
   await expect(dialog.getByText('Совместимость · ALLOW')).toBeVisible();
   await expect(button('Подтвердить создание')).toBeEnabled();
-  const { id: portTypeId, cardinality: _cardinality, ...portFields } = portType;
-  const changed = await request.put(`/api/v1/port-types/${portTypeId}`, {
-    data: { ...portFields, compatibility_mode: 'UNDEFINED' },
-  });
-  expect(changed.ok(), await changed.text()).toBe(true);
-  await dialog.getByLabel('Тип кабеля').selectOption(incompatibleType.id);
-  await dialog.getByLabel('Тип кабеля').selectOption(cableType.id);
+  await changeMode('UNDEFINED');
   const checkUnknown = async () => {
     await button('Проверить совместимость').click();
     await expect(dialog.getByText('Совместимость · UNKNOWN')).toBeVisible();
     await expect(dialog.getByText('совместимость типов портов не определена · пар: 48')).toBeVisible();
-    await expect(dialog.getByRole('checkbox')).toHaveCount(1);
-    await expect(button('Подтвердить создание')).toBeDisabled();
+    await expect(button('Подтвердить создание')).toBeEnabled();
   };
   await page.setViewportSize({ width: 1280, height: 800 });
   await checkUnknown();
@@ -159,11 +159,10 @@ test('reviews, creates, deletes and recreates 48 lines with the same labels', as
     await button('Сопоставить').click();
     await button('Предпросмотр').click();
     await previewLabels();
-    await dialog.getByLabel('Тип кабеля').selectOption(cableType.id);
     await checkUnknown();
-    await dialog.getByRole('checkbox').check();
     const mutation = page.waitForResponse(response => response.url().endsWith('/physical-connections/bulk'));
     await button('Подтвердить создание').click();
+    await page.getByRole('button', { name: 'Подтвердить и создать' }).click();
     const response = await mutation;
     expect(response.status(), await response.text()).toBe(201);
     const { created } = await response.json();

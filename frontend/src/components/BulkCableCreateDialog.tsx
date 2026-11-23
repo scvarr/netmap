@@ -1,9 +1,9 @@
-import { CableSpecificationFields } from "./CableSpecificationFields";
+import { usePhysicalCompatibilityConfirmation } from './PhysicalCompatibilityDialog';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { BulkPhysicalConnectionError } from '../topology/apiPhysicalEndpointConnectionWriteDataSource';
 import type { CableLabelDataSource, CableLabelTemplate } from '../topology/cableLabelTypes';
-import type { CableSpecification, CreateBulkPhysicalConnectionsRequest, PhysicalEndpointConnectionWriteDataSource } from '../topology/physicalEndpointConnectionWriteTypes';
+import type { CreateBulkPhysicalConnectionsRequest, PhysicalEndpointConnectionWriteDataSource } from '../topology/physicalEndpointConnectionWriteTypes';
 import { compatibilityReasonKeys, type PhysicalCompatibilityPreview } from '../topology/physicalCompatibility';
 import type { ConnectionPointDetails, PhysicalObjectDetailsDataSource, PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
 import { isAvailablePhysicalPort } from '../topology/physicalPortAvailability';
@@ -141,12 +141,7 @@ function PortTable({ title, id, document, side, list, change, retry }: {
   </section>;
 }
 
-function BulkCompatibilitySummary({ preview, accepted, disabled, onAccept }: {
-  preview: PhysicalCompatibilityPreview;
-  accepted: boolean;
-  disabled: boolean;
-  onAccept: (accepted: boolean) => void;
-}) {
+function BulkCompatibilitySummary({ preview }: { preview: PhysicalCompatibilityPreview }) {
   const { t } = useI18n();
   const [pair, setPair] = useState<number>();
   const reasons = new Map<keyof typeof compatibilityReasonKeys, number>();
@@ -179,10 +174,6 @@ function BulkCompatibilitySummary({ preview, accepted, disabled, onAccept }: {
           )}</ul>
         </div>
       </details>
-    {preview.verdict === 'UNKNOWN' && <label className="bulk-create-accept">
-      <input type="checkbox" disabled={disabled} checked={accepted} onChange={event => onAccept(event.target.checked)} />
-      {t('compatibility.accept')}
-    </label>}
   </section>;
 }
 
@@ -195,7 +186,6 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
   const [target, setTarget] = useState(emptySide);
   const [revision, setRevision] = useState(0);
   const [pairs, setPairs] = useState<Pair[]>([]);
-  const [cableSpec, setCableSpec] = useState<CableSpecification>({ cable_type_id: "" });
   const [stage, setStage] = useState<'select' | 'pairs' | 'preview' | 'refresh-failed'>('select');
   const [templates, setTemplates] = useState<CableLabelTemplate[]>([]);
   const [templateId, setTemplateId] = useState('');
@@ -203,7 +193,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [compatibilityReview, setCompatibilityReview] = useState<{
-    requestKey: string; preview: PhysicalCompatibilityPreview; accepted: boolean;
+    requestKey: string; preview: PhysicalCompatibilityPreview;
   }>();
   const [busy, setBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -285,32 +275,32 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
     try { await refresh(); close(); }
     catch { setStage('refresh-failed'); }
   };
-  const ready = Boolean(cableSpec.cable_type_id) && pairs.length > 0 && !conflict && (!templateId || labels.length === pairs.length);
+  const ready = pairs.length > 0 && !conflict && (!templateId || labels.length === pairs.length);
   const request: CreateBulkPhysicalConnectionsRequest = {
-    ...cableSpec,
     pairs: pairs.map(pair => ({ source: endpoint(pair.source), target: endpoint(pair.target) })),
     template_id: templateId || null,
     expected_generated_labels: labels,
   };
   const requestKey = JSON.stringify(request);
   const review = compatibilityReview?.requestKey === requestKey ? compatibilityReview : undefined;
-  const canCreate = ready && review?.preview.verdict !== 'DENY' && (review?.preview.verdict !== 'UNKNOWN' || review.accepted);
+  const canCreate = ready && review?.preview.verdict !== 'DENY';
+  const { confirm, confirmationDialog } = usePhysicalCompatibilityConfirmation();
   const submit = () => run(async () => {
     if (stage !== 'preview' || !canCreate || !writer.createBulkPhysicalConnections) return;
     setError(null);
-    setSubmitting(true);
     try {
       let operation = request;
       if (writer.previewBulkPhysicalConnections && !review) {
         const preview = await writer.previewBulkPhysicalConnections(request);
-        setCompatibilityReview({ requestKey, preview, accepted: false });
+        setCompatibilityReview({ requestKey, preview });
         return;
       }
-      if (review?.preview.token) {
-        operation = { ...request, compatibility: {
-          token: review.preview.token, accept_unknown: review.preview.verdict === 'UNKNOWN' && review.accepted,
-        } };
+      if (review) {
+        const compatibility = await confirm(review.preview);
+        if (!compatibility) return;
+        operation = { ...request, compatibility };
       }
+      setSubmitting(true);
       await writer.createBulkPhysicalConnections(operation);
       await refreshAfterCreate();
     } catch (reason) {
@@ -405,8 +395,6 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
         </>}
         {stage === 'preview' && <>
           <div className="bulk-create-options">
-            <CableSpecificationFields value={cableSpec}
-              onChange={value => { setCompatibilityReview(undefined); setError(null); setCableSpec(value); }} disabled={busy || conflict} />
             {labelCatalog && writer.previewBulkCableLabels && <label className="physical-panel-picker">{t('map.bulk.naming')}
               <select value={templateId} disabled={busy || conflict} onChange={event => {
                 const id = event.target.value;
@@ -417,8 +405,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
               </select>
             </label>}
           </div>
-          {review && <BulkCompatibilitySummary key={requestKey} preview={review.preview} accepted={review.accepted}
-            disabled={busy} onAccept={accepted => setCompatibilityReview({ ...review, accepted })} />}
+          {review && <BulkCompatibilitySummary key={requestKey} preview={review.preview} />}
         </>}
         {busy && <p role="status">{t(submitting ? 'connect.connecting' : 'object.loading')}</p>}
         {error && <p role="alert">{error}</p>}
@@ -442,5 +429,6 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
         </div>
       </>}
     </div>
+    {confirmationDialog}
   </section>;
 }

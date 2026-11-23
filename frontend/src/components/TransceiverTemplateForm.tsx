@@ -3,17 +3,18 @@ import { moduleMount, mountTypeId, type ModuleTemplateInput, type TransceiverSpe
 import { MountTypeNotice, MountTypeSelect, useMountTypes } from './ModulePortTypeSelect';
 import { PortTypeNotice, PortTypeSelect, usePortTypes, type PortType } from './PortTypeSelect';
 
-const textFields = ['manufacturer', 'part_number', 'fiber_type', 'description', 'notes'] as const;
+const textFields = ['manufacturer', 'part_number', 'description', 'notes'] as const;
 const numericFields = ['speed_mbps', 'reach_m', 'tx_wavelength_nm', 'rx_wavelength_nm'] as const;
 
 export function TransceiverSpecificationFacts({ specifications }: { specifications?: TransceiverSpecifications }) {
   const { t } = useI18n();
   if (!specifications || !Object.keys(specifications).length) return null;
   return <dl>
-    {[...textFields, ...numericFields].map(field => {
+    {[...textFields, 'fiber_type' as const, ...numericFields].map(field => {
       const value = specifications[field];
       return value == null || value === '' ? null : <div key={field}>
-        <dt>{t(`transceiver.${field}`)}</dt><dd>{value}</dd>
+        <dt>{t(`transceiver.${field}`)}</dt>
+        <dd>{field === 'fiber_type' && (value === 'SM' || value === 'MM') ? t(`transceiver.${value}`) : value}</dd>
       </div>;
     })}
   </dl>;
@@ -30,7 +31,6 @@ export function TransceiverPortFacts({ endpoints, types }: {
       return <dl key={endpoint.key}>
         <dt>{t('portTypes.field')}</dt><dd>{port.name}</dd>
         <dt>{t('physicalCatalog.medium')}</dt><dd>{t(`physicalCatalog.${port.medium}`)}</dd>
-        {port.fiber_mode && <><dt>{t('physicalCatalog.fiberMode')}</dt><dd>{port.fiber_mode}</dd></>}
         <dt>{t('transceiver.members', { count: port.cardinality })}</dt>
         <dd>{port.members.join(' · ')}</dd>
       </dl>;
@@ -48,12 +48,16 @@ export function TransceiverTemplateForm({ value, onChange, disabled, creating }:
   const endpoint = value.endpoints[0];
   const editableEnding = !endpoint || (value.endpoints.length === 1 && endpoint.kind === 'CONNECTION_POINT');
   const portTypeId = endpoint?.port_type_id ?? '';
-  const hasPortType = portTypes?.some(port => port.id === portTypeId);
+  const selectedPortType = portTypes?.find(port => port.id === portTypeId);
+  const fiberType = value.transceiver?.fiber_type;
   const selectEnding = (id: string) => {
     if (id === portTypeId) return;
     const key = creating && endpoint ? endpoint.key : crypto.randomUUID();
+    const nextPort = portTypes?.find(port => port.id === id);
+    const transceiver = { ...value.transceiver };
+    if (nextPort?.medium !== 'FIBER') delete transceiver.fiber_type;
     onChange({
-      ...value, transceiver: value.transceiver ?? {},
+      ...value, transceiver,
       endpoints: [{ key, port_type_id: id, display_name: t('transceiver.termination'), kind: 'CONNECTION_POINT' }],
       geometry: { ...value.geometry, endpoints: { [key]: { x: 0.5, y: 0.5 } } },
     });
@@ -68,12 +72,20 @@ export function TransceiverTemplateForm({ value, onChange, disabled, creating }:
       </label>
       <MountTypeSelect label="transceiver.mount" types={mounts.MODULE_PORT.types}
         value={mountTypeId(value)} onChange={id => onChange({ ...value, ...moduleMount('MODULE_PORT', id) })} />
-      {editableEnding && <PortTypeSelect types={portTypes} value={hasPortType ? portTypeId : ''} onChange={selectEnding} />}
+      {editableEnding && <PortTypeSelect types={portTypes} value={selectedPortType ? portTypeId : ''} onChange={selectEnding} />}
     </div>
     {editableEnding && endpoint && !creating && <p>{t('transceiver.endingChange')}</p>}
     {!value.transceiver && !creating && <p>{t('transceiver.historical')}</p>}
     <TransceiverPortFacts endpoints={value.endpoints} types={catalog.types} />
-    {editableEnding && (creating || hasPortType) && <div className="port-types-form__fields">
+    {editableEnding && (creating || selectedPortType) && <div className="port-types-form__fields">
+      {selectedPortType?.medium === 'FIBER' && <label>{t('transceiver.fiber_type')}
+        <select required value={fiberType === 'SM' || fiberType === 'MM' ? fiberType : ''}
+          onChange={event => onChange({ ...value, transceiver: { ...value.transceiver, fiber_type: event.target.value || undefined } })}>
+          <option value="">{t('physicalCatalog.UNDEFINED')}</option>
+          <option value="SM">{t('transceiver.SM')}</option>
+          <option value="MM">{t('transceiver.MM')}</option>
+        </select>
+      </label>}
       {textFields.map(field => {
         const change = (text: string) => onChange({
           ...value, transceiver: { ...value.transceiver, [field]: text.trim() ? text : undefined },

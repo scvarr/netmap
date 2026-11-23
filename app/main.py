@@ -1072,7 +1072,6 @@ def create_physical_link(
         created = PhysicalConnectionCatalog(session).create_atomic_link(
             query.source_interface_id,
             query.target_interface_id,
-            cable_spec=query,
             cable_label=query.cable_label,
             cable_label_template_id=query.cable_label_template_id,
             generate_cable_label=query.generate_cable_label,
@@ -1153,7 +1152,6 @@ def create_physical_endpoint_connection(
         created = PhysicalConnectionCatalog(session).create_endpoint_link(
             endpoint(query.source),
             endpoint(query.target),
-            cable_spec=query,
             cable_label=query.cable_label,
             cable_label_template_id=query.cable_label_template_id,
             generate_cable_label=query.generate_cable_label,
@@ -1195,7 +1193,7 @@ def create_bulk_physical_connections(
     ]
     with session.begin():
         created = PhysicalConnectionCatalog(session).create_bulk_point_links(
-            pairs, cable_spec=query, template_id=query.template_id,
+            pairs, template_id=query.template_id,
             expected_generated_labels=query.expected_generated_labels,
             preview=preview, compatibility=query.compatibility,
         )

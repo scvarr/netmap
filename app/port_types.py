@@ -4,8 +4,7 @@ import uuid
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, field_validator, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, field_validator
 from sqlalchemy import cast, or_, select
 from sqlalchemy.dialects.postgresql import JSONPATH
 from sqlalchemy.exc import IntegrityError
@@ -14,13 +13,12 @@ from sqlalchemy.orm import Session
 from app.database import get_session
 from app.errors import ValidationError
 from app.models import (
-    BaseTemplateCandidate, BaseTemplateDraft, BuiltInEndpointDefinition, Cable, CableType,
+    BaseTemplateCandidate, BaseTemplateDraft, BuiltInEndpointDefinition,
     ModuleBay, ModuleBayType, ModuleEndpointDefinition, ModulePortType, ModuleTemplateCandidate,
     ModuleTemplateDraft, ModuleTemplateRevision, PortType, PortTypeCompatibility,
 )
 
 Medium = Literal["COPPER", "FIBER"]
-FiberMode = Literal["SM", "MM"]
 CompatibilityMode = Literal["SAME_TYPE", "MATRIX", "UNDEFINED"]
 StructuralLabel = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255, pattern=r"^[^\x00\r\n]+$")]
 DatabaseSession = Annotated[Session, Depends(get_session)]
@@ -57,14 +55,6 @@ class PortStructure(BaseModel):
 
     medium: Medium
     members: Annotated[list[StructuralLabel], Field(min_length=1)]
-    fiber_mode: FiberMode | None = None
-
-    @model_validator(mode="after")
-    def validate_fiber_mode(self):
-        if self.medium == "COPPER" and self.fiber_mode is not None:
-            raise PydanticCustomError("invalid_fiber_mode", "Copper port types cannot specify fiber mode")
-        return self
-
     @field_validator("members")
     @classmethod
     def unique_members(cls, members):
@@ -75,18 +65,6 @@ class PortStructure(BaseModel):
 
 class PortTypeInput(CatalogInput, PortStructure):
     compatibility_mode: CompatibilityMode = "UNDEFINED"
-
-
-class CableTypeInput(CatalogInput):
-    medium: Medium
-    construction: StructuralLabel
-    fiber_mode: FiberMode | None = None
-
-    @model_validator(mode="after")
-    def validate_fiber_mode(self):
-        if (self.medium == "FIBER") != (self.fiber_mode is not None):
-            raise PydanticCustomError("invalid_fiber_mode", "Fiber cable types require SM or MM. Copper cable types cannot specify fiber mode")
-        return self
 
 
 class MountTypeInput(BaseModel):
@@ -113,10 +91,6 @@ class PortTypeDocument(PortTypeInput, CatalogDocument):
     cardinality: int
 
 
-class CableTypeDocument(CableTypeInput, CatalogDocument):
-    pass
-
-
 class MountTypeDocument(MountTypeInput, CatalogDocument):
     pass
 
@@ -127,7 +101,7 @@ SNAPSHOT_SECTIONS = (
 )
 
 
-def validate_port_type_assignments(session, endpoints, previous=()):
+def validate_port_type_assignments(session, endpoints, previous=(), *, transceiver=None):
     retained = {(endpoint["key"], endpoint["port_type_id"]) for endpoint in previous}
     ids = {uuid.UUID(endpoint["port_type_id"]) for endpoint in endpoints}
     if not ids:
@@ -141,6 +115,14 @@ def validate_port_type_assignments(session, endpoints, previous=()):
         raise ValidationError("Port type not found")
     for endpoint in endpoints:
         item = types[uuid.UUID(endpoint["port_type_id"])]
+        if transceiver is not None:
+            fiber_type = transceiver.get("fiber_type")
+            if (item.medium == "FIBER" and fiber_type not in ("SM", "MM")
+                    or item.medium == "COPPER" and fiber_type is not None):
+                raise ValidationError(
+                    "Выберите SM или MM для оптической модели. Для медной модели режим не задаётся.",
+                    {"reason": "TRANSCEIVER_FIBER_MODE"},
+                )
         if not item.is_active and (endpoint["key"], endpoint["port_type_id"]) not in retained:
             raise ValidationError("An archived port type cannot be newly assigned")
         if endpoint["kind"] == "NETWORK_PORT" and item.cardinality != 1:
@@ -185,10 +167,8 @@ def _used(session, model, item_id):
     if model in (ModulePortType, ModuleBayType):
         field = "module_port_type_id" if model is ModulePortType else "module_bay_type_id"
         return session.scalar(select(or_(*_mount_type_usage(field, item_id))))
-    if model is PortType:
-        revisions, snapshots = _port_type_usage(item_id)
-        return session.scalar(select(or_(*revisions, *snapshots)))
-    return session.scalar(select(select(Cable.id).where(Cable.cable_type_id == item_id).exists()))
+    revisions, snapshots = _port_type_usage(item_id)
+    return session.scalar(select(or_(*revisions, *snapshots)))
 
 
 def _commit(session):
@@ -255,7 +235,6 @@ def catalog_router(path, tag, model, payload, document, structural_fields):
 
 router = APIRouter()
 router.include_router(catalog_router("port-types", "Port types", PortType, PortTypeInput, PortTypeDocument, PortStructure.model_fields))
-router.include_router(catalog_router("cable-types", "Cable types", CableType, CableTypeInput, CableTypeDocument, ("medium", "construction", "fiber_mode")))
 
 router.include_router(catalog_router("module-port-types", "Module port types", ModulePortType, MountTypeInput, MountTypeDocument, ()))
 

@@ -1,5 +1,4 @@
 from fastapi.testclient import TestClient
-from tests.cable_type_fixtures import copper_cable_fields
 from app.database import SessionLocal
 from app.device_catalog import DeviceCatalog
 
@@ -43,7 +42,7 @@ def post_confirmed_physical(client, url, *, json):
 def create_endpoint_cable(client: TestClient, source_point_id: str, target_point_id: str) -> dict:
     response = post_confirmed_physical(client,
         "/v1/topology/physical-connections",
-        json={**copper_cable_fields(), "source": point_endpoint(source_point_id), "target": point_endpoint(target_point_id)},
+        json={"source": point_endpoint(source_point_id), "target": point_endpoint(target_point_id)},
     )
     assert response.status_code == 201, response.text
     return response.json()
@@ -54,7 +53,7 @@ def create_interface_cable(client: TestClient, source_name: str = "A", target_na
     target = create_device(client, target_name)
     response = post_confirmed_physical(client,
         "/v1/topology/physical-links",
-        json={**copper_cable_fields(), "source_interface_id": interface_id(source), "target_interface_id": interface_id(target)},
+        json={"source_interface_id": interface_id(source), "target_interface_id": interface_id(target)},
     )
     assert response.status_code == 201, response.text
     return response.json()

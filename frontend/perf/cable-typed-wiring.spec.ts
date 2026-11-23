@@ -4,20 +4,21 @@ import { randomUUID } from 'node:crypto';
 for (const verdict of ['ALLOW', 'DENY', 'UNKNOWN'] as const) {
 test(`typed line on the physical map · ${verdict}`, async ({ page, request }) => {
   const runId = randomUUID();
-  const name = `Typed wiring ${runId}`;
+  const name = `LC Simplex ${runId.slice(0, 8)}`;
   const cableLabel = `CAB-${runId}/1/24`;
   const post = async (path: string, data: unknown) => {
     const response = await request.post(`/api/v1${path}`, { data });
     expect(response.ok(), await response.text()).toBe(true);
     return response.json();
   };
-  const portNames = [`${name} A`, `${name} B`];
+  const portNames = verdict === 'ALLOW' ? [name] : [`${name} A`, `${name} B`];
   await page.goto('/catalogs/port-types');
   const portTypeIds = [];
   for (const portName of portNames) {
     await page.getByLabel('Название', { exact: true }).fill(portName);
     await page.getByLabel(/Обозначения каналов/).fill('1');
-    await page.getByLabel('Режим совместимости').selectOption(verdict === 'UNKNOWN' ? 'UNDEFINED' : 'MATRIX');
+    await page.getByLabel('Среда').selectOption(portNames.length === 2 && verdict === 'DENY' && portName.endsWith(' B') ? 'COPPER' : 'FIBER');
+    await page.getByLabel('Режим совместимости').selectOption(verdict === 'ALLOW' ? 'SAME_TYPE' : 'UNDEFINED');
     const saved = page.waitForResponse(response =>
       response.request().method() === 'POST' && response.url().endsWith('/port-types'));
     await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
@@ -27,13 +28,7 @@ test(`typed line on the physical map · ${verdict}`, async ({ page, request }) =
   }
   await page.getByRole('row').filter({ hasText: portNames[0] }).getByRole('button', { name: 'Редактировать' }).click();
   const matrix = page.getByRole('region', { name: 'Матрица совместимости' });
-  const decision = matrix.getByRole('row').filter({ hasText: portNames[1] });
-  if (verdict === 'ALLOW') {
-    await expect(decision).toContainText('DENY');
-    await matrix.getByRole('checkbox', { name: `Разрешить пару с ${portNames[1]}` }).click();
-  }
-  await expect(decision).toContainText(verdict);
-  const cableType = await post('/cable-types', { name, color: '#336699', medium: 'COPPER', construction: 'TWISTED_PAIR' });
+  await expect(matrix.getByRole('row').filter({ hasText: portNames.at(-1)! })).toContainText(verdict);
   const template = (portTypeId: string, displayName: string) => post('/library/base-templates', {
     name: displayName, body: { kind: 'RECTANGLE', width: 160, height: 70 },
     panels: [{ panel_key: 'front', panel_number: 1, display_name: 'Front', face: 'FRONT', x: 0, y: 0, width: 160, height: 70 }],
@@ -45,7 +40,7 @@ test(`typed line on the physical map · ${verdict}`, async ({ page, request }) =
   const mapId = map.map_ref.entity_id;
   const pointIds: string[] = [];
   for (const [index, label] of ['A', 'B'].entries()) {
-    const definition = await template(portTypeIds[index], portNames[index]);
+    const definition = await template(portTypeIds[index] ?? portTypeIds[0], `${name} template ${label}`);
     await page.goto('/infrastructure/objects/new?blueprint=' + definition.blueprint_ref.entity_id);
     await page.getByLabel('Имя экземпляра').fill(`${name} ${label}`);
     const instance = page.waitForResponse(response => response.request().method() === 'POST'
@@ -69,8 +64,8 @@ test(`typed line on the physical map · ${verdict}`, async ({ page, request }) =
 
   const dialog = page.getByRole('dialog', { name: 'Соединить порты' });
   const create = dialog.getByRole('button', { name: 'Создать кабель' });
-  await expect(create).toBeDisabled();
-  await dialog.getByLabel('Тип кабеля').selectOption(cableType.id);
+  await expect(create).toBeEnabled();
+  await expect(dialog.getByLabel(/Тип кабеля|Тип волокна/)).toHaveCount(0);
   await expect(dialog.getByLabel(/Разъём [AB]/)).toHaveCount(0);
   await dialog.getByLabel('Имя кабеля').fill(cableLabel);
   let writes = 0;
@@ -79,24 +74,38 @@ test(`typed line on the physical map · ${verdict}`, async ({ page, request }) =
   });
   if (verdict === 'DENY') {
     await create.click();
-    await expect(dialog.getByRole('alert')).toContainText('режим или матрица запрещает пару типов');
+    await expect(dialog.getByRole('alert')).toContainText('среды физических окончаний различаются');
     expect(writes).toBe(0);
     return;
   }
+  const modal = page.getByRole('dialog', { name: 'Подтверждение физической совместимости' });
+  let systemDialogs = 0;
+  const rejectSystemDialog = async (systemDialog: import('@playwright/test').Dialog) => {
+    systemDialogs++;
+    await systemDialog.dismiss();
+  };
+  page.on('dialog', rejectSystemDialog);
   if (verdict === 'UNKNOWN') {
-    const warning = page.waitForEvent('dialog');
-    const click = create.click();
-    const confirmation = await warning;
-    expect(confirmation.message()).toContain('совместимость типов портов не определена');
-    await confirmation.dismiss();
-    await click;
+    await create.click();
+    await expect(modal).toContainText('совместимость типов портов не определена');
+    await expect(modal.getByRole('button', { name: 'Отмена' })).toBeFocused();
+    await expect(page.getByRole('button', { name: 'Создаём…' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(modal).toBeHidden();
     await expect(create).toBeEnabled();
     expect(writes).toBe(0);
-    page.once('dialog', confirmation => confirmation.accept());
   }
   const creation = page.waitForResponse(response =>
     response.request().method() === 'POST' && response.url().endsWith('/physical-connections'));
   await create.click();
+  if (verdict === 'UNKNOWN') {
+    await expect(modal.getByRole('button', { name: 'Отмена' })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(modal.getByRole('button', { name: 'Подтвердить и создать' })).toBeFocused();
+    await page.keyboard.press('Enter');
+  }
+  expect(systemDialogs).toBe(0);
+  page.off('dialog', rejectSystemDialog);
   const response = await creation;
   expect(response.status(), await response.text()).toBe(201);
   const { cable_ref, connection_ref } = await response.json();
@@ -109,7 +118,7 @@ test(`typed line on the physical map · ${verdict}`, async ({ page, request }) =
   expect(packageResponse.ok()).toBe(true);
   const workspace = await packageResponse.json();
   expect(workspace.canonical.Cable.find((cable: { id: string }) => cable.id === cable_ref.entity_id)).toEqual({
-    id: cable_ref.entity_id, connection_id: connection_ref.entity_id, cable_type_id: cableType.id,
+    id: cable_ref.entity_id, connection_id: connection_ref.entity_id,
     label: cableLabel,
   });
   await port(pointIds[0]).click({ button: 'right' });
