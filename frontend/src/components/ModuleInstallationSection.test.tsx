@@ -5,8 +5,9 @@ import { I18nProvider } from '../i18n';
 import { HardwareModuleError, initialModuleGeometry, type HardwareConfiguration, type HardwareModuleDataSource, type InstalledModulePlace } from '../topology/hardwareModules';
 import { ModuleInstallationSection } from './ModuleInstallationSection';
 
-const module = { template_id: 'template', revision_id: 'revision', name: 'FC25Gb-2', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'OCP3', endpoints: [], geometry: initialModuleGeometry() };
-const free: HardwareConfiguration = { configuration_id: 'config', base_revision_id: 'base-revision', bays: [{ bay_key: 'bay-key', display_name: 'PCIe1', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'OCP3', panel_key: 'back', x: .1, y: .1, width: .3, height: .3, installation: null }] };
+const module = { template_id: 'template', revision_id: 'revision', name: 'FC25Gb-2', mount_kind: 'MODULE_BAY' as const, module_bay_type_id: 'OCP3', endpoints: [], geometry: initialModuleGeometry() };
+const free: HardwareConfiguration = { configuration_id: 'config', base_revision_id: 'base-revision', bays: [{ bay_key: 'bay-key', display_name: 'PCIe1', mount_kind: 'MODULE_BAY', module_bay_type_id: 'OCP3', panel_key: 'back', x: .1, y: .1, width: .3, height: .3, installation: null }] };
+const sfpMount = { mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'SFP', module_bay_type_id: null };
 const occupied: HardwareConfiguration = { ...free, panels: [{ panel_key: 'back', display_name: 'Back', width: 600, height: 200 }], bays: [{ ...free.bays[0], installation: {
   layout: { panel_key: 'back', x: .1, y: .1, width: .3, height: .2 }, fill_color: '#123456', id: 'stable-installation-id', name: module.name, module_template_id: 'template', module_revision_id: 'revision', orientation: 'HORIZONTAL', endpoints: [{
     key: 'endpoint', port_type_id: 'test-type', kind: 'NETWORK_PORT', installation_id: 'stable-installation-id', panel_key: 'back', panel_display_name: 'Back', bay_key: 'bay-key', bay_display_name: 'PCIe1',
@@ -32,21 +33,24 @@ it('installs only a compatible single-member transceiver and replaces the diamon
   ] : [])));
   const data = source();
   const endpoint = { key: 'optic', display_name: 'Termination', kind: 'CONNECTION_POINT' as const, port_type_id: 'single' };
-  const available = { ...module, name: 'Optic', endpoints: [endpoint] };
+  data.saveLayout = vi.fn();
+  const available = { ...module, ...sfpMount, name: 'Optic', endpoints: [endpoint] };
   vi.mocked(data.listModules).mockResolvedValue({ modules: [
     available, { ...available, name: 'Duplex', template_id: 'duplex', endpoints: [{ ...endpoint, port_type_id: 'duplex' }] },
   ] });
-  const socket = { ...free.bays[0], network_interface_id: 'interface' };
+  const socket = { ...free.bays[0], ...sfpMount, network_interface_id: 'interface' };
   const installation = occupied.bays[0].installation!;
   vi.mocked(data.loadConfiguration).mockResolvedValue({ ...free, bays: [socket] });
   vi.mocked(data.installModule).mockResolvedValue({ ...free, bays: [{ ...socket, installation: {
-    ...installation, name: available.name, endpoints: [{ ...installation.endpoints[0], ...endpoint, network_interface_id: null }],
+    ...installation, orientation: 'VERTICAL', name: available.name,
+    endpoints: [{ ...installation.endpoints[0], ...endpoint, network_interface_id: null }],
   } }] });
   show(data);
   expect(await screen.findByRole('option', { name: 'Optic' })).toBeInTheDocument();
   expect(screen.queryByRole('option', { name: 'Duplex' })).toBeNull();
   expect(document.querySelectorAll('polygon[data-module-port-marker]')).toHaveLength(1);
-  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Выберите совместимый модуль' }), available.template_id);
+  expect(screen.queryByText('Ориентация')).toBeNull();
+  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Выберите совместимый трансивер' }), available.template_id);
   await userEvent.click(screen.getByRole('button', { name: 'Установить' }));
   expect(data.installModule).toHaveBeenCalledWith('object', {
     bay_key: 'bay-key', module_template_id: 'template', orientation: 'HORIZONTAL',
@@ -54,18 +58,23 @@ it('installs only a compatible single-member transceiver and replaces the diamon
   expect(document.querySelectorAll('rect[data-endpoint-id="point"]')).toHaveLength(1);
   expect(document.querySelectorAll('polygon[data-module-port-marker]')).toHaveLength(0);
   expect(screen.getByText(/Извлечение и замена физического трансивера/)).toBeInTheDocument();
+  expect(screen.queryByText('Вертикальная')).toBeNull();
+  expect(screen.getByText(/Аппаратный интерфейс/)).toBeInTheDocument();
+  expect(screen.queryByText('Корректировать расположение плат')).toBeNull();
 });
 
-function tableBayKeys() {
-  return Array.from(screen.getByRole('table').querySelectorAll('[data-bay-key]'), row => row.getAttribute('data-bay-key'));
+function tableBayKeys(name = 'Платы') {
+  return Array.from(screen.getByRole('table', { name }).querySelectorAll('[data-bay-key]'), row => row.getAttribute('data-bay-key'));
 }
 
 it('groups mixed places by pinned panel and exact type matching, with stable natural order on reopen', async () => {
   const data = source();
+  vi.mocked(data.listModules).mockResolvedValue({ modules: [module, { ...module, ...sfpMount, module_port_type_id: 'OCP3' }] });
   const logical = (key: string, name: string, module_port_type_id = 'OCP3', panel = 'back'): HardwareConfiguration['bays'][number] => ({
     kind: 'LOGICAL', bay_key: key, display_name: name, mount_kind: 'MODULE_PORT' as const, module_port_type_id, panel_key: panel, installation: null,
   });
   const bays = [
+    free.bays[0],
     logical('ten', 'Место 10'), logical('two-b', 'Место 2'),
     logical('lower', 'Lower case', 'ocp3'), logical('space', 'With space', 'OCP3 '),
     { ...free.bays[0], bay_key: 'fixed', display_name: 'Fixed-01', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'AUX', module_bay_type_id: null },
@@ -80,21 +89,26 @@ it('groups mixed places by pinned panel and exact type matching, with stable nat
   vi.mocked(data.loadConfiguration).mockResolvedValueOnce({ ...free, bays })
     .mockResolvedValueOnce({ ...free, bays: [...bays].reverse() });
   show(data, vi.fn(), presentation);
-  const table = await screen.findByRole('table');
+  const table = await screen.findByRole('table', { name: 'Трансиверы' });
+  const boardTable = within(screen.getByRole('table', { name: 'Платы' }));
+  expect(boardTable.getByRole('columnheader', { name: 'Отсек' })).toBeInTheDocument();
+  expect(boardTable.getByRole('columnheader', { name: 'Ориентация' })).toBeInTheDocument();
+  expect(within(table).getByRole('columnheader', { name: 'Гнездо' })).toBeInTheDocument();
+  expect(within(table).queryByRole('columnheader', { name: 'Ориентация' })).toBeNull();
   expect(Array.from(table.querySelectorAll('th[scope="rowgroup"]'), header => header.textContent)).toEqual([
-    'Front · Модульный порт · OCP3', 'Back · Модульный порт · AUX', 'Back · Модульный порт · OCP3', 'Back · Модульный порт · ocp3', 'Back · Модульный порт · OCP3 ', 'a · Модульный порт · OCP3', 'z · Модульный порт · OCP3',
+    'Front · OCP3', 'Back · AUX', 'Back · OCP3', 'Back · ocp3', 'Back · OCP3 ', 'a · OCP3', 'z · OCP3',
   ]);
   const order = ['front', 'fixed', 'one', 'two-a', 'two-b', 'ten', 'lower', 'space', 'missing-a', 'missing-z'];
-  expect(tableBayKeys()).toEqual(order);
+  expect(tableBayKeys('Трансиверы')).toEqual(order);
   for (const name of ['Lower case', 'With space']) {
     const row = within(screen.getByRole('rowheader', { name }).closest('tr')!);
-    expect(row.getByText('Нет совместимых модулей')).toBeInTheDocument();
+    expect(row.getByText('Нет совместимых трансиверов')).toBeInTheDocument();
     expect(row.getByRole('button', { name: 'Установить' })).toBeDisabled();
   }
   cleanup();
   show(data, vi.fn(), presentation);
-  await screen.findByRole('table');
-  expect(tableBayKeys()).toEqual(order);
+  await screen.findByRole('table', { name: 'Трансиверы' });
+  expect(tableBayKeys('Трансиверы')).toEqual(order);
 });
 
 it('shows the installed orientation and toggles the canonical port details', async () => {
@@ -123,7 +137,7 @@ describe('ModuleInstallationSection uninstall', () => {
     const remove = await screen.findByRole('button', { name: 'Удалить' });
     expect(remove).toHaveClass('text-action');
     await userEvent.click(remove);
-    expect(confirm).toHaveBeenCalledWith('Удалить модуль «FC25Gb-2» из отсека «PCIe1»?');
+    expect(confirm).toHaveBeenCalledWith('Удалить плату «FC25Gb-2» из отсека «PCIe1»?');
     expect(data.uninstallModule).not.toHaveBeenCalled();
     expect(screen.getByText('Back / PCIe1 / feth1', { selector: 'li' })).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
@@ -136,14 +150,14 @@ describe('ModuleInstallationSection uninstall', () => {
     expect(data.uninstallModule).toHaveBeenCalledWith('object', 'stable-installation-id');
     expect(screen.getByText('Back / PCIe1 / feth1', { selector: 'li' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Удалить' })).toBeDisabled();
-    expect(screen.queryByLabelText('Выберите совместимый модуль')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Выберите совместимую плату')).not.toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
     complete(free);
-    expect(await screen.findByRole('combobox', { name: 'Выберите совместимый модуль' })).toBeInTheDocument();
+    expect(await screen.findByRole('combobox', { name: 'Выберите совместимую плату' })).toBeInTheDocument();
     expect(screen.queryByText('Back / PCIe1 / feth1')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Удалить' })).not.toBeInTheDocument();
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
-    await userEvent.selectOptions(screen.getByLabelText('Выберите совместимый модуль'), 'template');
+    await userEvent.selectOptions(screen.getByLabelText('Выберите совместимую плату'), 'template');
     await userEvent.click(screen.getByRole('button', { name: 'Установить' }));
     expect(data.installModule).toHaveBeenCalledWith('object', { bay_key: 'bay-key', module_template_id: 'template', orientation: 'HORIZONTAL' });
     expect(await screen.findByText('Back / PCIe1 / feth1', { selector: 'li' })).toBeInTheDocument();
@@ -159,12 +173,12 @@ describe('ModuleInstallationSection uninstall', () => {
     expect(screen.getByText('Back / PCIe1 / feth1', { selector: 'li' })).toBeInTheDocument();
     expect(screen.getByText('Порты').parentElement).toHaveAttribute('open');
     expect(screen.getByRole('button', { name: 'Удалить' })).toBeEnabled();
-    expect(screen.queryByLabelText('Выберите совместимый модуль')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Выберите совместимую плату')).not.toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
   });
   it('never offers uninstall for a free bay', async () => {
     const data = source(); data.loadConfiguration = vi.fn().mockResolvedValue(free); show(data);
-    expect(await screen.findByRole('combobox', { name: 'Выберите совместимый модуль' })).toBeInTheDocument();
+    expect(await screen.findByRole('combobox', { name: 'Выберите совместимую плату' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Удалить' })).not.toBeInTheDocument();
   });
 });
@@ -248,7 +262,7 @@ it('expands nested places, installs and removes a selected leaf, and explains a 
   withLeaf.nested_installations!.push({
     ...root, id: 'leaf', name: 'SFP optics', parent_installation_id: root.id, endpoints: [], module_places: [],
   });
-  const optics = { ...module, template_id: 'optics', module_port_type_id: 'SFP', name: 'SFP optics' };
+  const optics = { ...module, ...sfpMount, template_id: 'optics', name: 'SFP optics' };
   vi.mocked(data.listModules).mockResolvedValue({ modules: [module, optics, { ...optics, template_id: 'physical', name: 'Physical optics', endpoints: [{ key: 'point', display_name: 'LC', kind: 'CONNECTION_POINT', port_type_id: 'fiber' }] }] });
   vi.mocked(data.loadConfiguration).mockResolvedValue(tree);
   vi.mocked(data.installModule).mockResolvedValue(withLeaf);
@@ -268,12 +282,13 @@ it('expands nested places, installs and removes a selected leaf, and explains a 
   expect(historical.queryByRole('button', { name: 'Установить' })).toBeNull();
   const child = await screen.findByRole('row', { name: /^Legacy extension/ });
   expect(within(child).getByText('Board extension')).toBeInTheDocument();
-  await userEvent.click(within(child).getByText('Вложенные места'));
+  await userEvent.click(within(child).getByText('Гнёзда трансиверов'));
   const nestedSocket = within(await screen.findByRole('row', { name: /^Legacy SFP/ }));
   expect(nestedSocket.queryByRole('button', { name: 'Установить' })).toBeNull();
   const leafPlace = await screen.findByRole('row', { name: /^SFP 2/ });
   const leaf = within(leafPlace);
-  const select = leaf.getByRole('combobox', { name: 'Выберите совместимый модуль' });
+  expect(leaf.queryByLabelText('Ориентация')).toBeNull();
+  const select = leaf.getByRole('combobox', { name: 'Выберите совместимый трансивер' });
   expect(within(select).queryByRole('option', { name: module.name })).not.toBeInTheDocument();
   expect(within(select).queryByRole('option', { name: 'Physical optics' })).toBeNull();
   await userEvent.selectOptions(select, 'optics');
@@ -289,7 +304,7 @@ it('expands nested places, installs and removes a selected leaf, and explains a 
   expect(data.uninstallModule).toHaveBeenCalledWith('object', root.id);
   await userEvent.click(leaf.getByRole('button', { name: 'Удалить' }));
   expect(data.uninstallModule).toHaveBeenLastCalledWith('object', 'leaf');
-  expect(await leaf.findByRole('combobox', { name: 'Выберите совместимый модуль' })).toBeInTheDocument();
+  expect(await leaf.findByRole('combobox', { name: 'Выберите совместимый трансивер' })).toBeInTheDocument();
 });
 
 it('renders the installed body and canonical port at projected coordinates', async () => {
@@ -322,7 +337,7 @@ it('moves and resizes the rotated sockets with the unsaved board layout', async 
   const original = [[expect.closeTo(195), expect.closeTo(30)], [expect.closeTo(132), expect.closeTo(48)]];
   expect(socketCenters(panel)).toEqual(original);
 
-  await userEvent.click(screen.getByText('Корректировать расположение'));
+  await userEvent.click(screen.getByText('Корректировать расположение плат'));
   drag(documentQuery(), panel, 120, 40);
   expect(socketCenters(panel)).toEqual([
     [expect.closeTo(255), expect.closeTo(50)],
@@ -366,7 +381,7 @@ function drag(body: Element, panel: Element, x = 1200, y = 400) {
 it('keeps normal view inert; selects, clamps drag, projects ports, cancels and exits', async () => {
   const { data, body, panel } = await editingSource();
   drag(body, panel); expect(body.getAttribute('x')).toBe('60');
-  await userEvent.click(screen.getByText('Корректировать расположение'));
+  await userEvent.click(screen.getByText('Корректировать расположение плат'));
   drag(body, panel);
   expect(Number(body.getAttribute('x'))).toBeCloseTo(420);
   expect(Number(body.getAttribute('y'))).toBeCloseTo(160);
@@ -384,7 +399,7 @@ it('keeps normal view inert; selects, clamps drag, projects ports, cancels and e
 });
 it('resizes proportionally inside panel and saves the expected server snapshot', async () => {
   const { data, body, panel, refresh } = await editingSource();
-  await userEvent.click(screen.getByText('Корректировать расположение'));
+  await userEvent.click(screen.getByText('Корректировать расположение плат'));
   fireEvent.pointerDown(body, { clientX: 60, clientY: 20 }); fireEvent.pointerUp(panel);
   const handle = screen.getByLabelText('Изменить размер');
   drag(handle, panel);
@@ -397,7 +412,7 @@ it('resizes proportionally inside panel and saves the expected server snapshot',
 });
 it.each(['server error', '409 layout changed'])('retains reset draft on %s and allows retry or cancel', async message => {
   const { data, body, panel } = await editingSource();
-  await userEvent.click(screen.getByText('Корректировать расположение'));
+  await userEvent.click(screen.getByText('Корректировать расположение плат'));
   fireEvent.pointerDown(body, { clientX: 60, clientY: 20 }); fireEvent.pointerUp(panel);
   await userEvent.click(screen.getByText('Начальное размещение'));
   expect(body.getAttribute('x')).toBe('90'); expect(data.saveLayout).not.toHaveBeenCalled();
@@ -417,7 +432,7 @@ it.each([[600, 1, 140], [1, 600, 360], [600, 200, 150]])('fits %s × %s panels i
   const installation = config.bays[0].installation!;
   installation.name = 'NIC-2GE';
   installation.endpoints.push({ ...installation.endpoints[0], key: 'second', connection_point_id: 'point-2', network_interface_id: 'interface-2', x: .3 });
-  config.bays.push({ ...free.bays[0], bay_key: 'empty', panel_key: 'front', installation: null });
+  config.bays.push({ ...free.bays[0], ...sfpMount, bay_key: 'empty', panel_key: 'front', installation: null });
   data.loadConfiguration = vi.fn().mockResolvedValue(config);
   const presentation = structuredClone(basePresentation);
   presentation.panels = [
@@ -481,7 +496,7 @@ it('tracks container width across view and editing without resetting the table',
   expect(viewport).toHaveStyle({ height: '140px' });
   const compactViewBox = preview.getAttribute('viewBox');
 
-  await userEvent.click(screen.getByText('Корректировать расположение'));
+  await userEvent.click(screen.getByText('Корректировать расположение плат'));
   expect(viewport).toHaveStyle({ height: '360px' });
   expect(preview.getAttribute('viewBox')).not.toBe(compactViewBox);
   await userEvent.click(screen.getByText('Завершить корректировку'));
@@ -499,6 +514,8 @@ it('selects only one module and reopens the explicitly saved layout without chan
   saved.bays[0].installation!.initial_layout = { panel_key: 'back', x: .15, y: .15, width: .2, height: .1 };
   saved.bays.push({ ...saved.bays[0], bay_key: 'second-bay', installation: { ...saved.bays[0].installation!, id: 'second-installation', endpoints: [] } });
   saved.bays.push({ ...free.bays[0], bay_key: 'free-bay', display_name: 'Free place' });
+  saved.bays.push({ ...saved.bays[0], ...sfpMount, bay_key: 'socket', installation: { ...saved.bays[0].installation!,
+    id: 'fixed-optic', endpoints: [], orientation: 'VERTICAL' } });
   data.loadConfiguration = vi.fn().mockImplementation(async () => structuredClone(saved));
   data.saveLayout = vi.fn().mockImplementation(async (_object, id, body) => {
     expect(id).toBe('stable-installation-id');
@@ -507,14 +524,17 @@ it('selects only one module and reopens the explicitly saved layout without chan
   });
   show(data);
   const panel = await screen.findByRole('img', { name: 'Back' });
-  await userEvent.click(screen.getByText('Корректировать расположение'));
+  await userEvent.click(screen.getByText('Корректировать расположение плат'));
   const order = tableBayKeys();
-  expect(screen.getByLabelText('Выберите совместимый модуль')).toBeDisabled();
+  expect(screen.getByLabelText('Выберите совместимую плату')).toBeDisabled();
   expect(screen.getByLabelText('Ориентация')).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Установить' })).toBeDisabled();
   for (const remove of screen.getAllByRole('button', { name: 'Удалить' })) expect(remove).toBeDisabled();
   const first = document.querySelector('[data-installation-id="stable-installation-id"]')!;
   const second = document.querySelector('[data-installation-id="second-installation"]')!;
+  const optic = document.querySelector('[data-installation-id="fixed-optic"]')!;
+  fireEvent.pointerDown(optic, { clientX: 60, clientY: 20 }); fireEvent.pointerUp(panel);
+  expect(screen.queryByLabelText('Изменить размер')).toBeNull();
   fireEvent.pointerDown(first, { clientX: 60, clientY: 20 }); fireEvent.pointerUp(panel);
   await userEvent.click(screen.getByText('Начальное размещение'));
   fireEvent.pointerDown(second, { clientX: 60, clientY: 20 }); fireEvent.pointerUp(panel);
@@ -535,7 +555,7 @@ it('selects only one module and reopens the explicitly saved layout without chan
 it('reads a logical place without drawing a rectangle and enables installation', async () => {
   const data = source();
   vi.mocked(data.loadConfiguration).mockResolvedValue({ ...free, panels: occupied.panels, bays: [{
-    kind: 'LOGICAL', bay_key: 'logical', display_name: 'Logical place', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'OCP3', panel_key: 'back', installation: null,
+    kind: 'LOGICAL', bay_key: 'logical', display_name: 'Logical place', mount_kind: 'MODULE_BAY', module_bay_type_id: 'OCP3', panel_key: 'back', installation: null,
   }] });
   show(data);
   await screen.findByRole('rowheader', { name: 'Logical place' });

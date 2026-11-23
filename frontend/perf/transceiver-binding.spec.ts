@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 
-test('author SFP equipment, install a single-member transceiver, and keep its cable after reload', async ({ page, request }) => {
+test('install a vertical board and fixed SFP transceivers, then keep their cable after reload', async ({ page, request }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const name = 'SFP ' + randomUUID().slice(0, 8);
   const post = async (path: string, data: object) => {
@@ -16,6 +16,13 @@ test('author SFP equipment, install a single-member transceiver, and keep its ca
   const mounts = await (await request.get('/api/v1/module-port-types')).json();
   const sfp = mounts.find((mount: { name: string }) => mount.name === 'SFP')
     ?? await post('/module-port-types', { name: 'SFP' });
+  const bayType = await post('/module-bay-types', { name });
+  const board = await post('/library/module-templates', {
+    name: name + ' board', mount_kind: 'MODULE_BAY', module_bay_type_id: bayType.id,
+    geometry: { width: 80, height: 30, fill_color: '#64748b', endpoints: {} }, endpoints: [],
+    module_places: [{ key: 'sfp-board', display_name: 'SFP Board', mount_kind: 'MODULE_PORT',
+      module_port_type_id: sfp.id, hardware_interface_key: randomUUID(), x: .5, y: .5 }],
+  });
 
   await page.goto('/library/base-templates/new');
   await page.getByLabel('Название шаблона').fill(name + ' base');
@@ -25,6 +32,10 @@ test('author SFP equipment, install a single-member transceiver, and keep its ca
   await creator.getByRole('button', { name: 'Добавить', exact: true }).click();
   await page.locator('polygon[data-module-port-marker]').click();
   await page.getByRole('checkbox', { name: 'Назначить аппаратный интерфейс' }).check();
+  await page.locator('summary').filter({ hasText: 'Логические отсеки' }).click();
+  const boardGroup = page.getByRole('group', { name: 'Создать группу' });
+  await boardGroup.getByLabel('Тип модульного отсека').selectOption(bayType.id);
+  await boardGroup.getByRole('button', { name: 'Создать группу' }).click();
   await page.getByRole('button', { name: 'Сохранить шаблон', exact: true }).click();
   await expect(page).toHaveURL(/\/library\/base-templates$/);
 
@@ -35,7 +46,7 @@ test('author SFP equipment, install a single-member transceiver, and keep its ca
   await page.getByRole('button', { name: 'Создать шаблон', exact: true }).click();
   await expect(page).toHaveURL(/tab=transceivers/);
 
-  const installOptic = async (suffix: string) => {
+  const installOptic = async (suffix: string, onBoard = false) => {
     await page.goto('/infrastructure/objects/new');
     await page.getByRole('row', { name: new RegExp(name + ' base') }).getByRole('button').click();
     await page.getByLabel('Имя экземпляра').fill(name + suffix);
@@ -45,20 +56,41 @@ test('author SFP equipment, install a single-member transceiver, and keep its ca
     const objectId = objectUrl.split('/').at(-1)!;
     const physicalUrl = objectUrl + '/physical';
     await page.goto(physicalUrl);
-    const equipment = page.getByRole('region', { name: 'Отсеки модулей' });
+    const boards = page.getByRole('region', { name: 'Платы' });
+    let equipment = page.getByRole('region', { name: 'Трансиверы' });
     await expect(page.locator('polygon[data-module-port-marker]')).toHaveCount(1);
+    const editLayout = page.getByRole('button', { name: 'Корректировать расположение плат' });
+    await expect(editLayout).toHaveCount(0);
+    if (onBoard) {
+      await boards.getByLabel('Выберите совместимую плату').selectOption(board.template_id);
+      await boards.getByLabel('Ориентация').selectOption('VERTICAL');
+      await boards.getByRole('button', { name: 'Установить', exact: true }).click();
+      await expect(boards.getByRole('cell', { name: 'Вертикальная' })).toBeVisible();
+      await editLayout.click();
+      await page.locator('rect[data-installation-id]').click({ position: { x: 5, y: 5 } });
+      await expect(page.getByLabel('Изменить размер')).toBeVisible();
+      await page.getByRole('button', { name: 'Завершить корректировку' }).click();
+      await boards.getByText('Гнёзда трансиверов', { exact: true }).click();
+      equipment = boards.getByRole('table', { name: 'Трансиверы' });
+    }
+    await expect(equipment.getByRole('columnheader', { name: 'Гнездо' })).toBeVisible();
+    await expect(equipment.getByRole('columnheader', { name: 'Ориентация' })).toHaveCount(0);
+    await expect(equipment.getByLabel('Ориентация')).toHaveCount(0);
     await expect(equipment.getByText(/Аппаратный интерфейс/)).toBeVisible();
-    await equipment.getByLabel('Выберите совместимый модуль').selectOption({ label: name + ' optic' });
+    await equipment.getByLabel('Выберите совместимый трансивер').selectOption({ label: name + ' optic' });
+    const installation = page.waitForRequest(candidate =>
+      candidate.method() === 'POST' && candidate.url().endsWith('/module-installations'));
     await equipment.getByRole('button', { name: 'Установить', exact: true }).click();
+    expect((await installation).postDataJSON().orientation).toBe('HORIZONTAL');
     const marker = page.locator('rect[data-endpoint-id]');
     await expect(marker).toHaveCount(1);
-    await expect(page.locator('polygon[data-module-port-marker]')).toHaveCount(0);
+    await expect(page.locator('polygon[data-module-port-marker]')).toHaveCount(onBoard ? 1 : 0);
     await expect(equipment.getByText(/Извлечение и замена физического трансивера/)).toBeVisible();
     const pointId = (await marker.getAttribute('data-endpoint-id'))!;
     return { objectId, physicalUrl, pointId };
   };
   const peer = await installOptic(' B');
-  const source = await installOptic(' A');
+  const source = await installOptic(' A', true);
   await page.getByRole('button', { name: 'Подключить порт', exact: true }).click();
   await page.getByLabel('Целевой физический объект').selectOption(peer.objectId);
   await page.getByLabel('Свободный физический порт').selectOption(peer.pointId);

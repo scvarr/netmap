@@ -97,7 +97,7 @@ test('assign interfaces to published SFP sockets, reconcile an existing object, 
 
   await page.goto(objectUrl + '/physical');
   const row = page.locator(`tr[data-bay-key="${updated.bays[0].bay_key}"]`);
-  await row.getByLabel('Выберите совместимый модуль').selectOption({ label: name + ' optic' });
+  await row.getByLabel('Выберите совместимый трансивер').selectOption({ label: name + ' optic' });
   await row.getByRole('button', { name: 'Установить', exact: true }).click();
   await expect(page.locator('rect[data-endpoint-id]')).toHaveCount(1);
   await expect(diamonds).toHaveCount(2);

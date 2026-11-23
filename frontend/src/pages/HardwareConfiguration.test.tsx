@@ -135,11 +135,11 @@ describe('09.6-A user path', () => {
   });
   it('installs only an exactly compatible module, sends orientation, and refreshes physical details', async () => {
     const source = modules(); const refresh = vi.fn(); show(<ModuleInstallationSection objectId="object" dataSource={source} onInstalled={refresh} />);
-    expect(await screen.findByRole('combobox', { name: 'Выберите совместимый модуль' })).toBeInTheDocument();
+    expect(await screen.findByRole('combobox', { name: 'Выберите совместимую плату' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Other NIC' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Ориентация').closest('.blueprint-editor-controls')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Установить' })).toHaveClass('primary-action');
-    await userEvent.selectOptions(screen.getByLabelText('Выберите совместимый модуль'), 'module');
+    await userEvent.selectOptions(screen.getByLabelText('Выберите совместимую плату'), 'module');
     await userEvent.selectOptions(screen.getByLabelText('Ориентация'), 'VERTICAL');
     await userEvent.click(screen.getByRole('button', { name: 'Установить' }));
     await waitFor(() => expect(source.installModule).toHaveBeenCalledWith('object', { module_template_id: 'module', bay_key: 'bay', orientation: 'VERTICAL' }));
