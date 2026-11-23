@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 
-test('install a vertical board and fixed SFP transceivers, then keep their cable after reload', async ({ page, request }) => {
+test('install a vertical board and fixed SFP transceivers, then keep their cable after reload', async ({ page, request }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const name = 'SFP ' + randomUUID().slice(0, 8);
   const post = async (path: string, data: object) => {
@@ -84,8 +84,15 @@ test('install a vertical board and fixed SFP transceivers, then keep their cable
     expect((await installation).postDataJSON().orientation).toBe('HORIZONTAL');
     const marker = page.locator('rect[data-endpoint-id]');
     await expect(marker).toHaveCount(1);
+    const outline = page.locator('rect[data-transceiver-outline]');
+    await expect(outline).toHaveCount(1);
+    await expect(outline).toHaveAttribute('fill', 'none');
+    await expect(page.locator('[data-installation-id]')).toHaveCount(onBoard ? 1 : 0);
     await expect(page.locator('polygon[data-module-port-marker]')).toHaveCount(onBoard ? 1 : 0);
     await expect(equipment.getByText(/Извлечение и замена физического трансивера/)).toBeVisible();
+    await page.getByRole('img', { name: 'Предпросмотр схемы' }).screenshot({
+      path: testInfo.outputPath(onBoard ? 'transceiver-on-board.png' : 'transceiver-in-base.png'),
+    });
     const pointId = (await marker.getAttribute('data-endpoint-id'))!;
     return { objectId, physicalUrl, pointId };
   };
@@ -102,5 +109,6 @@ test('install a vertical board and fixed SFP transceivers, then keep their cable
   await expect(page.getByText(name + ' cable', { exact: false })).toBeVisible();
   await page.reload();
   await expect(page.locator(`rect[data-endpoint-id="${source.pointId}"]`)).toHaveCount(1);
+  await expect(page.locator('[data-transceiver-outline]')).toHaveCount(1);
   await expect(page.getByText(name + ' cable', { exact: false })).toBeVisible();
 });

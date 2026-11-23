@@ -74,6 +74,27 @@ function projectInstallationPosition(position: { x: number; y: number }, saved: 
   };
 }
 
+function SocketMarker({ cx, cy, r, name, installation, placeKey }: {
+  cx: number; cy: number; r: number; name: string; installation?: ModuleInstallation; placeKey?: string;
+}) {
+  const endpoint = installation?.endpoints[0];
+  if (!endpoint) {
+    return <EndpointMarker kind="MODULE_PORT" label={installation ? `${name} · ${installation.name}` : name}
+      data-module-place-key={placeKey} data-occupied-socket={installation ? true : undefined}
+      cx={cx} cy={cy} r={r} fill={installation ? '#66538a' : undefined}
+      stroke={installation ? '#a39bbb' : '#0f172a'} strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none" />;
+  }
+  const halfSide = r / Math.SQRT2 + r / 2;
+  return <g pointerEvents="none">
+    <rect data-transceiver-outline aria-hidden="true" x={cx - halfSide} y={cy - halfSide}
+      width={2 * halfSide} height={2 * halfSide} rx={r / 4}
+      fill="none" stroke="#94a3b8" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+    <EndpointMarker kind="NETWORK_PORT" label={endpoint.contextual_display_name}
+      data-endpoint-id={endpoint.connection_point_id} data-module-place-key={placeKey}
+      cx={cx} cy={cy} r={r} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+  </g>;
+}
+
 export function ModuleInstallationSection({ objectId, onInstalled, presentation, dataSource = hardwareModuleDataSource }: { objectId: string; presentation?: BlueprintPresentation; onInstalled: () => void | Promise<void>; dataSource?: HardwareModuleDataSource }) {
   const moduleTypes = useMountTypes();
   const { types: portTypes } = usePortTypes();
@@ -261,6 +282,12 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
       {image.slots.filter(s => s.panel_key === panel.panel_key && !modulePorts.has(s.connection_point_id)).map(s => <EndpointMarker key={s.connection_point_id} kind={s.kind} label={s.display_name} data-builtin-endpoint-id={s.connection_point_id} cx={s.panel_local_position.x * panel.width} cy={s.panel_local_position.y * panel.height} r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />)}
       {config!.bays.filter(b => b.panel_key === panel.panel_key).map(b => {
         const i = b.installation; const l = i?.id === selected && draft ? draft : i?.layout;
+        if (b.mount_kind === 'MODULE_PORT') {
+          const position = i?.endpoints[0] ?? (b.kind !== 'LOGICAL' ? modulePortPosition(b) :
+            l && modulePortPosition(l));
+          return position && <SocketMarker key={b.bay_key} name={b.display_name} installation={i ?? undefined}
+            cx={position.x * panel.width} cy={position.y * panel.height} r={4 / scale} />;
+        }
         const begin = (e: React.PointerEvent<SVGElement>, resize: boolean) => {
           if (!editing || pending || !i || !l || (dirty && selected !== i.id)) return;
           e.preventDefault();
@@ -274,20 +301,17 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
             cx={modulePortPosition(b).x * panel.width} cy={modulePortPosition(b).y * panel.height}
             r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
           {i && l && <g>
-            <rect data-installation-id={i.id} onPointerDown={b.mount_kind === 'MODULE_BAY' ? e => begin(e, false) : undefined} x={l.x * panel.width} y={l.y * panel.height} width={l.width * panel.width} height={l.height * panel.height} fill={i.fill_color} stroke={editing && selected === i.id ? '#f59e0b' : 'none'} strokeWidth={1.5} vectorEffect="non-scaling-stroke"><title>{i.name}</title></rect>
+            <rect data-installation-id={i.id} onPointerDown={e => begin(e, false)} x={l.x * panel.width} y={l.y * panel.height} width={l.width * panel.width} height={l.height * panel.height} fill={i.fill_color} stroke={editing && selected === i.id ? '#f59e0b' : 'none'} strokeWidth={1.5} vectorEffect="non-scaling-stroke"><title>{i.name}</title></rect>
             {i.module_places?.filter(place => place.mount_kind === 'MODULE_PORT').map(place => {
               // The configuration projects the pinned place through the installed orientation.
               const position = projectInstallationPosition(modulePortPosition(place.global_position), i.layout, l);
-              const endpoint = nested.get(place.installation_id ?? '')?.endpoints[0];
-              return <EndpointMarker key={place.bay_key} kind={endpoint ? 'NETWORK_PORT' : place.mount_kind}
-                label={endpoint?.contextual_display_name ?? place.display_name} data-endpoint-id={endpoint?.connection_point_id}
-                data-module-place-key={place.bay_key} pointerEvents="none"
-                cx={position.x * panel.width} cy={position.y * panel.height}
-                r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />;
+              return <SocketMarker key={place.bay_key} name={place.display_name} placeKey={place.bay_key}
+                installation={nested.get(place.installation_id ?? '')}
+                cx={position.x * panel.width} cy={position.y * panel.height} r={4 / scale} />;
             })}
             {i.endpoints.map(e => {
               const position = projectInstallationPosition(e, i.layout, l);
-              return <EndpointMarker key={e.connection_point_id} kind={b.mount_kind === 'MODULE_PORT' ? 'NETWORK_PORT' : e.kind} label={e.contextual_display_name}
+              return <EndpointMarker key={e.connection_point_id} kind={e.kind} label={e.contextual_display_name}
                 data-endpoint-id={e.connection_point_id} pointerEvents="none"
                 cx={position.x * panel.width} cy={position.y * panel.height}
                 r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />;

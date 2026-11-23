@@ -57,11 +57,26 @@ it('installs only a compatible single-member transceiver and replaces the diamon
   });
   expect(document.querySelectorAll('rect[data-endpoint-id="point"]')).toHaveLength(1);
   expect(document.querySelectorAll('polygon[data-module-port-marker]')).toHaveLength(0);
+  expect(document.querySelector('[data-installation-id]')).toBeNull();
+  expectTransceiverOutline(document, 'point', 120, 40);
   expect(screen.getByText(/Извлечение и замена физического трансивера/)).toBeInTheDocument();
   expect(screen.queryByText('Вертикальная')).toBeNull();
   expect(screen.getByText(/Аппаратный интерфейс/)).toBeInTheDocument();
   expect(screen.queryByText('Корректировать расположение плат')).toBeNull();
 });
+
+function expectTransceiverOutline(container: ParentNode, pointId: string, cx: number, cy: number) {
+  const marker = container.querySelector(`rect[data-endpoint-id="${pointId}"]`)!;
+  const outline = marker.parentElement!.querySelector('[data-transceiver-outline]')!;
+  expect(marker.parentElement).toHaveAttribute('pointer-events', 'none');
+  expect(outline).toHaveAttribute('fill', 'none');
+  for (const rect of [marker, outline]) {
+    expect(Number(rect.getAttribute('x')) + Number(rect.getAttribute('width')) / 2).toBeCloseTo(cx);
+    expect(Number(rect.getAttribute('y')) + Number(rect.getAttribute('height')) / 2).toBeCloseTo(cy);
+  }
+  expect(Number(outline.getAttribute('width'))).toBeGreaterThan(Number(marker.getAttribute('width')));
+  expect(container.querySelectorAll('[data-transceiver-outline]')).toHaveLength(1);
+}
 
 function tableBayKeys(name = 'Платы') {
   return Array.from(screen.getByRole('table', { name }).querySelectorAll('[data-bay-key]'), row => row.getAttribute('data-bay-key'));
@@ -238,6 +253,25 @@ it('draws both pinned sockets on the board panel alongside the canonical endpoin
   expect(radius * 800 / viewWidth).toBeCloseTo(4);
 });
 
+it.each(['HORIZONTAL', 'VERTICAL'] as const)('centers the contour on the installed socket of a %s board', async orientation => {
+  const data = source();
+  const config = boardConfiguration(orientation);
+  const board = config.bays[0].installation!;
+  board.module_places![0].installation_id = 'optic';
+  config.nested_installations = [{
+    ...board, id: 'optic', name: 'Transceiver', parent_installation_id: board.id, module_places: [],
+    endpoints: [{ ...board.endpoints[0], kind: 'CONNECTION_POINT', connection_point_id: 'optic-point', network_interface_id: null }],
+  }];
+  vi.mocked(data.loadConfiguration).mockResolvedValue(config);
+  show(data);
+  const panel = await screen.findByRole('img', { name: 'Back' });
+  expectTransceiverOutline(panel, 'optic-point', orientation === 'VERTICAL' ? 195 : 105, 30);
+  expect(panel.querySelectorAll('[data-endpoint-id="optic-point"]')).toHaveLength(1);
+  expect(panel.querySelectorAll('polygon[data-module-port-marker]')).toHaveLength(1);
+  expect(panel.querySelectorAll('[data-installation-id]')).toHaveLength(1);
+  expect(panel.querySelector('[data-endpoint-id="point"]')?.parentElement?.querySelector(':scope > [data-transceiver-outline]')).toBeNull();
+});
+
 it('expands nested places, installs and removes a selected leaf, and explains a blocked parent', async () => {
   const data = source();
   const tree = structuredClone(occupied);
@@ -298,6 +332,7 @@ it('expands nested places, installs and removes a selected leaf, and explains a 
   });
   expect(await leaf.findByText('SFP optics')).toBeInTheDocument();
   expect(socketCenters(panel)).toEqual(freeSocket);
+  expect(panel.querySelector('[data-module-place-key="bay-key"][data-occupied-socket]')).toHaveTextContent('SFP optics');
   expect(panel.querySelectorAll('[data-endpoint-id]')).toHaveLength(1);
   await userEvent.click(within(top).getAllByRole('button', { name: 'Удалить' }).at(-1)!);
   expect(await screen.findByRole('alert')).toHaveTextContent('Сначала удалите дочерние установки.');
@@ -532,7 +567,8 @@ it('selects only one module and reopens the explicitly saved layout without chan
   for (const remove of screen.getAllByRole('button', { name: 'Удалить' })) expect(remove).toBeDisabled();
   const first = document.querySelector('[data-installation-id="stable-installation-id"]')!;
   const second = document.querySelector('[data-installation-id="second-installation"]')!;
-  const optic = document.querySelector('[data-installation-id="fixed-optic"]')!;
+  const optic = document.querySelector('[data-occupied-socket]')!;
+  expect(optic).toBeInTheDocument();
   fireEvent.pointerDown(optic, { clientX: 60, clientY: 20 }); fireEvent.pointerUp(panel);
   expect(screen.queryByLabelText('Изменить размер')).toBeNull();
   fireEvent.pointerDown(first, { clientX: 60, clientY: 20 }); fireEvent.pointerUp(panel);
