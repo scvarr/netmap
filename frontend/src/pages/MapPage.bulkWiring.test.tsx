@@ -192,23 +192,21 @@ describe('MapPage bulk cable editor', () => {
   });
 
   it('groups compatibility, reveals the individual denial and clears confirmation on edits', async () => {
-    const ends = [
-      { pair: 1, side: 'A', verdict: 'UNKNOWN', reasons: ['CABLE_CONNECTOR_UNSPECIFIED'] },
-      { pair: 1, side: 'B', verdict: 'DENY', reasons: ['MEDIUM_MISMATCH', 'CABLE_CONNECTOR_UNSPECIFIED'] },
-    ];
-    const compatibility = vi.fn().mockResolvedValueOnce({ verdict: 'DENY', token: null, ends })
-      .mockResolvedValueOnce({ verdict: 'UNKNOWN', token: 'first', ends: ends.slice(0, 1) })
-      .mockResolvedValueOnce({ verdict: 'UNKNOWN', token: 'second', ends: ends.slice(0, 1) });
+    const denied = [{ pair: 1, verdict: 'DENY', reasons: ['MEDIUM_MISMATCH'] }];
+    const unknown = [{ pair: 1, verdict: 'UNKNOWN', reasons: ['PORT_COMPATIBILITY_UNDEFINED'] }];
+    const compatibility = vi.fn().mockResolvedValueOnce({ verdict: 'DENY', token: null, pairs: denied })
+      .mockResolvedValueOnce({ verdict: 'UNKNOWN', token: 'first', pairs: unknown })
+      .mockResolvedValueOnce({ verdict: 'UNKNOWN', token: 'second', pairs: unknown });
     const { create } = setup(compatibility);
     await start();
     await selectOne();
     fireEvent.click(button('Проверить совместимость'));
     expect(await screen.findByRole('alert')).toHaveTextContent('DENY');
-    expect(screen.getByText(/разъём кабеля не указан.*окончаний: 2, пар: 1/)).toBeVisible();
+    expect(screen.getByText(/среды кабеля и порта различаются.*пар: 1/)).toBeVisible();
     expect(button('Подтвердить создание')).toBeDisabled();
     fireEvent.click(screen.getByText('Подробности по парам'));
     select(screen.getByLabelText('Номер пары'), '1');
-    expect(screen.getByText(/Пара 1, окончание B.*среды кабеля и порта различаются/)).toBeVisible();
+    expect(screen.getByText(/Пара 1.*DENY.*среды кабеля и порта различаются/)).toBeVisible();
     expect(create).not.toHaveBeenCalled();
 
     fireEvent.click(button('Назад'));

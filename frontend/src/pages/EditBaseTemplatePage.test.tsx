@@ -8,7 +8,7 @@ import type { BaseTemplateDataSource, BaseTemplateDraftDocument, BaseTemplateRec
 
 beforeEach(() => { localStorage.clear();
   vi.stubGlobal('fetch', vi.fn(async url => Response.json((String(url).endsWith('/module-port-types') || String(url).endsWith('/module-bay-types')) ? ['OCP3', 'SFP+', 'QSFP+'].map(name => ({ id: name, name, is_active: true })) : [
-    { id: 'test-type', name: 'Copper', color: '#336699', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
+    { id: 'test-type', name: 'Copper', color: '#336699', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, fiber_mode: null, compatibility_mode: 'UNDEFINED' },
   ])));
 });
 afterEach(() => vi.unstubAllGlobals());

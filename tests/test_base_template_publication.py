@@ -229,7 +229,7 @@ def test_published_workspace_v6_roundtrip_preserves_receipt_and_rebased_draft():
     create_object(template_id)
     draft = open_draft(template_id)
     package = client.get('/v1/workspace/package').json()
-    assert package['format_version'] == 15
+    assert package['format_version'] == 16
     assert client.delete('/v1/workspace/dataset').status_code == 204
     assert client.post('/v1/workspace/package', json=package).status_code == 204
     assert client.get('/v1/workspace/package').json() == package

@@ -11,11 +11,9 @@ test('reviews, creates, deletes and recreates 48 lines with the same labels', as
     expect(response.ok(), await response.text()).toBe(true);
     return response.json();
   };
-  const socket = await post('/connector-types', { name: name + ' socket', color: '#336699', mating_profile: 'RJ45', termination: 'SOCKET' });
-  const plug = await post('/connector-types', { name: `RJ45 Plug · ${stamp}`, color: '#336699', mating_profile: 'RJ45', termination: 'PLUG' });
-  const portType = await post('/port-types', { name, color: '#336699', medium: 'COPPER', members: ['1'], connector_type_id: socket.id });
+  const portType = await post('/port-types', { name, color: '#336699', medium: 'COPPER', members: ['1'], compatibility_mode: 'SAME_TYPE' });
   const cableType = await post('/cable-types', { name: `Витая пара · ${stamp}`, color: '#336699', medium: 'COPPER', construction: 'TWISTED_PAIR' });
-  const incompatibleType = await post('/cable-types', { name: `Оптическое волокно · ${stamp}`, color: '#336699', medium: 'FIBER', construction: 'SINGLE_MODE' });
+  const incompatibleType = await post('/cable-types', { name: `Оптическое волокно · ${stamp}`, color: '#336699', medium: 'FIBER', construction: 'Glass', fiber_mode: 'SM' });
   const labelTemplate = await post('/cable-label-templates', { name: `C01/##/48 · ${stamp}`, pattern: 'C01/##/48', start_at: 1 });
   const numbers = Array.from({ length: 48 }, (_, index) => index + 1);
   const labels = numbers.map(number => `C01/${String(number).padStart(2, '0')}/48`);
@@ -115,7 +113,6 @@ test('reviews, creates, deletes and recreates 48 lines with the same labels', as
   await previewLabels();
   await page.setViewportSize({ width: 1440, height: 900 });
   await dialog.getByLabel('Тип кабеля').selectOption(incompatibleType.id);
-  await dialog.getByLabel('Разъём A').selectOption(plug.id);
   await button('Проверить совместимость').click();
   await expect(dialog.getByRole('alert')).toHaveText('Совместимость · DENY');
   await expect(button('Подтвердить создание')).toBeDisabled();
@@ -124,22 +121,26 @@ test('reviews, creates, deletes and recreates 48 lines with the same labels', as
   const detail = dialog.getByRole('region', { name: 'Подробности по парам' });
   expect(await detail.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
   await dialog.getByLabel('Номер пары').selectOption('48');
-  await expect(detail.getByRole('listitem')).toHaveCount(2);
-  await expect(detail.getByText(/Пара 48, окончание B.*разъём кабеля не указан/)).toBeVisible();
+  await expect(detail.getByRole('listitem')).toHaveCount(1);
+  await expect(detail.getByText(/Пара 48.*DENY.*среды кабеля и порта различаются/)).toBeVisible();
   await checkLayout(300, 'Подтвердить создание');
   await capture('04-deny-detail-1440x900.png');
 
   await dialog.getByLabel('Тип кабеля').selectOption(cableType.id);
-  await dialog.getByLabel('Разъём B').selectOption(plug.id);
   await button('Проверить совместимость').click();
   await expect(dialog.getByText('Совместимость · ALLOW')).toBeVisible();
   await expect(button('Подтвердить создание')).toBeEnabled();
-  await dialog.getByLabel('Разъём A').selectOption('');
-  await dialog.getByLabel('Разъём B').selectOption('');
+  const { id: portTypeId, cardinality: _cardinality, ...portFields } = portType;
+  const changed = await request.put(`/api/v1/port-types/${portTypeId}`, {
+    data: { ...portFields, compatibility_mode: 'UNDEFINED' },
+  });
+  expect(changed.ok(), await changed.text()).toBe(true);
+  await dialog.getByLabel('Тип кабеля').selectOption(incompatibleType.id);
+  await dialog.getByLabel('Тип кабеля').selectOption(cableType.id);
   const checkUnknown = async () => {
     await button('Проверить совместимость').click();
     await expect(dialog.getByText('Совместимость · UNKNOWN')).toBeVisible();
-    await expect(dialog.getByText('разъём кабеля не указан · окончаний: 96, пар: 48')).toBeVisible();
+    await expect(dialog.getByText('совместимость типов портов не определена · пар: 48')).toBeVisible();
     await expect(dialog.getByRole('checkbox')).toHaveCount(1);
     await expect(button('Подтвердить создание')).toBeDisabled();
   };

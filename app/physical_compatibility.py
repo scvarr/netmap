@@ -1,4 +1,4 @@
-"""Compatibility of the two direct matings in an external Cable operation."""
+"""Compatibility of physical endings and the line between them."""
 
 import hmac
 import json
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app import models as m
 from app.errors import NetMapError
 from app.schemas import (
-    CableSpecification, PhysicalCompatibilityConfirmation, PhysicalCompatibilityEnd,
+    CableSpecification, PhysicalCompatibilityConfirmation, PhysicalCompatibilityPair,
     PhysicalCompatibilityPreview, PhysicalCompatibilityReason, PhysicalCompatibilityVerdict,
 )
 
@@ -22,30 +22,34 @@ _TOKEN_KEY = secrets.token_bytes(32)
 _PRIORITY = {"ALLOW": 0, "UNKNOWN": 1, "DENY": 2}
 
 
-def check_end(
-    pair: int, side: str, cable: m.CableType, port: m.PortType | None,
-    cable_connector: m.ConnectorType | None, port_connector: m.ConnectorType | None,
-) -> PhysicalCompatibilityEnd:
+def check_pair(
+    index: int, cable: m.CableType, a: m.PortType | None, b: m.PortType | None, marked: bool,
+) -> PhysicalCompatibilityPair:
     contradictions: list[PhysicalCompatibilityReason] = []
     unknowns: list[PhysicalCompatibilityReason] = []
-    if port is None:
-        unknowns.append("PORT_TYPE_UNRESOLVED")
-    elif cable.medium != port.medium:
+    known = [port for port in (a, b) if port is not None]
+    if a is None:
+        unknowns.append("PORT_A_TYPE_UNRESOLVED")
+    if b is None:
+        unknowns.append("PORT_B_TYPE_UNRESOLVED")
+    if any(port.medium != cable.medium for port in known):
         contradictions.append("MEDIUM_MISMATCH")
-    if cable_connector is None:
-        unknowns.append("CABLE_CONNECTOR_UNSPECIFIED")
-    if port is not None and port_connector is None:
-        unknowns.append("PORT_CONNECTOR_UNSPECIFIED")
-    if cable_connector is not None and port_connector is not None:
-        if cable_connector.mating_profile != port_connector.mating_profile:
-            contradictions.append("PROFILE_MISMATCH")
-        if cable_connector.termination == port_connector.termination:
-            contradictions.append("TERMINATION_MISMATCH")
-    if cable.medium == "FIBER" and port is not None and port.medium == "FIBER":
-        unknowns.append("FIBER_MODE_UNDOCUMENTED")
-    return PhysicalCompatibilityEnd(
-        pair=pair, side=side,
-        verdict="DENY" if contradictions else "UNKNOWN" if unknowns else "ALLOW",
+    if cable.medium == "FIBER":
+        optical = [port for port in known if port.medium == "FIBER"]
+        if any(port.fiber_mode not in (None, cable.fiber_mode) for port in optical):
+            contradictions.append("FIBER_MODE_MISMATCH")
+        if any(port.fiber_mode is None for port in optical):
+            unknowns.append("FIBER_MODE_UNDOCUMENTED")
+
+    if a is not None and b is not None:
+        modes = {a.compatibility_mode, b.compatibility_mode}
+        if (a.id != b.id and "SAME_TYPE" in modes) or ("MATRIX" in modes and (modes != {"MATRIX"} or not marked)):
+            contradictions.append("PORT_TYPES_NOT_ALLOWED")
+        elif "UNDEFINED" in modes:
+            unknowns.append("PORT_COMPATIBILITY_UNDEFINED")
+
+    return PhysicalCompatibilityPair(
+        pair=index, verdict="DENY" if contradictions else "UNKNOWN" if unknowns else "ALLOW",
         reasons=contradictions + unknowns or ["COMPATIBLE"],
     )
 
@@ -95,12 +99,6 @@ def _port_provenance(session: Session, points: dict[uuid.UUID, m.ConnectionPoint
     return {point_id: rows[0] for point_id, rows in candidates.items() if len(rows) == 1}
 
 
-def _connector_state(connector: m.ConnectorType | None):
-    if connector is None:
-        return None
-    return (connector.id, connector.mating_profile, connector.termination, connector.is_active)
-
-
 def verify_compatibility(
     session: Session, spec: CableSpecification,
     pairs: list[tuple[m.ConnectionPoint | None, m.ConnectionPoint | None]],
@@ -111,43 +109,48 @@ def verify_compatibility(
         provenance = _port_provenance(session, points)
         ports = _locked_types(session, m.PortType, {row[2] for row in provenance.values()})
         cable = _locked_types(session, m.CableType, {spec.cable_type_id})[spec.cable_type_id]
-        connector_ids = {spec.connector_a_type_id, spec.connector_b_type_id}
-        connector_ids.update(port.connector_type_id for port in ports.values())
-        connectors = _locked_types(session, m.ConnectorType, connector_ids - {None})
+        marked_pairs = set(session.execute(
+            select(m.PortTypeCompatibility.port_type_a_id, m.PortTypeCompatibility.port_type_b_id)
+            .where(m.PortTypeCompatibility.port_type_a_id.in_(ports),
+                   m.PortTypeCompatibility.port_type_b_id.in_(ports))
+        ))
     except OperationalError as error:
         if getattr(error.orig, "sqlstate", None) in ("55P03", "40P01", "40001"):
             raise NetMapError("PHYSICAL_COMPATIBILITY_CONFLICT", "Physical data is being updated. Run a new preview.") from error
         raise
 
-    ends = []
+    results = []
     state = []
     for index, pair in enumerate(pairs, 1):
-        for side, point, connector_id in zip(("A", "B"), pair, (spec.connector_a_type_id, spec.connector_b_type_id)):
+        pair_types = []
+        for point in pair:
             row = provenance.get(point.id) if point is not None else None
             port = ports.get(row[2]) if row else None
             if port is not None and port.cardinality != point.cardinality:
                 port = None
-            cable_connector = connectors.get(connector_id)
-            port_connector = connectors.get(port.connector_type_id) if port is not None else None
-            ends.append(check_end(index, side, cable, port, cable_connector, port_connector))
+            pair_types.append(port)
             state.append((
                 (point.id, point.physical_object_id, point.cardinality) if point is not None else None,
-                row, (port.medium, port.members) if port is not None else None,
-                _connector_state(cable_connector), _connector_state(port_connector),
+                row,
+                (port.medium, port.members, port.fiber_mode, port.compatibility_mode, port.is_active)
+                if port is not None else None,
             ))
+        a, b = pair_types
+        marked = a is not None and b is not None and tuple(sorted((a.id, b.id))) in marked_pairs
+        results.append(check_pair(index, cable, a, b, marked))
+        state.append(marked)
 
-    verdict: PhysicalCompatibilityVerdict = max((end.verdict for end in ends), key=_PRIORITY.__getitem__)
+    verdict: PhysicalCompatibilityVerdict = max((pair.verdict for pair in results), key=_PRIORITY.__getitem__)
     payload = json.dumps(
-        [intent, spec.cable_type_id, spec.connector_a_type_id, spec.connector_b_type_id,
-         cable.medium, cable.construction, cable.is_active, state, verdict],
+        [intent, spec.cable_type_id, cable.medium, cable.construction, cable.fiber_mode, cable.is_active, state, verdict],
         default=str, separators=(",", ":"),
     ).encode()
     token = hmac.digest(_TOKEN_KEY, payload, "sha256").hex()
-    result = PhysicalCompatibilityPreview(verdict=verdict, ends=ends, token=token if verdict != "DENY" else None)
+    result = PhysicalCompatibilityPreview(verdict=verdict, pairs=results, token=token if verdict != "DENY" else None)
     if preview:
         return result
 
-    details = {"ends": [end.model_dump() for end in ends]}
+    details = {"pairs": [pair.model_dump() for pair in results]}
     if verdict == "DENY":
         raise NetMapError("PHYSICAL_COMPATIBILITY_DENIED", "Physical compatibility check failed", details)
     if confirmation is not None and not hmac.compare_digest(confirmation.token.encode(), token.encode()):

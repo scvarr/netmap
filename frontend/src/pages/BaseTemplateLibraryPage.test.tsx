@@ -9,7 +9,7 @@ import { BaseTemplateLibraryPage } from './BaseTemplateLibraryPage';
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async () => Response.json([
-    { id: 'test-type', name: 'Copper', color: '#335577', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
+    { id: 'test-type', name: 'Copper', color: '#335577', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, fiber_mode: null, compatibility_mode: 'UNDEFINED' },
   ])));
 });
 afterEach(() => vi.unstubAllGlobals());

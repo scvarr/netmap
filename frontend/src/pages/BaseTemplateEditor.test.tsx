@@ -10,8 +10,8 @@ import type { BaseTemplateRevisionDocument } from '../topology/baseTemplateTypes
 import { newBlueprintEditorState, BaseTemplateEditor } from './BaseTemplateEditor';
 
 const catalog = [
-  { id: 'test-type', name: 'Copper', color: '#336699', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
-  { id: 'fiber', name: 'Fiber', color: '#FFAA00', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
+  { id: 'test-type', name: 'Copper', color: '#336699', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, fiber_mode: null, compatibility_mode: 'UNDEFINED' },
+  { id: 'fiber', name: 'Fiber', color: '#FFAA00', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, fiber_mode: null, compatibility_mode: 'UNDEFINED' },
 ];
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async url => Response.json(String(url).endsWith('/module-port-types') ? ['Open / 42'].map(name => ({ id: name, name, is_active: true })) : catalog)));

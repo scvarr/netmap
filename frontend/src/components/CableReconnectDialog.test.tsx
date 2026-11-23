@@ -45,7 +45,7 @@ async function open(documents = docs, previewCompatibility?: CableReconnectDataS
 it.each(['DENY', 'UNKNOWN'] as const)('gates reconnect confirmation for %s', async verdict => {
   const check = vi.fn().mockResolvedValue({
     verdict, token: verdict === 'UNKNOWN' ? 'preview-token' : null,
-    ends: [{ pair: 1, side: 'B', verdict, reasons: [verdict === 'DENY' ? 'PROFILE_MISMATCH' : 'PORT_TYPE_UNRESOLVED'] }],
+    pairs: [{ pair: 1, verdict, reasons: [verdict === 'DENY' ? 'PORT_TYPES_NOT_ALLOWED' : 'PORT_B_TYPE_UNRESOLVED'] }],
   });
   const { reconnect } = await open(docs, check);
   select('Переносимое окончание', 'B');
@@ -60,10 +60,10 @@ it.each(['DENY', 'UNKNOWN'] as const)('gates reconnect confirmation for %s', asy
   expect(submit).toBeDisabled();
   expect(reconnect).not.toHaveBeenCalled();
   if (verdict === 'DENY') {
-    expect(warning).toHaveTextContent('профили разъёмов не совпадают');
+    expect(warning).toHaveTextContent('режим или матрица запрещает пару типов');
     expect(screen.queryByRole('checkbox')).toBeNull();
   } else {
-    expect(warning).toHaveTextContent('достоверный тип порта отсутствует');
+    expect(warning).toHaveTextContent('достоверный тип окончания B отсутствует');
     fireEvent.click(screen.getByRole('checkbox', { name: 'Продолжить с неподтверждённой совместимостью' }));
     fireEvent.click(submit);
     await waitFor(() => expect(reconnect).toHaveBeenCalledExactlyOnceWith('cable', expected, 'B', 'c1', {

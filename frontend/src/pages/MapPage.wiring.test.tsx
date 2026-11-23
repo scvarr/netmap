@@ -47,14 +47,13 @@ describe('MapPage visual wiring', () => {
     expect(screen.getByRole('button', { name: 'Создать кабель' })).toBeDisabled();
     await selectCableType();
     expect(screen.queryByRole('option', { name: 'Archived fiber' })).toBeNull();
-    await screen.findAllByRole('option', { name: 'RJ45 plug' });
-    fireEvent.change(screen.getByLabelText('Разъём B'), { target: { value: 'connector' } });
+    expect(screen.queryByLabelText(/Разъём [AB]/)).not.toBeInTheDocument();
     expect(screen.getByText('Source / A01 → Target / B01')).toBeInTheDocument();
     expect(screen.queryByText('Источник: Source / A01')).not.toBeInTheDocument();
     expect(screen.queryByText('Назначение: Target / B01')).not.toBeInTheDocument();
     expect(write).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
-    await waitFor(() => expect(write).toHaveBeenCalledWith({ cable_type_id: 'copper', connector_b_type_id: 'connector', source: { kind: 'CONNECTION_POINT', connection_point_id: 'a-cp', member_index: 1 }, target: { kind: 'CONNECTION_POINT', connection_point_id: 'b-cp', member_index: 1 }, cable_label: null, cable_label_template_id: null, generate_cable_label: false }));
+    await waitFor(() => expect(write).toHaveBeenCalledWith({ cable_type_id: 'copper', source: { kind: 'CONNECTION_POINT', connection_point_id: 'a-cp', member_index: 1 }, target: { kind: 'CONNECTION_POINT', connection_point_id: 'b-cp', member_index: 1 }, cable_label: null, cable_label_template_id: null, generate_cable_label: false }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Соединить порты' })).not.toBeInTheDocument());
     expect(write).toHaveBeenCalledTimes(1);
     expect(maps.loadMap).toHaveBeenCalledTimes(mapReads + 1);

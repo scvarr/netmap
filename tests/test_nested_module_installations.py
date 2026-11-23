@@ -44,13 +44,9 @@ def module(name, mount, places=(), has_endpoint=False):
 
 
 def physical_transceiver(mount, *, medium="FIBER"):
-    connector_name = f"Lab socket {uuid.uuid4()}"
-    connector = created(client.post("/v1/connector-types", json={
-        "name": connector_name, "mating_profile": "Lab", "termination": "SOCKET", "color": "#336699",
-    }))
     port = created(client.post("/v1/port-types", json={
-        "name": "Lab termination", "medium": medium, "members": ["1"],
-        "connector_type_id": connector["id"], "color": "#336699",
+        "name": "Lab termination", "medium": medium, "members": ["1"], "compatibility_mode": "SAME_TYPE",
+        "color": "#336699",
     }))
     return {"name": "Physical transceiver", **mount, "transceiver": {}, "geometry": initial_geometry(["optical"]),
             "endpoints": [{"key": "optical", "display_name": "Optical", "kind": "CONNECTION_POINT", "port_type_id": port["id"]}]}
@@ -302,7 +298,7 @@ def test_reconcile_moves_subtree_preserves_identity_and_round_trips_workspace():
     final_tree = read(oid)
     assert final_tree["nested_installations"] == [updated, updated_leaf]
     exported = package()
-    assert exported["format_version"] == 15
+    assert exported["format_version"] == 16
     assert exported["canonical"] == before["canonical"]
     def mappings(pkg):
         return {row["id"]: (row["installation_id"], row["connection_point_id"], row["network_interface_id"])
@@ -432,7 +428,7 @@ def test_workspace_tree_round_trip_and_prewrite_rejection():
     child, = historical_install(oid, card, "extension", root["id"])["nested_installations"]
     pinned = historical_install(oid, transceiver, "SFP port", child["id"])
     original = package()
-    assert original["format_version"] == 15
+    assert original["format_version"] == 16
     assert client.delete("/v1/workspace/dataset").status_code == 204
     empty = package()
     for target, error in [(str(uuid.uuid4()), "missing"), (other_root["id"], "another configuration"),

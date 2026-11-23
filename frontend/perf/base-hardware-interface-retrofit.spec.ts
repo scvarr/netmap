@@ -8,8 +8,7 @@ test('assign interfaces to published SFP sockets, reconcile an existing object, 
     expect(response.ok(), await response.text()).toBe(true);
     return response.json();
   };
-  const socket = await post('/connector-types', { name, color: '#336699', mating_profile: 'RJ45', termination: 'SOCKET' });
-  const port = await post('/port-types', { name, color: '#336699', medium: 'COPPER', members: ['1'], connector_type_id: socket.id });
+  const port = await post('/port-types', { name, color: '#336699', medium: 'COPPER', members: ['1'], compatibility_mode: 'SAME_TYPE' });
   const mounts = await (await request.get('/api/v1/module-port-types')).json();
   const sfp = mounts.find((mount: { name: string }) => mount.name === 'SFP')
     ?? await post('/module-port-types', { name: 'SFP' });

@@ -211,8 +211,8 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
           {step !== 'edit' && target && selected && <>
             <p>{t('map.reconnect.after')}</p>
             {ends(side === 'A' ? [endpoint(target, selected), current.ends[1]] : [current.ends[0], endpoint(target, selected)])}
-            {compatibility && compatibility.verdict !== 'ALLOW' &&
-              <p role="alert">{compatibilityMessage(compatibility, t)}</p>}
+            {compatibility &&
+              <p role={compatibility.verdict === 'ALLOW' ? 'status' : 'alert'}>{compatibilityMessage(compatibility, t)}</p>}
             {compatibility?.verdict === 'UNKNOWN' && <label>
               <input type="checkbox" checked={acceptUnknown} disabled={busy} onChange={event => setAcceptUnknown(event.target.checked)} />
               {t('compatibility.accept')}

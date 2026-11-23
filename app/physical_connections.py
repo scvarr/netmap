@@ -9,7 +9,7 @@ from app.errors import NetMapError, ValidationError
 from app.cable_labels import CableLabelCatalog, resolved_cable_label
 from app.module_endpoint_names import EndpointNames
 from app.models import (
-    Cable, CableLabelTemplate, CableType, ConnectorType, Connection, ConnectionMember,
+    Cable, CableLabelTemplate, CableType, Connection, ConnectionMember,
     ConnectionPoint, HardwareInterfaceAssociation, NetworkInterface, NetworkInterfacePhysicalOwner,
 )
 from app.physical_compatibility import verify_compatibility
@@ -373,30 +373,21 @@ class PhysicalConnectionCatalog:
         cable = Cable(
             connection_id=connection_id,
             cable_type_id=spec.cable_type_id,
-            connector_a_type_id=spec.connector_a_type_id,
-            connector_b_type_id=spec.connector_b_type_id,
         )
         self.session.add(cable)
         self.session.flush()
         return cable
 
     def _validate_cable_spec(self, spec: CableSpecification) -> None:
-        connector_ids = {spec.connector_a_type_id, spec.connector_b_type_id} - {None}
-        for model, ids, label in (
-            (CableType, {spec.cable_type_id}, "Cable type"),
-            (ConnectorType, connector_ids, "Connector type"),
-        ):
-            if not ids:
-                continue
-            # Serialize assignment against archive, deletion and structural updates.
-            items = list(self.session.scalars(
-                select(model).where(model.id.in_(ids)).order_by(model.id)
-                .with_for_update(read=True).execution_options(populate_existing=True)
-            ))
-            if len(items) != len(ids):
-                raise ValidationError(f"{label} not found")
-            if any(not item.is_active for item in items):
-                raise ValidationError(f"{label} is archived")
+        # Serialize assignment against archive, deletion and structural updates.
+        cable_type = self.session.scalar(
+            select(CableType).where(CableType.id == spec.cable_type_id)
+            .with_for_update(read=True).execution_options(populate_existing=True)
+        )
+        if cable_type is None:
+            raise ValidationError("Cable type not found")
+        if not cable_type.is_active:
+            raise ValidationError("Cable type is archived")
 
     def _reconnect_snapshot(
         self, cable_id: uuid.UUID, new_point_id: uuid.UUID | None = None,
@@ -465,10 +456,7 @@ class PhysicalConnectionCatalog:
                 raise NetMapError("CABLE_RECONNECT_OCCUPIED", "ConnectionPoint member is already occupied")
             cable = self.session.get(Cable, cable_id)
             assert cable is not None
-            spec = CableSpecification(
-                cable_type_id=cable.cable_type_id, connector_a_type_id=cable.connector_a_type_id,
-                connector_b_type_id=cable.connector_b_type_id,
-            )
+            spec = CableSpecification(cable_type_id=cable.cable_type_id)
             pair = (
                 new_point if request.side == "A" else points[connection.point_a_id],
                 new_point if request.side == "B" else points[connection.point_b_id],

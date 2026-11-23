@@ -1168,9 +1168,9 @@ class BaseTemplateRevisionDocument(BaseModel):
 
 
 class CableSpecification(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     cable_type_id: uuid.UUID
-    connector_a_type_id: uuid.UUID | None = None
-    connector_b_type_id: uuid.UUID | None = None
 
 
 class PhysicalCompatibilityConfirmation(BaseModel):
@@ -1182,22 +1182,21 @@ class PhysicalCompatibilityConfirmation(BaseModel):
 
 PhysicalCompatibilityVerdict = Literal["ALLOW", "DENY", "UNKNOWN"]
 PhysicalCompatibilityReason = Literal[
-    "MEDIUM_MISMATCH", "PROFILE_MISMATCH", "TERMINATION_MISMATCH",
-    "PORT_TYPE_UNRESOLVED", "CABLE_CONNECTOR_UNSPECIFIED",
-    "PORT_CONNECTOR_UNSPECIFIED", "FIBER_MODE_UNDOCUMENTED", "COMPATIBLE",
+    "MEDIUM_MISMATCH", "PORT_TYPES_NOT_ALLOWED", "PORT_COMPATIBILITY_UNDEFINED",
+    "PORT_A_TYPE_UNRESOLVED", "PORT_B_TYPE_UNRESOLVED", "FIBER_MODE_MISMATCH",
+    "FIBER_MODE_UNDOCUMENTED", "COMPATIBLE",
 ]
 
 
-class PhysicalCompatibilityEnd(BaseModel):
+class PhysicalCompatibilityPair(BaseModel):
     pair: int
-    side: Literal["A", "B"]
     verdict: PhysicalCompatibilityVerdict
     reasons: list[PhysicalCompatibilityReason]
 
 
 class PhysicalCompatibilityPreview(BaseModel):
     verdict: PhysicalCompatibilityVerdict
-    ends: list[PhysicalCompatibilityEnd]
+    pairs: list[PhysicalCompatibilityPair]
     token: str | None
 
 

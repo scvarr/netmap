@@ -125,7 +125,7 @@ def test_base_marker_revision_and_legacy_installation_survive_workspace_roundtri
     assert edited in base_review.open_draft(base)["definition"]["bays"]
     assert client.get(configuration_url).json() == pinned
     package = client.get("/v1/workspace/package").json()
-    assert package["format_version"] == 15
+    assert package["format_version"] == 16
     assert client.delete("/v1/workspace/dataset").status_code == 204
     imported = client.post("/v1/workspace/package", json=package)
     assert imported.status_code == 204, imported.text

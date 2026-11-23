@@ -10,10 +10,9 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
     const path = url.split('/').at(-1);
     if (path === 'module-port-types') return Response.json([{ id: 'sfp-plus', name: 'SFP+', is_active: true }]);
-    if (path === 'connector-types') return Response.json([{ id: 'lc', name: 'LC Duplex' }]);
     if (path === 'port-types') return Response.json([{
       id: 'lr', name: 'Optical LR', color: '#336699', medium: 'FIBER', is_active: true,
-      cardinality: 2, members: ['TX', 'RX'], connector_type_id: 'lc',
+      cardinality: 2, members: ['TX', 'RX'], fiber_mode: 'SM', compatibility_mode: 'SAME_TYPE',
     }]);
     return Response.json([]);
   }));
@@ -31,7 +30,7 @@ it('creates a physical transceiver with catalog UUIDs and optional typed charact
   fireEvent.change(screen.getByLabelText('Тип гнезда трансивера'), { target: { value: 'sfp-plus' } });
   expect(submit).toBeDisabled();
   fireEvent.change(screen.getByLabelText('Тип порта', { selector: 'select' }), { target: { value: 'lr' } });
-  expect(await screen.findByText('LC Duplex')).toBeInTheDocument();
+  expect(await screen.findByText('SM')).toBeInTheDocument();
   expect(screen.getByText('Физические каналы (2)')).toBeInTheDocument();
   expect(screen.getByText('TX · RX')).toBeInTheDocument();
   expect(screen.getByText(/с одним физическим каналом/)).toBeInTheDocument();

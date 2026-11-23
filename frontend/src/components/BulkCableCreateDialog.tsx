@@ -149,43 +149,36 @@ function BulkCompatibilitySummary({ preview, accepted, disabled, onAccept }: {
 }) {
   const { t } = useI18n();
   const [pair, setPair] = useState<number>();
-  const reasons = new Map<keyof typeof compatibilityReasonKeys, { pairs: Set<number>; ends: number }>();
-  const affectedPairs = new Set<number>();
-  for (const end of preview.ends) {
-    if (end.verdict === 'ALLOW') continue;
-    affectedPairs.add(end.pair);
-    for (const reason of end.reasons) {
-      const counts = reasons.get(reason) ?? { pairs: new Set<number>(), ends: 0 };
-      counts.pairs.add(end.pair);
-      counts.ends++;
-      reasons.set(reason, counts);
-    }
+  const reasons = new Map<keyof typeof compatibilityReasonKeys, number>();
+  for (const result of preview.pairs) {
+    if (result.verdict === 'ALLOW') continue;
+    for (const reason of result.reasons) reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
   }
   return <section className="bulk-create-compatibility" aria-label={t('map.bulk.compatibility')}>
     <p role={preview.verdict === 'DENY' ? 'alert' : 'status'}><strong>
       {t('map.bulk.verdict', { verdict: preview.verdict })}
     </strong></p>
-    {reasons.size > 0 && <>
+    {reasons.size > 0 &&
       <ul className="bulk-create-reasons">{[...reasons].map(([reason, counts]) => <li key={reason}>
-        {t('map.bulk.reasonCount', { reason: t(compatibilityReasonKeys[reason]), ends: counts.ends, pairs: counts.pairs.size })}
-      </li>)}</ul>
+        {t('map.bulk.reasonCount', { reason: t(compatibilityReasonKeys[reason]), pairs: counts })}
+      </li>)}</ul>}
       <details>
         <summary>{t('map.bulk.compatibilityDetails')}</summary>
         <label>{t('map.bulk.detailPair')}
           <select value={pair ?? ''} onChange={event => setPair(Number(event.target.value) || undefined)}>
-            <option value="">{t('map.bulk.allAffectedPairs')}</option>
-            {[...affectedPairs].map(index => <option key={index} value={index}>{index}</option>)}
+            <option value="">{t('map.bulk.allPairs')}</option>
+            {preview.pairs.map(result => <option key={result.pair} value={result.pair}>{result.pair}</option>)}
           </select>
         </label>
         <div className="bulk-create-detail-scroll" role="region" aria-label={t('map.bulk.compatibilityDetails')} tabIndex={0}>
-          <ul>{preview.ends.filter(end => end.verdict !== 'ALLOW' && (pair === undefined || end.pair === pair)).map(end =>
-            <li key={`${end.pair}/${end.side}`}><strong>{end.verdict}</strong> · {t('compatibility.end', {
-              pair: end.pair, side: end.side, reasons: end.reasons.map(reason => t(compatibilityReasonKeys[reason])).join(', '),
+          <ul>{preview.pairs.filter(result => pair === undefined || result.pair === pair).map(result =>
+            <li key={result.pair}>{t('compatibility.pair', {
+              pair: result.pair, verdict: result.verdict,
+              reasons: result.reasons.map(reason => t(compatibilityReasonKeys[reason])).join(', '),
             })}</li>,
           )}</ul>
         </div>
       </details>
-    </>}
     {preview.verdict === 'UNKNOWN' && <label className="bulk-create-accept">
       <input type="checkbox" disabled={disabled} checked={accepted} onChange={event => onAccept(event.target.checked)} />
       {t('compatibility.accept')}

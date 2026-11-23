@@ -7,8 +7,8 @@ import { EditModuleTemplatePage } from './EditModuleTemplatePage';
 import type { ModuleDraftDocument, ModuleReviewDataSource } from '../topology/hardwareModules';
 
 const catalog = [
-  { id: 'test-type', name: 'Copper', color: '#336699', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
-  { id: 'fiber', name: 'Fiber', color: '#FFAA00', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
+  { id: 'test-type', name: 'Copper', color: '#336699', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, fiber_mode: null, compatibility_mode: 'UNDEFINED' },
+  { id: 'fiber', name: 'Fiber', color: '#FFAA00', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, fiber_mode: null, compatibility_mode: 'UNDEFINED' },
 ];
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async () => Response.json(catalog)));

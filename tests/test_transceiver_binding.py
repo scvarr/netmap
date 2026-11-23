@@ -63,19 +63,16 @@ def test_cable_and_workspace_roundtrip(hardware):
     optic = created(client.post("/v1/library/module-templates", json=definition))
     a = created(install(object_id, optic, "socket", board["id"]))["nested_installations"][0]["endpoints"][0]
     b = created(install(peer_id, optic, "direct"))["bays"][1]["installation"]["endpoints"][0]
-    plug = created(client.post("/v1/connector-types", json={
-        "name": "Lab plug", "color": "#336699", "mating_profile": "Lab", "termination": "PLUG",
-    }))
     cable = created(client.post("/v1/cable-types", json={
         "name": "Lab copper", "color": "#336699", "medium": "COPPER", "construction": "TWISTED_PAIR",
     }))
     data = {"source": point_end(a["connection_point_id"]), "target": point_end(b["connection_point_id"]),
-            "cable_type_id": cable["id"], "connector_a_type_id": plug["id"], "connector_b_type_id": plug["id"]}
+            "cable_type_id": cable["id"]}
     connected = created(client.post("/v1/topology/physical-connections", json=data))
     reason(client.post("/v1/topology/physical-connections", json=data), 422, "CONNECTION_POINT_MEMBER_OCCUPIED")
     reason(client.delete(f"/v1/topology/physical-objects/{object_id}"), 409, "PHYSICAL_OBJECT_IN_USE")
     snapshot = package()
-    assert snapshot["format_version"] == 15
+    assert snapshot["format_version"] == 16
     assert client.delete("/v1/workspace/dataset").status_code == 204
     empty = package()
     for invalid_member in (None, 2):
@@ -108,7 +105,7 @@ def test_install_validation_and_concurrency(hardware):
                 if row["id"] == definition["endpoints"][0]["port_type_id"])
     duplex_port = created(client.post("/v1/port-types", json={
         "name": "Duplex", "color": "#336699", "medium": "FIBER",
-        "members": ["1", "2"], "connector_type_id": port["connector_type_id"],
+        "members": ["1", "2"],
     }))
     duplex_definition = copy.deepcopy(definition)
     duplex_definition.update(name="Duplex optic")

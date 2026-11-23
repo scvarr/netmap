@@ -4,7 +4,8 @@ import uuid
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 from sqlalchemy import cast, or_, select
 from sqlalchemy.dialects.postgresql import JSONPATH
 from sqlalchemy.exc import IntegrityError
@@ -14,11 +15,13 @@ from app.database import get_session
 from app.errors import ValidationError
 from app.models import (
     BaseTemplateCandidate, BaseTemplateDraft, BuiltInEndpointDefinition, Cable, CableType,
-    ConnectorType, ModuleBay, ModuleBayType, ModuleEndpointDefinition, ModulePortType, ModuleTemplateCandidate,
-    ModuleTemplateDraft, ModuleTemplateRevision, PortType,
+    ModuleBay, ModuleBayType, ModuleEndpointDefinition, ModulePortType, ModuleTemplateCandidate,
+    ModuleTemplateDraft, ModuleTemplateRevision, PortType, PortTypeCompatibility,
 )
 
 Medium = Literal["COPPER", "FIBER"]
+FiberMode = Literal["SM", "MM"]
+CompatibilityMode = Literal["SAME_TYPE", "MATRIX", "UNDEFINED"]
 StructuralLabel = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255, pattern=r"^[^\x00\r\n]+$")]
 DatabaseSession = Annotated[Session, Depends(get_session)]
 
@@ -54,7 +57,13 @@ class PortStructure(BaseModel):
 
     medium: Medium
     members: Annotated[list[StructuralLabel], Field(min_length=1)]
-    connector_type_id: uuid.UUID | None = None
+    fiber_mode: FiberMode | None = None
+
+    @model_validator(mode="after")
+    def validate_fiber_mode(self):
+        if self.medium == "COPPER" and self.fiber_mode is not None:
+            raise PydanticCustomError("invalid_fiber_mode", "Copper port types cannot specify fiber mode")
+        return self
 
     @field_validator("members")
     @classmethod
@@ -65,17 +74,19 @@ class PortStructure(BaseModel):
 
 
 class PortTypeInput(CatalogInput, PortStructure):
-    pass
-
-
-class ConnectorTypeInput(CatalogInput):
-    mating_profile: StructuralLabel
-    termination: Literal["PLUG", "SOCKET"]
+    compatibility_mode: CompatibilityMode = "UNDEFINED"
 
 
 class CableTypeInput(CatalogInput):
     medium: Medium
     construction: StructuralLabel
+    fiber_mode: FiberMode | None = None
+
+    @model_validator(mode="after")
+    def validate_fiber_mode(self):
+        if (self.medium == "FIBER") != (self.fiber_mode is not None):
+            raise PydanticCustomError("invalid_fiber_mode", "Fiber cable types require SM or MM. Copper cable types cannot specify fiber mode")
+        return self
 
 
 class MountTypeInput(BaseModel):
@@ -102,10 +113,6 @@ class PortTypeDocument(PortTypeInput, CatalogDocument):
     cardinality: int
 
 
-class ConnectorTypeDocument(ConnectorTypeInput, CatalogDocument):
-    pass
-
-
 class CableTypeDocument(CableTypeInput, CatalogDocument):
     pass
 
@@ -120,7 +127,7 @@ SNAPSHOT_SECTIONS = (
 )
 
 
-def validate_port_type_assignments(session, endpoints, previous=(), *, require_connector=False):
+def validate_port_type_assignments(session, endpoints, previous=()):
     retained = {(endpoint["key"], endpoint["port_type_id"]) for endpoint in previous}
     ids = {uuid.UUID(endpoint["port_type_id"]) for endpoint in endpoints}
     if not ids:
@@ -134,8 +141,6 @@ def validate_port_type_assignments(session, endpoints, previous=(), *, require_c
         raise ValidationError("Port type not found")
     for endpoint in endpoints:
         item = types[uuid.UUID(endpoint["port_type_id"])]
-        if require_connector and item.connector_type_id is None:
-            raise ValidationError("Transceiver PortType requires a connector")
         if not item.is_active and (endpoint["key"], endpoint["port_type_id"]) not in retained:
             raise ValidationError("An archived port type cannot be newly assigned")
         if endpoint["kind"] == "NETWORK_PORT" and item.cardinality != 1:
@@ -183,24 +188,7 @@ def _used(session, model, item_id):
     if model is PortType:
         revisions, snapshots = _port_type_usage(item_id)
         return session.scalar(select(or_(*revisions, *snapshots)))
-    if model is ConnectorType:
-        return session.scalar(select(or_(
-            select(PortType.id).where(PortType.connector_type_id == item_id).exists(),
-            select(Cable.id).where(Cable.connector_a_type_id == item_id).exists(),
-            select(Cable.id).where(Cable.connector_b_type_id == item_id).exists(),
-        )))
     return session.scalar(select(select(Cable.id).where(Cable.cable_type_id == item_id).exists()))
-
-
-def _validate_connector(session, connector_id):
-    if connector_id is None:
-        return
-    connector = session.scalar(select(ConnectorType).where(ConnectorType.id == connector_id)
-                               .with_for_update(read=True).execution_options(populate_existing=True))
-    if connector is None:
-        raise HTTPException(422, "Connector type not found")
-    if not connector.is_active:
-        raise HTTPException(409, "An archived connector type cannot be newly assigned")
 
 
 def _commit(session):
@@ -236,8 +224,6 @@ def catalog_router(path, tag, model, payload, document, structural_fields):
 
     @router.post("", status_code=201, response_model=document, name=f"create_{path}")
     def create_item(query: payload, session: DatabaseSession):
-        if model is PortType:
-            _validate_connector(session, query.connector_type_id)
         item = model(**query.model_dump())
         session.add(item)
         _commit(session)
@@ -249,8 +235,6 @@ def catalog_router(path, tag, model, payload, document, structural_fields):
         if any(getattr(item, field) != getattr(query, field) for field in structural_fields):
             if _used(session, model, item_id):
                 raise HTTPException(409, "Catalog type structure is in use")
-            if model is PortType and query.connector_type_id != item.connector_type_id:
-                _validate_connector(session, query.connector_type_id)
         for field, value in query.model_dump().items():
             setattr(item, field, value)
         _commit(session)
@@ -271,9 +255,50 @@ def catalog_router(path, tag, model, payload, document, structural_fields):
 
 router = APIRouter()
 router.include_router(catalog_router("port-types", "Port types", PortType, PortTypeInput, PortTypeDocument, PortStructure.model_fields))
-router.include_router(catalog_router("connector-types", "Connector types", ConnectorType, ConnectorTypeInput, ConnectorTypeDocument, ("mating_profile", "termination")))
-router.include_router(catalog_router("cable-types", "Cable types", CableType, CableTypeInput, CableTypeDocument, ("medium", "construction")))
+router.include_router(catalog_router("cable-types", "Cable types", CableType, CableTypeInput, CableTypeDocument, ("medium", "construction", "fiber_mode")))
 
 router.include_router(catalog_router("module-port-types", "Module port types", ModulePortType, MountTypeInput, MountTypeDocument, ()))
 
 router.include_router(catalog_router("module-bay-types", "Module bay types", ModuleBayType, MountTypeInput, MountTypeDocument, ()))
+
+
+class CompatibilityPairDocument(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    port_type_a_id: uuid.UUID
+    port_type_b_id: uuid.UUID
+
+
+class CompatibilityPairInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    allowed: StrictBool
+
+
+@router.get("/v1/port-type-compatibilities", response_model=list[CompatibilityPairDocument])
+def list_compatibility_pairs(session: DatabaseSession):
+    return list(session.scalars(select(PortTypeCompatibility).order_by(
+        PortTypeCompatibility.port_type_a_id, PortTypeCompatibility.port_type_b_id,
+    )))
+
+
+@router.put("/v1/port-type-compatibilities/{first_id}/{second_id}", status_code=204)
+def set_compatibility_pair(first_id: uuid.UUID, second_id: uuid.UUID,
+                           query: CompatibilityPairInput, session: DatabaseSession):
+    ids = sorted({first_id, second_id})
+    # Serialize both directions and exclude verification while the rule changes.
+    types = list(session.scalars(select(PortType).where(PortType.id.in_(ids))
+                                 .order_by(PortType.id).with_for_update()))
+    if len(types) != len(ids):
+        raise HTTPException(404, "Port type not found")
+    if query.allowed and (any(port.compatibility_mode != "MATRIX" for port in types)
+                          or types[0].medium != types[-1].medium):
+        raise HTTPException(422, "An allowed pair needs two matrix types of the same medium")
+
+    key = (ids[0], ids[-1])
+    pair = session.get(PortTypeCompatibility, key)
+    if query.allowed and pair is None:
+        session.add(PortTypeCompatibility(port_type_a_id=key[0], port_type_b_id=key[1]))
+    elif not query.allowed and pair is not None:
+        session.delete(pair)
+    _commit(session)

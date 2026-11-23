@@ -252,12 +252,6 @@ class Cable(Base):
     cable_type_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("cable_types.id", ondelete="RESTRICT"), index=True,
     )
-    connector_a_type_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("connector_types.id", ondelete="RESTRICT"), index=True,
-    )
-    connector_b_type_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("connector_types.id", ondelete="RESTRICT"), index=True,
-    )
     # Mutable user-facing metadata.  It is deliberately not identity or topology.
     label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     connection: Mapped[Connection] = relationship(back_populates="cable")
@@ -1376,25 +1370,6 @@ class ModuleTemplatePublication(Base):
     id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_candidates.id", ondelete="CASCADE"), primary_key=True)
     revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_revisions.id", ondelete="CASCADE"), unique=True, nullable=False)
 
-class ConnectorType(Base):
-    __tablename__ = "connector_types"
-    __table_args__ = (
-        Index("uq_connector_types_normalized_name", func.lower(sa.text("name")), unique=True),
-        CheckConstraint("name <> ''", name="nonempty_name"),
-        CheckConstraint("color ~ '^#[0-9A-F]{6}$'", name="hex_color"),
-        CheckConstraint("termination IN ('PLUG', 'SOCKET')", name="termination"),
-        CheckConstraint("mating_profile <> ''", name="nonempty_profile"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[str | None] = mapped_column(sa.Text)
-    color: Mapped[str] = mapped_column(String(7), nullable=False)
-    is_active: Mapped[bool] = mapped_column(nullable=False)
-    mating_profile: Mapped[str] = mapped_column(String(255))
-    termination: Mapped[str] = mapped_column(String(6))
-
-
 class CableType(Base):
     __tablename__ = "cable_types"
     __table_args__ = (
@@ -1403,6 +1378,9 @@ class CableType(Base):
         CheckConstraint("color ~ '^#[0-9A-F]{6}$'", name="hex_color"),
         CheckConstraint("medium IN ('COPPER', 'FIBER')", name="medium"),
         CheckConstraint("construction <> ''", name="nonempty_construction"),
+        CheckConstraint("(medium = 'COPPER' AND fiber_mode IS NULL) OR "
+                        "(medium = 'FIBER' AND fiber_mode IS NOT NULL AND fiber_mode IN ('SM', 'MM'))",
+                        name="fiber_mode"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -1412,6 +1390,7 @@ class CableType(Base):
     is_active: Mapped[bool] = mapped_column(nullable=False)
     medium: Mapped[str] = mapped_column(String(6))
     construction: Mapped[str] = mapped_column(String(255))
+    fiber_mode: Mapped[str | None] = mapped_column(String(2))
 
 
 class PortType(Base):
@@ -1420,6 +1399,9 @@ class PortType(Base):
         Index("uq_port_types_normalized_name", func.lower(sa.text("name")), unique=True),
         CheckConstraint("medium IN ('COPPER', 'FIBER')", name="medium"),
         CheckConstraint("jsonb_array_length(members) >= 1", name="nonempty_members"),
+        CheckConstraint("fiber_mode IS NULL OR (medium = 'FIBER' AND fiber_mode IN ('SM', 'MM'))",
+                        name="fiber_mode"),
+        CheckConstraint("compatibility_mode IN ('SAME_TYPE', 'MATRIX', 'UNDEFINED')", name="compatibility_mode"),
         CheckConstraint("name <> ''", name="nonempty_name"),
         CheckConstraint("color ~ '^#[0-9A-F]{6}$'", name="hex_color"),
     )
@@ -1431,13 +1413,26 @@ class PortType(Base):
     is_active: Mapped[bool] = mapped_column(nullable=False)
     medium: Mapped[str] = mapped_column(String(6))
     members: Mapped[list[str]] = mapped_column(JSONB)
-    connector_type_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("connector_types.id", ondelete="RESTRICT"), index=True,
-    )
+    fiber_mode: Mapped[str | None] = mapped_column(String(2))
+    compatibility_mode: Mapped[str] = mapped_column(String(9), default="UNDEFINED")
 
     @property
     def cardinality(self) -> int:
         return len(self.members)
+
+
+class PortTypeCompatibility(Base):
+    __tablename__ = "port_type_compatibilities"
+    __table_args__ = (
+        CheckConstraint("port_type_a_id <= port_type_b_id", name="ordered_pair"),
+    )
+
+    port_type_a_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("port_types.id", ondelete="CASCADE"), primary_key=True,
+    )
+    port_type_b_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("port_types.id", ondelete="CASCADE"), primary_key=True, index=True,
+    )
 
 
 class ModulePortType(Base):

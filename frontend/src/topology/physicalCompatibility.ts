@@ -5,14 +5,14 @@ export interface PhysicalCompatibilityConfirmation {
   accept_unknown: boolean;
 }
 
-type Verdict = 'ALLOW' | 'DENY' | 'UNKNOWN';
+export type Verdict = 'ALLOW' | 'DENY' | 'UNKNOWN';
 export const compatibilityReasonKeys = {
   MEDIUM_MISMATCH: 'compatibility.medium',
-  PROFILE_MISMATCH: 'compatibility.profile',
-  TERMINATION_MISMATCH: 'compatibility.termination',
-  PORT_TYPE_UNRESOLVED: 'compatibility.portType',
-  CABLE_CONNECTOR_UNSPECIFIED: 'compatibility.cableConnector',
-  PORT_CONNECTOR_UNSPECIFIED: 'compatibility.portConnector',
+  PORT_TYPES_NOT_ALLOWED: 'compatibility.portTypesDenied',
+  PORT_COMPATIBILITY_UNDEFINED: 'compatibility.portRuleUndefined',
+  PORT_A_TYPE_UNRESOLVED: 'compatibility.portAType',
+  PORT_B_TYPE_UNRESOLVED: 'compatibility.portBType',
+  FIBER_MODE_MISMATCH: 'compatibility.fiberMismatch',
   FIBER_MODE_UNDOCUMENTED: 'compatibility.fiberMode',
   COMPATIBLE: 'compatibility.compatible',
 } as const;
@@ -20,19 +20,20 @@ export const compatibilityReasonKeys = {
 export interface PhysicalCompatibilityPreview {
   verdict: Verdict;
   token: string | null;
-  ends: { pair: number; side: 'A' | 'B'; verdict: Verdict; reasons: (keyof typeof compatibilityReasonKeys)[] }[];
+  pairs: { pair: number; verdict: Verdict; reasons: (keyof typeof compatibilityReasonKeys)[] }[];
 }
 
 export class PhysicalCompatibilityError extends Error {}
 
 export function compatibilityReasons(preview: PhysicalCompatibilityPreview, t: ReturnType<typeof useI18n>['t']): string[] {
-  return preview.ends.filter(end => end.verdict !== 'ALLOW').map(end => t('compatibility.end', {
-    pair: end.pair, side: end.side, reasons: end.reasons.map(reason => t(compatibilityReasonKeys[reason])).join(', '),
+  return preview.pairs.map(pair => t('compatibility.pair', {
+    pair: pair.pair, verdict: pair.verdict, reasons: pair.reasons.map(reason => t(compatibilityReasonKeys[reason])).join(', '),
   }));
 }
 
 export function compatibilityMessage(preview: PhysicalCompatibilityPreview, t: ReturnType<typeof useI18n>['t']): string {
-  return [t(preview.verdict === 'DENY' ? 'compatibility.denied' : 'compatibility.unknown'), ...compatibilityReasons(preview, t)].join('\n');
+  const headline = { ALLOW: 'compatibility.allowed', DENY: 'compatibility.denied', UNKNOWN: 'compatibility.unknown' } as const;
+  return [t(headline[preview.verdict]), ...compatibilityReasons(preview, t)].join('\n');
 }
 
 export function confirmPhysicalCompatibility(
@@ -57,7 +58,7 @@ export async function requestPhysicalCompatibility(
   });
   if (!response.ok) throw await readError(response);
   const preview: PhysicalCompatibilityPreview = await response.json();
-  if (!['ALLOW', 'DENY', 'UNKNOWN'].includes(preview?.verdict) || !Array.isArray(preview.ends)
+  if (!['ALLOW', 'DENY', 'UNKNOWN'].includes(preview?.verdict) || !Array.isArray(preview.pairs)
       || (preview.verdict !== 'DENY' && typeof preview.token !== 'string')) {
     throw new Error('Malformed physical compatibility preview');
   }

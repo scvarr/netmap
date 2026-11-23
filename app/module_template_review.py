@@ -185,8 +185,7 @@ class ModuleTemplateReview:
         updated = validate_definition(definition)
         validate_module_authoring(updated)
         validate_transceiver_authoring(updated, published_definition(self.session, template_id, draft.source_revision_id))
-        validate_port_type_assignments(self.session, updated["endpoints"], draft.definition["endpoints"],
-                                       require_connector="transceiver" in updated)
+        validate_port_type_assignments(self.session, updated["endpoints"], draft.definition["endpoints"])
         validate_mount_types(self.session, module_assignments(updated), module_assignments(draft.definition))
         draft.definition = updated
         draft.generation += 1

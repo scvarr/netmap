@@ -8,8 +8,6 @@ export type PhysicalEndpointRequest =
 
 export interface CableSpecification {
   cable_type_id: string;
-  connector_a_type_id?: string | null;
-  connector_b_type_id?: string | null;
 }
 
 export interface CreatePhysicalEndpointConnectionRequest extends CableNamingInput, CableSpecification {

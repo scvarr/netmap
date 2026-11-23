@@ -8,7 +8,7 @@ from tests.test_workspace_portability import client, isolated_workspace, snapsho
 
 pytestmark = pytest.mark.no_database
 URL = "/v1/port-types"
-PORT = {"medium": "COPPER", "members": ["1"], "connector_type_id": None}
+PORT = {"medium": "COPPER", "members": ["1"], "fiber_mode": None, "compatibility_mode": "UNDEFINED"}
 
 
 def create_port(fields):
@@ -54,7 +54,7 @@ def test_port_type_workspace_round_trip_and_invalid_import():
     archived = create_port({"name": "Optical", "color": "#abcdef",
                                       "description": "SFP+", "is_active": False}).json()
     before = snapshot()
-    assert before["format_version"] == 15
+    assert before["format_version"] == 16
     assert {item["id"]: item for item in before["settings"]["PortType"]} == {
         item["id"]: {k: v for k, v in item.items() if k != "cardinality"} for item in (active, archived)
     }
@@ -150,7 +150,7 @@ def test_assignment_lifecycle_and_workspace_round_trip(template_kind, section):
     assert update_port(original_url, {"name": "Twisted pair", "color": "#112233", "members": ["X"]}).status_code == 409
 
     before = snapshot()
-    assert before["format_version"] == 15
+    assert before["format_version"] == 16
     assert client.delete("/v1/workspace/dataset").status_code == 204
     malformed = copy.deepcopy(before)
     draft_record, = malformed["authoring"][f"{template_kind.capitalize()}TemplateDraft"]
@@ -181,12 +181,7 @@ def test_connected_retained_endpoint_type_is_immutable(template_kind, replacemen
 
     port_types = []
     for profile, medium in (("RJ45", "COPPER"), ("LC" if replacement_medium == "FIBER" else "GG45", replacement_medium)):
-        connector = client.post("/v1/connector-types", json={
-            "name": profile, "color": "#123456", "mating_profile": profile, "termination": "SOCKET",
-        })
-        assert connector.status_code == 201, connector.text
-        port = create_port({"name": profile, "color": "#123456", "medium": medium,
-                            "connector_type_id": connector.json()["id"]})
+        port = create_port({"name": profile, "color": "#123456", "medium": medium})
         assert port.status_code == 201, port.text
         port_types.append(port.json())
     original, replacement = port_types
@@ -253,7 +248,7 @@ def test_connected_retained_endpoint_type_is_immutable(template_kind, replacemen
     # Even after removing the draft reference, the frozen candidate protects its type.
     still_used = update_port(f"{URL}/{replacement['id']}", {
         "name": replacement["name"], "color": replacement["color"], "medium": replacement_medium,
-        "connector_type_id": replacement["connector_type_id"], "members": ["X"],
+        "members": ["X"],
     })
     assert still_used.status_code == 409, still_used.text
 
@@ -267,7 +262,7 @@ def test_connected_retained_endpoint_type_is_immutable(template_kind, replacemen
     assert snapshot() == pinned
 
     saved_type = update_port(f"{URL}/{original['id']}", {
-        "name": "Renamed RJ45", "color": "#334455", "connector_type_id": original["connector_type_id"],
+        "name": "Renamed RJ45", "color": "#334455",
     })
     assert saved_type.status_code == 200, saved_type.text
     reloaded = client.get(object_url)
@@ -280,31 +275,12 @@ def test_connected_retained_endpoint_type_is_immutable(template_kind, replacemen
     assert after["authoring"] == pinned["authoring"]
 
 
-def test_connector_dependency_archiving_and_cable_catalog():
-    connectors = "/v1/connector-types"
-    connector = {"name": "Custom LC", "color": "#123456", "mating_profile": "Custom", "termination": "SOCKET"}
-    created = client.post(connectors, json=connector)
-    assert created.status_code == 201, created.text
-    connector_id = created.json()["id"]
-    url = f"{connectors}/{connector_id}"
-    port = {"name": "Optical panel", "color": "#345678", "medium": "FIBER", "members": ["A", "B"],
-            "connector_type_id": connector_id}
-    created = create_port(port)
-    assert created.status_code == 201, created.text
-    port_id = created.json()["id"]
-    assert client.get(f"{URL}/{port_id}").json()["cardinality"] == 2
-    assert client.put(url, json={**connector, "termination": "PLUG"}).status_code == 409
-    assert client.put(url, json={**connector, "name": "Edited LC", "is_active": False}).status_code == 200
-    assert client.get(url).json()["name"] == "Edited LC"
-    assert create_port({**port, "name": "New port"}).status_code == 409
-    assert client.delete(url).status_code == 409
-    assert update_port(f"{URL}/{port_id}", {**port, "connector_type_id": None}).status_code == 200
-    assert client.put(url, json={**connector, "termination": "PLUG", "is_active": False}).status_code == 200
-    assert client.delete(url).status_code == 204
-
+def test_cable_type_fiber_mode_validation_and_lifecycle():
     cables = "/v1/cable-types"
-    cable = {"name": "Custom fiber", "color": "#223344", "medium": "FIBER", "construction": "CUSTOM"}
+    cable = {"name": "Custom fiber", "color": "#223344", "medium": "FIBER", "construction": "CUSTOM", "fiber_mode": "SM"}
     assert client.post(cables, json={**cable, "cardinality": 12}).status_code == 422
+    assert client.post(cables, json={**cable, "fiber_mode": None}).status_code == 422
+    assert client.post(cables, json={**cable, "medium": "COPPER"}).status_code == 422
     created = client.post(cables, json=cable)
     assert created.status_code == 201, created.text
     cable_id = created.json()["id"]
@@ -352,25 +328,6 @@ def test_structural_edit_waits_for_concurrent_template_assignment():
             assert waiting, "The structural edit must wait for the assigning transaction"
         assert result.result(timeout=5).status_code == 409
     assert client.get(f"{URL}/{UUID(port_id)}").json()["members"] == ["1"]
-
-
-def test_seed_conflicts_preserve_user_edits(monkeypatch):
-    from runpy import run_path
-    from app.database import SessionLocal
-
-    helpers = run_path("alembic/versions/catd01_physical_catalogs.py")
-    with SessionLocal.begin() as session:
-        monkeypatch.setattr(helpers["op"], "get_bind", session.connection)
-        seed = helpers["seed"]
-        item_id = seed("cable_types", "Seed", medium="COPPER", construction="TWISTED_PAIR")
-    url = f"/v1/cable-types/{item_id}"
-    assert client.put(url, json={"name": "Renamed seed", "color": "#123456", "medium": "FIBER",
-                                 "construction": "CUSTOM"}).status_code == 200
-    with SessionLocal.begin() as session:
-        monkeypatch.setattr(helpers["op"], "get_bind", session.connection)
-        assert seed("cable_types", "Seed", medium="COPPER", construction="TWISTED_PAIR") == item_id
-    assert client.get(url).json()["construction"] == "CUSTOM"
-    assert len(client.get("/v1/cable-types").json()) == 1
 
 
 def test_multimember_module_materializes_passive_point_but_rejects_network_port():

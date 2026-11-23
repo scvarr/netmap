@@ -80,7 +80,7 @@ def test_roundtrip_and_prewrite_validation(hardware):
     object_id, board, direct = create_installation(hardware)
     other_id, other_board, _ = create_installation(hardware)
     original = package()
-    assert original["format_version"] == 15
+    assert original["format_version"] == 16
     assert client.delete("/v1/workspace/dataset").status_code == 204
     empty = package()
     for mutation in ("foreign_owner", "foreign_parent", "wrong_place", "wrong_key", "duplicate", "missing",
@@ -175,7 +175,7 @@ def test_duplicate_and_wrong_kind_declarations_are_invalid(hardware):
     assert client.post("/v1/library/module-templates", json=definition).status_code == 422
 
 
-def test_v14_import_preserves_historical_objects_without_provisioning():
+def test_workspace_rejects_v14_and_preserves_unprovisioned_objects_in_current_format():
     base, _ = create_base()
     object_id = create_object(base)["physical_object_ref"]["entity_id"]
     current = package()
@@ -185,7 +185,8 @@ def test_v14_import_preserves_historical_objects_without_provisioning():
     for bay in old["authoring"]["ModuleBay"]:
         del bay["hardware_interface_key"]
     assert client.delete("/v1/workspace/dataset").status_code == 204
-    response = client.post("/v1/workspace/package", json=old)
+    assert client.post("/v1/workspace/package", json=old).status_code == 422
+    response = client.post("/v1/workspace/package", json=current)
     assert response.status_code == 204, response.text
     assert package() == current
     assert "network_interface_id" not in read(object_id)["bays"][0]

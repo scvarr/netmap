@@ -18,12 +18,9 @@ LIBRARY = "/v1/library/module-templates"
 
 
 def physical_definition(mount, model, connector, medium, members, specifications):
-    connector_id = created(client.post("/v1/connector-types", json={
-        "name": connector, "mating_profile": connector, "termination": "SOCKET", "color": "#336699",
-    }))["id"]
     port_type = created(client.post("/v1/port-types", json={
         "name": f"{connector} termination", "medium": medium, "members": members,
-        "connector_type_id": connector_id, "color": "#336699",
+        "color": "#336699",
     }))
     return {
         "name": model, **mount, "transceiver": specifications,
@@ -79,7 +76,7 @@ def test_transceiver_library_lifecycle(model, connector, medium, members, specif
     assert "transceiver" not in latest[structural["template_id"]]
 
     exported = package()
-    assert exported["format_version"] == 15
+    assert exported["format_version"] == 16
     assert exported["canonical"] == before["canonical"]
     assert exported["authoring"]["ModuleInstallation"] == before["authoring"]["ModuleInstallation"]
     historical = next(row for row in exported["authoring"]["ModuleTemplateRevision"]

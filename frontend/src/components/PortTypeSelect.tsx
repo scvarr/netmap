@@ -4,6 +4,10 @@ import { useI18n } from '../i18n';
 
 export type Medium = 'COPPER' | 'FIBER';
 
+export type FiberMode = 'SM' | 'MM';
+export const compatibilityModes = ['SAME_TYPE', 'MATRIX', 'UNDEFINED'] as const;
+export type CompatibilityMode = (typeof compatibilityModes)[number];
+
 export type CatalogType = {
   id: string;
   name: string;
@@ -16,11 +20,11 @@ export type PortType = CatalogType & {
   medium: Medium;
   members: string[];
   cardinality: number;
-  connector_type_id: string | null;
+  fiber_mode: FiberMode | null;
+  compatibility_mode: CompatibilityMode;
 };
 
-export type ConnectorType = CatalogType & { mating_profile: string; termination: 'PLUG' | 'SOCKET' };
-export type CableType = CatalogType & { medium: Medium; construction: string };
+export type CableType = CatalogType & { medium: Medium; construction: string; fiber_mode: FiberMode | null };
 
 export const portTypesUrl = '/api/v1/port-types';
 

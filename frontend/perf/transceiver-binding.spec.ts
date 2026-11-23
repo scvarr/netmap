@@ -9,9 +9,7 @@ test('install a vertical board and fixed SFP transceivers, then keep their cable
     expect(response.ok(), await response.text()).toBe(true);
     return response.json();
   };
-  const socket = await post('/connector-types', { name: name + ' socket', color: '#336699', mating_profile: 'RJ45', termination: 'SOCKET' });
-  const plug = await post('/connector-types', { name: name + ' plug', color: '#336699', mating_profile: 'RJ45', termination: 'PLUG' });
-  const port = await post('/port-types', { name, color: '#336699', medium: 'COPPER', members: ['1'], connector_type_id: socket.id });
+  const port = await post('/port-types', { name, color: '#336699', medium: 'COPPER', members: ['1'], compatibility_mode: 'SAME_TYPE' });
   const cable = await post('/cable-types', { name, color: '#336699', medium: 'COPPER', construction: 'TWISTED_PAIR' });
   const mounts = await (await request.get('/api/v1/module-port-types')).json();
   const sfp = mounts.find((mount: { name: string }) => mount.name === 'SFP')
@@ -102,8 +100,6 @@ test('install a vertical board and fixed SFP transceivers, then keep their cable
   await page.getByLabel('Целевой физический объект').selectOption(peer.objectId);
   await page.getByLabel('Свободный физический порт').selectOption(peer.pointId);
   await page.getByLabel('Тип кабеля').selectOption(cable.id);
-  await page.getByLabel('Разъём A').selectOption(plug.id);
-  await page.getByLabel('Разъём B').selectOption(plug.id);
   await page.getByLabel('Имя кабеля').fill(name + ' cable');
   await page.getByRole('button', { name: 'Подключить', exact: true }).click();
   await expect(page.getByText(name + ' cable', { exact: false })).toBeVisible();

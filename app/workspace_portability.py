@@ -19,7 +19,7 @@ from sqlalchemy.sql.sqltypes import JSON
 
 from app.database import Base
 from app import models
-from app.port_types import CableTypeInput, ConnectorTypeInput, MountTypeInput, PortTypeInput
+from app.port_types import CableTypeInput, MountTypeInput, PortTypeInput
 from app.module_port_types import MOUNT_CATALOGS, MOUNT_FIELDS, mount_identity, result_mounts
 from app.schemas import ModuleBayRequest, ModuleMount, AutomaticLocationLayout
 from app.hardware_interfaces import declared_interfaces
@@ -27,7 +27,7 @@ from pydantic import ValidationError
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 15
+FORMAT_VERSION = 16
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -41,7 +41,7 @@ ENTITIES = (
     ("canonical", "InterfacePhysicalBinding", "InterfacePhysicalBinding", "id interface_id point_id point_member"),
     ("canonical", "Connection", "Connection", "id point_a_id point_b_id cardinality"),
     ("canonical", "ConnectionMember", "ConnectionMember", "id connection_id index point_a_member point_b_member"),
-    ("canonical", "Cable", "Cable", "id connection_id cable_type_id connector_a_type_id connector_b_type_id label"),
+    ("canonical", "Cable", "Cable", "id connection_id cable_type_id label"),
     ("canonical", "EntityMetadata", "EntityMetadata", "id physical_object_id network_interface_id connection_point_id key value"),
     ("canonical", "L2ForwardingContext", "L2ForwardingContext", "id"),
     ("canonical", "L2Binding", "L2Binding", "id interface_id forwarding_context_id"),
@@ -94,11 +94,11 @@ ENTITIES = (
     ("presentation", "MapViewPosition", "MapViewPosition", "id placement_id variant_id view_key x y locked display_width face_override"),
     ("presentation", "MapLocationState", "MapLocationState", "id variant_id location_id collapsed visible_direct_elements geometry manual_bounds face_override"),
     ("presentation", "MapTextAnnotation", "MapTextAnnotation", "id map_id text position text_color font_size"),
-    ("settings", "ConnectorType", "ConnectorType", "id name description color is_active mating_profile termination"),
-    ("settings", "PortType", "PortType", "id name description color is_active medium members connector_type_id"),
+    ("settings", "PortType", "PortType", "id name description color is_active medium members fiber_mode compatibility_mode"),
+    ("settings", "PortTypeCompatibility", "PortTypeCompatibility", "port_type_a_id port_type_b_id"),
     ("settings", "ModuleBayType", "ModuleBayType", "id name is_active"),
     ("settings", "ModulePortType", "ModulePortType", "id name is_active"),
-    ("settings", "CableType", "CableType", "id name description color is_active medium construction"),
+    ("settings", "CableType", "CableType", "id name description color is_active medium construction fiber_mode"),
     ("settings", "CableLabelSettings", "CableLabelSettings", "id unique_labels"),
     ("settings", "CableLabelTemplate", "CableLabelTemplate", "id name description pattern start_at"),
     ("settings", "CableLabelHistory", "CableLabelHistory", "id label cable_id assigned_at released_at"),
@@ -133,7 +133,7 @@ def export_package(session: Session) -> dict:
     package = {"format": FORMAT, "format_version": FORMAT_VERSION, "module_geometry_version": 1, "module_layout_version": 1, "module_places_version": 1,
                "canonical": {}, "authoring": {}, "presentation": {}, "settings": {}}
     for section, name, model, fields in _specs():
-        rows = session.scalars(select(model).order_by(model.id)).all()
+        rows = session.scalars(select(model).order_by(*model.__table__.primary_key.columns)).all()
         package[section][name] = [
             {field: _json_value(getattr(row, field)) for field in fields
              if model is not models.ModuleTemplateRevision or field != "transceiver" or row.transceiver is not None}
@@ -181,7 +181,7 @@ def validate_package(package: object) -> dict:
     if not isinstance(package, dict) or package.get("format") != FORMAT:
         raise PackageError("Not a NetMap workspace package")
     version = package.get("format_version")
-    if type(version) is not int or version not in (14, FORMAT_VERSION):
+    if type(version) is not int or version != FORMAT_VERSION:
         raise PackageError("Unsupported NetMap workspace format_version")
     profiles = ("module_geometry_version", "module_layout_version", "module_places_version")
     sections = ("canonical", "authoring", "presentation", "settings")
@@ -191,17 +191,12 @@ def validate_package(package: object) -> dict:
         raise PackageError("Unsupported module profile")
 
     specs = _specs()
-    input_specs = specs if version == FORMAT_VERSION else [
-        (section, name, model, [field for field in fields
-                               if model is not models.ModuleBay or field != "hardware_interface_key"])
-        for section, name, model, fields in specs if model is not models.HardwareInterfaceAssociation
-    ]
     result = {}
     for section in sections:
-        expected = {name for part, name, _, _ in input_specs if part == section}
+        expected = {name for part, name, _, _ in specs if part == section}
         if not isinstance(package[section], dict) or set(package[section]) != expected:
             raise PackageError(f"Incomplete {section} section")
-    for section, name, model, fields in input_specs:
+    for section, name, model, fields in specs:
         records = package[section][name]
         if not isinstance(records, list):
             raise PackageError(f"{name} must be a list")
@@ -215,14 +210,12 @@ def validate_package(package: object) -> dict:
             if not isinstance(record, dict) or not required_fields <= record.keys() <= expected_fields:
                 raise PackageError(f"{name} has incomplete or unknown fields")
             row = {field: _decode(record.get(field), columns[field], f"{name}.{field}") for field in fields}
-            if version == 14 and model is models.ModuleBay:
-                row["hardware_interface_key"] = None
             if model is models.MapPresentationVariant and row["automatic_layout"] is not None:
                 try:
                     row["automatic_layout"] = TypeAdapter(AutomaticLocationLayout).validate_python(row["automatic_layout"]).model_dump(mode="json")
                 except ValidationError as error:
                     raise PackageError("Invalid MapPresentationVariant.automatic_layout settings") from error
-            catalog_schema = {models.PortType: PortTypeInput, models.ConnectorType: ConnectorTypeInput,
+            catalog_schema = {models.PortType: PortTypeInput,
                               models.CableType: CableTypeInput, models.ModulePortType: MountTypeInput,
                               models.ModuleBayType: MountTypeInput}.get(model)
             if catalog_schema:
@@ -241,13 +234,14 @@ def validate_package(package: object) -> dict:
                     ModuleBayRequest.model_validate({k: row[k] for k in ModuleBayRequest.model_fields if k in row})
                 except ValidationError as error:
                     raise PackageError("Invalid ModuleBay kind or rectangle") from error
-            if row["id"] in ids:
+            if model is models.PortTypeCompatibility and row["port_type_a_id"] > row["port_type_b_id"]:
+                raise PackageError("PortTypeCompatibility pair must be in UUID order")
+            identity = tuple(row[column.key] for column in model.__table__.primary_key.columns)
+            if identity in ids:
                 raise PackageError(f"Duplicate {name} ID")
-            ids.add(row["id"])
+            ids.add(identity)
             parsed.append(row)
         result[model.__table__.name] = parsed
-    if version == 14:
-        result["hardware_interface_associations"] = []
     singleton = result["cable_label_settings"]
     if len(singleton) != 1 or singleton[0]["id"] != 1:
         raise PackageError("CableLabelSettings singleton is missing")
@@ -298,15 +292,6 @@ def validate_package(package: object) -> dict:
             current = locations[current]
     _validate_template_reviews(result)
     _validate_module_template_reviews(result)
-    if version == 14:
-        definitions = [(r["module_places"], "key") for r in result["module_template_revisions"]]
-        definitions.extend(
-            (r["definition"].get(places, ()), key)
-            for prefix, places, key in (("base", "bays", "bay_key"), ("module", "module_places", "key"))
-            for state in ("drafts", "candidates") for r in result[f"{prefix}_template_{state}"]
-        )
-        if any(declared_interfaces(places, place_key=key) for places, key in definitions):
-            raise PackageError("Hardware interface declarations require Workspace v15")
     _validate_hardware_configuration(result)
     capacities = {row["id"]: len(row["members"]) for row in result["port_types"]}
     for prefix, section in (("base", "slots"), ("module", "endpoints")):
@@ -365,12 +350,6 @@ def _validate_module_template_reviews(rows):
     if len(published) != len(set(published)) or set(published) != {r["id"] for r in revisions.values() if r["version_number"] > 1}:
         raise PackageError("Every noninitial module revision requires one publication receipt")
     definitions = {}
-    connected_types = {str(row["id"]) for row in rows["port_types"] if row["connector_type_id"] is not None}
-
-    def validate_transceiver(definition):
-        if "transceiver" in definition and definition["endpoints"][0]["port_type_id"] not in connected_types:
-            raise PackageError("Transceiver PortType requires a connector")
-
     for revision in revisions.values():
         try:
             definition = validate_definition({**{k: revision[k] for k in ("name", "geometry", "module_places", "transceiver", *MOUNT_FIELDS)}, "endpoints": [
@@ -378,7 +357,6 @@ def _validate_module_template_reviews(rows):
                 for e in sorted(rows["module_endpoint_definitions"], key=lambda e: e["order_index"]) if e["module_revision_id"] == revision["id"]]})
         except (SchemaError, TypeError) as exc:
             raise PackageError("Invalid module revision definition") from exc
-        validate_transceiver(definition)
         definitions[revision["id"]] = definition
     for receipt in receipts:
         candidate = candidates[receipt["id"]]
@@ -402,7 +380,7 @@ def _validate_module_template_reviews(rows):
                     raise PackageError("Duplicate module template draft")
                 templates.add(row["template_id"])
             try:
-                validate_transceiver(validate_definition(row["definition"]))
+                validate_definition(row["definition"])
                 if table == "module_template_candidates":
                     ModuleTemplateImpactResult.model_validate(row["result"])
             except (SchemaError, TypeError) as exc:
@@ -670,7 +648,7 @@ def is_empty(session: Session) -> bool:
     if settings and (len(settings) != 1 or settings[0].id != 1 or settings[0].unique_labels):
         return False
     return all(
-        session.scalar(select(table.c.id).limit(1)) is None
+        session.scalar(select(next(iter(table.primary_key.columns))).limit(1)) is None
         for table in _tables_in_dependency_order() if table.name != "cable_label_settings"
     )
 

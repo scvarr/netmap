@@ -4,24 +4,28 @@ import { useSearchParams } from 'react-router-dom';
 import { useI18n } from '../i18n';
 import { PageHeader, PageShell } from '../components/PageChrome';
 
-import type { CableType, CatalogType, ConnectorType, Medium, PortType } from '../components/PortTypeSelect';
+import { compatibilityModes, type CableType, type CatalogType, type CompatibilityMode, type FiberMode, type Medium, type PortType } from '../components/PortTypeSelect';
 
 import type { MountType } from '../components/ModulePortTypeSelect';
 
-type Catalog = 'module-bay-types' | 'module-port-types' | 'port-types' | 'connector-types' | 'cable-types';
-type Item = PortType | ConnectorType | CableType | MountType;
+type Catalog = 'module-bay-types' | 'module-port-types' | 'port-types' | 'cable-types';
+type Item = PortType | CableType | MountType;
 type Fields = Omit<CatalogType, 'id'>;
 type Payload = Omit<MountType, 'id'> & Partial<Fields> & ReturnType<typeof structureOf>;
-const titles = { 'module-bay-types': 'moduleBayTypes.title', 'module-port-types': 'modulePortTypes.title', 'port-types': 'portTypes.title', 'connector-types': 'physicalCatalog.connectorTypes', 'cable-types': 'physicalCatalog.cableTypes' } as const;
-const createLabels = { 'module-bay-types': 'moduleBayTypes.create', 'module-port-types': 'modulePortTypes.create', 'port-types': 'portTypes.create', 'connector-types': 'physicalCatalog.createConnector', 'cable-types': 'physicalCatalog.createCable' } as const;
-const emptyStructure = { medium: 'COPPER' as Medium, members: '', connector_type_id: '', mating_profile: '', termination: 'SOCKET' as ConnectorType['termination'], construction: '' };
+const titles = { 'module-bay-types': 'moduleBayTypes.title', 'module-port-types': 'modulePortTypes.title', 'port-types': 'portTypes.title', 'cable-types': 'physicalCatalog.cableTypes' } as const;
+const createLabels = { 'module-bay-types': 'moduleBayTypes.create', 'module-port-types': 'modulePortTypes.create', 'port-types': 'portTypes.create', 'cable-types': 'physicalCatalog.createCable' } as const;
+const emptyStructure = {
+  medium: 'COPPER' as Medium, members: '', fiber_mode: '' as FiberMode | '',
+  compatibility_mode: 'UNDEFINED' as CompatibilityMode, construction: '',
+};
+const matrixUrl = '/api/v1/port-type-compatibilities';
+type CompatibilityPair = { port_type_a_id: string; port_type_b_id: string };
 
 function structureOf(item: Item) {
   if ('members' in item) {
-    return { medium: item.medium, members: item.members, connector_type_id: item.connector_type_id };
+    return { medium: item.medium, members: item.members, fiber_mode: item.fiber_mode, compatibility_mode: item.compatibility_mode };
   }
-  if ('mating_profile' in item) return { mating_profile: item.mating_profile, termination: item.termination };
-  if ('construction' in item) return { medium: item.medium, construction: item.construction };
+  if ('construction' in item) return { medium: item.medium, construction: item.construction, fiber_mode: item.fiber_mode };
   return {};
 }
 
@@ -43,7 +47,7 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
   const [items, setItems] = useState<Item[] | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [structure, setStructure] = useState(emptyStructure);
-  const [connectors, setConnectors] = useState<ConnectorType[]>();
+  const [matrix, setMatrix] = useState<CompatibilityPair[]>([]);
   const [attempt, setAttempt] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -55,9 +59,9 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
       const response = await fetch(endpoint, { signal: controller.signal });
       if (!response.ok) throw new Error();
       if (catalog === 'port-types') {
-        const connectorResponse = await fetch('/api/v1/connector-types', { signal: controller.signal });
-        if (!connectorResponse.ok) throw new Error();
-        setConnectors(await connectorResponse.json() as ConnectorType[]);
+        const matrixResponse = await fetch(matrixUrl, { signal: controller.signal });
+        if (!matrixResponse.ok) throw new Error();
+        setMatrix(await matrixResponse.json() as CompatibilityPair[]);
       }
       setItems(await response.json() as Item[]);
     }
@@ -99,6 +103,7 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
       }
       if (method === 'DELETE') {
         setItems((current) => (current ?? []).filter((item) => item.id !== id));
+        setMatrix(current => current.filter(pair => pair.port_type_a_id !== id && pair.port_type_b_id !== id));
       } else {
         const saved = await response.json() as Item;
         setItems((current) => [...(current ?? []).filter((item) => item.id !== saved.id), saved]);
@@ -111,14 +116,36 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
     }
   }
 
+  async function setPair(first: string, second: string, allowed: boolean) {
+    const [a, b] = [first, second].sort();
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`${matrixUrl}/${a}/${b}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ allowed }),
+      });
+      if (!response.ok) {
+        setError(response.status === 422 ? 'invalid' : 'request');
+        return;
+      }
+      setMatrix(current => allowed
+        ? [...current, { port_type_a_id: a, port_type_b_id: b }]
+        : current.filter(pair => pair.port_type_a_id !== a || pair.port_type_b_id !== b));
+    } catch {
+      setError('request');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function save(event: FormEvent) {
     event.preventDefault();
     const fields = modular ? { name: form.name, is_active: form.is_active } : form;
+    const physical = { medium: structure.medium, fiber_mode: structure.fiber_mode || null };
     const payload = modular ? {} : catalog === 'port-types'
-      ? { medium: structure.medium, members: structure.members.split('\n').map(member => member.trim()).filter(Boolean), connector_type_id: structure.connector_type_id || null }
-      : catalog === 'connector-types'
-        ? { mating_profile: structure.mating_profile, termination: structure.termination }
-        : { medium: structure.medium, construction: structure.construction };
+      ? { ...physical, members: structure.members.split('\n').map(member => member.trim()).filter(Boolean),
+          compatibility_mode: structure.compatibility_mode }
+      : { ...physical, construction: structure.construction };
     void mutate(editingId ? 'PUT' : 'POST', editingId, { ...fields, ...payload });
   }
 
@@ -133,6 +160,7 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
   const pageCount = Math.max(1, Math.ceil(visible.length / size));
   const page = Number.isInteger(requestedPage) ? Math.min(Math.max(1, requestedPage), pageCount) : 1;
   const rows = visible.slice((page - 1) * size, page * size);
+  const editing = items?.find(item => item.id === editingId);
 
   return <PageShell className="catalog-page port-types-page">
     <PageHeader eyebrow={t('portTypes.section')} title={title} />
@@ -148,34 +176,28 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
             {!modular && <label>{t('portTypes.description')} <input value={form.description ?? ''} onChange={(event) => setForm({ ...form, description: event.target.value || null })} /></label>}
           </div>
           {!modular && <><div className="port-types-form__fields">
-            {catalog !== 'connector-types' && <label>{t('physicalCatalog.medium')}
-              <select value={structure.medium} onChange={event => setStructure({ ...structure, medium: event.target.value as Medium })}>
+            <label>{t('physicalCatalog.medium')}
+              <select value={structure.medium} onChange={event => setStructure({ ...structure, medium: event.target.value as Medium, fiber_mode: '' })}>
                 <option value="COPPER">{t('physicalCatalog.COPPER')}</option>
                 <option value="FIBER">{t('physicalCatalog.FIBER')}</option>
+              </select>
+            </label>
+            {structure.medium === 'FIBER' && <label>{t('physicalCatalog.fiberMode')}
+              <select required={catalog === 'cable-types'} value={structure.fiber_mode}
+                onChange={event => setStructure({ ...structure, fiber_mode: event.target.value as FiberMode | '' })}>
+                <option value="">{t('physicalCatalog.UNDEFINED')}</option>
+                <option value="SM">SM</option>
+                <option value="MM">MM</option>
               </select>
             </label>}
             {catalog === 'port-types' && <>
               <label>{t('physicalCatalog.members')}
                 <textarea required rows={3} value={structure.members} onChange={event => setStructure({ ...structure, members: event.target.value })} />
               </label>
-              <label>{t('physicalCatalog.connector')}
-                <select value={structure.connector_type_id} onChange={event => setStructure({ ...structure, connector_type_id: event.target.value })}>
-                  <option value="">{t('physicalCatalog.noConnector')}</option>
-                  {connectors?.filter(item => item.is_active || item.id === structure.connector_type_id).map(item =>
-                    <option key={item.id} value={item.id} disabled={!item.is_active}>
-                      {item.name}{!item.is_active && ` · ${t('portTypes.archived')}`}
-                    </option>)}
-                </select>
-              </label>
-            </>}
-            {catalog === 'connector-types' && <>
-              <label>{t('physicalCatalog.profile')}
-                <input required maxLength={255} value={structure.mating_profile} onChange={event => setStructure({ ...structure, mating_profile: event.target.value })} />
-              </label>
-              <label>{t('physicalCatalog.termination')}
-                <select value={structure.termination} onChange={event => setStructure({ ...structure, termination: event.target.value as ConnectorType['termination'] })}>
-                  <option value="SOCKET">{t('physicalCatalog.SOCKET')}</option>
-                  <option value="PLUG">{t('physicalCatalog.PLUG')}</option>
+              <label>{t('physicalCatalog.compatibilityMode')}
+                <select value={structure.compatibility_mode}
+                  onChange={event => setStructure({ ...structure, compatibility_mode: event.target.value as CompatibilityMode })}>
+                  {compatibilityModes.map(mode => <option key={mode} value={mode}>{t(`physicalCatalog.${mode}`)}</option>)}
                 </select>
               </label>
             </>}
@@ -194,6 +216,34 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
         </fieldset>
       </form>
     </section>
+    {editing && 'members' in editing && <section className="catalog-surface catalog-table-wrap" aria-label={t('physicalCatalog.matrix')}>
+      <h2>{t('physicalCatalog.matrix')} · {editing.name}</h2>
+      <p className="catalog-note">{t('physicalCatalog.matrixHelp')}</p>
+      <table className="catalog-table">
+        <thead><tr>
+          <th scope="col">{t('portTypes.name')}</th>
+          <th scope="col">{t('physicalCatalog.marked')}</th>
+          <th scope="col">{t('physicalCatalog.pairResult')}</th>
+        </tr></thead>
+        <tbody>{(items ?? []).filter((item): item is PortType => 'members' in item).map(other => {
+          const [a, b] = [editing.id, other.id].sort();
+          const marked = matrix.some(pair => pair.port_type_a_id === a && pair.port_type_b_id === b);
+          const modes = [editing.compatibility_mode, other.compatibility_mode];
+          const sameMedium = editing.medium === other.medium;
+          const matrixPair = sameMedium && editing.compatibility_mode === 'MATRIX' && other.compatibility_mode === 'MATRIX';
+          const denied = !sameMedium || (editing.id !== other.id && modes.includes('SAME_TYPE'))
+            || (modes.includes('MATRIX') && !(matrixPair && marked));
+          const verdict = denied ? 'DENY' : modes.includes('UNDEFINED') ? 'UNKNOWN' : 'ALLOW';
+          return <tr key={other.id}>
+            <th scope="row">{other.name}</th>
+            <td><input type="checkbox" aria-label={t('physicalCatalog.markPair', { name: other.name })}
+              checked={marked} disabled={busy || (!matrixPair && !marked)}
+              onChange={event => void setPair(a, b, event.target.checked)} /></td>
+            <td>{t(`physicalCatalog.${verdict}`)}</td>
+          </tr>;
+        })}</tbody>
+      </table>
+    </section>}
     {items?.length === 0 && <p className="catalog-note">{t('physicalCatalog.empty')}</p>}
     {!!items?.length && <section className="catalog-controls" aria-label={t('catalog.searchFilters')}>
       <label>{t('catalog.search')}<input value={search} onChange={event => changeList('q', event.target.value)} /></label>
@@ -237,10 +287,10 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
               {appearance && <><td>
                 {'medium' in item && t(`physicalCatalog.${item.medium}`)}
                 {'members' in item && <> · {item.cardinality} <small>{item.members.join(', ')}</small>
-                  {item.connector_type_id && <small>{connectors?.find(connector => connector.id === item.connector_type_id)?.name}</small>}
+                  <small>{t(`physicalCatalog.${item.compatibility_mode}`)}</small>
                 </>}
-                {'mating_profile' in item && <>{item.mating_profile} · {t(`physicalCatalog.${item.termination}`)}</>}
                 {'construction' in item && <> · {item.construction}</>}
+                {'fiber_mode' in item && item.fiber_mode && <> · {item.fiber_mode}</>}
               </td>
               <td><span className="port-types-swatch">
                 <span aria-hidden="true" style={{ backgroundColor: appearance.color }} />
@@ -250,9 +300,10 @@ export function PhysicalCatalogPage({ catalog }: { catalog: Catalog }) {
               <td><div className="catalog-table__actions">
                 <button className="secondary-action" type="button" disabled={busy} onClick={() => { setEditingId(id); setForm({ ...emptyForm, ...fields, ...appearance }); setStructure('members' in item ? {
                   ...emptyStructure, medium: item.medium, members: item.members.join('\n'),
-                  connector_type_id: item.connector_type_id ?? '',
-                } : 'mating_profile' in item ? { ...emptyStructure, mating_profile: item.mating_profile, termination: item.termination }
-                  : 'construction' in item ? { ...emptyStructure, medium: item.medium, construction: item.construction } : emptyStructure); setError(null); }}>{t('portTypes.edit')}</button>
+                  compatibility_mode: item.compatibility_mode, fiber_mode: item.fiber_mode ?? '',
+                } : 'construction' in item ? {
+                  ...emptyStructure, medium: item.medium, construction: item.construction, fiber_mode: item.fiber_mode ?? '',
+                } : emptyStructure); setError(null); }}>{t('portTypes.edit')}</button>
                 <button className="secondary-action" type="button" disabled={busy} onClick={() => void mutate('PUT', id, { ...physicalFields, ...appearance, ...fields, is_active: !fields.is_active })}>{t(fields.is_active ? 'portTypes.archive' : 'portTypes.restore')}</button>
                 {!fields.is_active && <button className="danger-action" type="button" disabled={busy} onClick={() => {
                   if (window.confirm(t('portTypes.deleteConfirm'))) void mutate('DELETE', id);
