@@ -10,7 +10,7 @@ from app.cable_labels import CableLabelCatalog, resolved_cable_label
 from app.module_endpoint_names import EndpointNames
 from app.models import (
     Cable, CableLabelTemplate, CableType, ConnectorType, Connection, ConnectionMember,
-    ConnectionPoint, NetworkInterface, NetworkInterfacePhysicalOwner,
+    ConnectionPoint, HardwareInterfaceAssociation, NetworkInterface, NetworkInterfacePhysicalOwner,
 )
 from app.physical_compatibility import verify_compatibility
 from app.repository import CanonicalRepository, ConnectionMemberInput
@@ -150,6 +150,12 @@ class PhysicalConnectionCatalog:
                 "NetworkInterface does not exist",
                 {"interface_ids": [str(value) for value in missing_ids]},
             )
+
+        if interface_ids and self.session.scalar(select(HardwareInterfaceAssociation.id).where(
+            HardwareInterfaceAssociation.interface_id.in_(interface_ids)
+        ).limit(1)) is not None:
+            raise ValidationError("Hardware interfaces require a physical transceiver binding",
+                                  {"reason": "TRANSCEIVER_BINDING_REQUIRED"})
 
         repository = CanonicalRepository(self.session)
         owners = {

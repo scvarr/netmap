@@ -63,10 +63,11 @@
 
 ## Частичная реализация
 
-- **Оборудование и оптика.** Пассивная ModuleTemplate continuity и MOD-03
-  остаются OPEN. MOD-03 охватывает родительские NetworkInterface и физические
-  bindings трансиверов, LC Duplex и безопасный lifecycle. QSFP breakout и его
-  lifecycle также остаются OPEN.
+- **Оборудование и оптика.** MOD-03A-1 IMPLEMENTED. Родительские NetworkInterface
+  создаются по явным объявлениям в портах шасси и плат. Workspace v15 сохраняет
+  связи с местами, импорт v14 поддерживается. MOD-03A-2 (физические bindings),
+  MOD-03B (LC Duplex), MOD-03C (замена), FN-010 (L1-карта), пассивная
+  ModuleTemplate continuity и QSFP breakout остаются OPEN.
 - **Карта.** DOC-LOC-03 PARTIAL. Есть стрелочная расстановка, сортировка
   Location и порядок непосредственного оборудования. Остался grid-specific
   partial-collapse UX. Полный collapse проверен на ручной карте, в uniform grid

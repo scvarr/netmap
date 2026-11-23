@@ -79,7 +79,7 @@ def test_transceiver_library_lifecycle(model, connector, medium, members, specif
     assert "transceiver" not in latest[structural["template_id"]]
 
     exported = package()
-    assert exported["format_version"] == 14
+    assert exported["format_version"] == 15
     assert exported["canonical"] == before["canonical"]
     assert exported["authoring"]["ModuleInstallation"] == before["authoring"]["ModuleInstallation"]
     historical = next(row for row in exported["authoring"]["ModuleTemplateRevision"]

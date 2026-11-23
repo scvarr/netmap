@@ -1,13 +1,13 @@
 import uuid
 from collections import Counter
 
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.errors import ModelError, ValidationError
 from app.models import (
     ModuleInstallation, ModuleEndpointMapping, ObjectConfiguration, BuiltInEndpointMapping, Connection, ConnectionMember,
-    ConnectionPoint, EntityMetadata, InterfacePhysicalBinding, L2Binding,
+    ConnectionPoint, EntityMetadata, HardwareInterfaceAssociation, InterfacePhysicalBinding, L2Binding,
     L2EgressRule, L2ForwardingContext, L2IngressRule,
     L3Binding, NetworkInterface, NetworkInterfacePhysicalOwner,
     NetworkInterfaceRealization, PhysicalObject,
@@ -107,6 +107,8 @@ class PhysicalObjectDeletionCatalog:
 
     def _delete_aggregate(self, object_: PhysicalObject, point_ids: tuple[uuid.UUID, ...], interface_ids: tuple[uuid.UUID, ...], connection_ids: tuple[uuid.UUID, ...]) -> None:
         instance_ids = self._ids(ObjectConfiguration.id, ObjectConfiguration.physical_object_id == object_.id)
+        self.session.execute(delete(HardwareInterfaceAssociation).where(
+            HardwareInterfaceAssociation.configuration_id.in_(instance_ids)))
         for placement in self.session.scalars(select(MapPlacement).where(MapPlacement.physical_object_id == object_.id)):
             self.session.delete(placement)
         if connection_ids:

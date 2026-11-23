@@ -12,6 +12,7 @@ from app.module_port_types import (
     validate_transceiver_authoring,
 )
 from app.module_layout import compose_layout, initial_layout, nested_place, validate_layout
+from app.hardware_interfaces import declared_interfaces
 from app.device_catalog import DISPLAY_ALIAS_KEY, PHYSICAL_OBJECT_CLASS_KEY
 from app.errors import ModelError, ValidationError
 from app.models import (
@@ -25,7 +26,7 @@ from app.models import (
     BaseTemplateRevision,
     PresentationPanel,
     ModuleBay, ModuleTemplate, ModuleTemplateRevision, ModuleEndpointDefinition,
-    ModuleInstallation, ModuleEndpointMapping, PhysicalObject, PortType,
+    HardwareInterfaceAssociation, ModuleInstallation, ModuleEndpointMapping, PhysicalObject, PortType,
 )
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from app.module_endpoint_names import endpoint_context
@@ -340,6 +341,10 @@ class HardwareCatalog:
         instance = ObjectConfiguration(base_revision_id=version.id, physical_object_id=physical_object.id)
         self.session.add(instance)
         self.session.flush()
+        self._materialize_hardware_interfaces(instance, None, [
+            _base_place(bay) for bay in self.session.scalars(select(ModuleBay).where(
+                ModuleBay.base_revision_id == version.id, ModuleBay.hardware_interface_key.is_not(None)))
+        ], place_key="bay_key")
         materialized: dict[uuid.UUID, MaterializedSlot] = {}
         for slot in slots:
             point = repository.add_connection_point(physical_object.id, cardinality=slot.cardinality)
@@ -498,6 +503,7 @@ class HardwareCatalog:
             bay_key=query.bay_key, orientation=query.orientation)
         self.session.add(installation)
         self.session.flush()
+        self._materialize_hardware_interfaces(config, installation.id, revision.module_places, place_key="key")
         repository = CanonicalRepository(self.session)
         for definition in definitions:
             capacity = self.session.get(PortType, definition.port_type_id).cardinality
@@ -514,6 +520,22 @@ class HardwareCatalog:
         self.session.flush()
         return self.configuration_document(object_id)
 
+    def _materialize_hardware_interfaces(self, config, parent_id, places, *, place_key):
+        repository = CanonicalRepository(self.session)
+        keys = declared_interfaces(places, place_key=place_key)
+        for place in places:
+            bay_key = place[place_key]
+            if bay_key not in keys:
+                continue
+            interface = repository.add_network_interface()
+            repository.add_network_interface_physical_owner(interface.id, config.physical_object_id)
+            self._metadata(network_interface_id=interface.id, key=DISPLAY_ALIAS_KEY, value=place["display_name"])
+            self.session.add(HardwareInterfaceAssociation(
+                configuration_id=config.id, physical_object_id=config.physical_object_id,
+                parent_installation_id=parent_id, bay_key=bay_key,
+                hardware_interface_key=keys[bay_key], interface_id=interface.id,
+            ))
+
     def configuration_document(self, object_id):
         CanonicalRepository(self.session).require_physical_objects([object_id])
         config = self.session.scalar(select(ObjectConfiguration).where(ObjectConfiguration.physical_object_id == object_id))
@@ -522,6 +544,9 @@ class HardwareCatalog:
         installations = list(self.session.scalars(select(ModuleInstallation).where(
             ModuleInstallation.configuration_id == config.id).order_by(ModuleInstallation.id)))
         occupied = {(i.parent_installation_id, i.bay_key): i for i in installations}
+        hardware_interfaces = {(row.parent_installation_id, row.bay_key): row.interface_id
+                               for row in self.session.scalars(select(HardwareInterfaceAssociation).where(
+                                   HardwareInterfaceAssociation.configuration_id == config.id))}
         modules = {r.id: (r, t) for r, t in self.session.execute(
             select(ModuleTemplateRevision, ModuleTemplate)
             .join(ModuleTemplate, ModuleTemplate.id == ModuleTemplateRevision.template_id)
@@ -544,6 +569,9 @@ class HardwareCatalog:
         nested_installations = []
         while pending:
             place, parent_id, frame, siblings, parent_layout, parent_turns, parent_path = pending.popleft()
+            interface_id = hardware_interfaces.get((parent_id, place["bay_key"]))
+            if interface_id is not None:
+                place["network_interface_id"] = str(interface_id)
             installation = occupied.get((parent_id, place["bay_key"]))
             if parent_id is None:
                 place["installation"] = None
@@ -609,5 +637,8 @@ class HardwareCatalog:
 
 
 def _base_place(bay):
-    return {**row_mount(bay), **{key: getattr(bay, key) for key in
-            ("bay_key", "display_name", "panel_key", "kind", "x", "y", "width", "height")}}
+    place = {**row_mount(bay), **{key: getattr(bay, key) for key in
+             ("bay_key", "display_name", "panel_key", "kind", "x", "y", "width", "height")}}
+    if bay.hardware_interface_key is not None:
+        place["hardware_interface_key"] = str(bay.hardware_interface_key)
+    return place

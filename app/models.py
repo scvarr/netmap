@@ -359,6 +359,7 @@ class NetworkInterfacePhysicalOwner(Base):
     __tablename__ = "network_interface_physical_owners"
     __table_args__ = (
         UniqueConstraint("interface_id", name="uq_network_interface_physical_owners_interface"),
+        UniqueConstraint("interface_id", "physical_object_id", name="uq_interface_owner_object"),
         Index("ix_network_interface_physical_owners_physical_object_id", "physical_object_id"),
     )
 
@@ -557,7 +558,10 @@ class BaseInternalLink(Base):
 
 class ObjectConfiguration(Base):
     __tablename__ = "object_configurations"
-    __table_args__ = (UniqueConstraint("physical_object_id", name="uq_object_configurations_physical_object"),)
+    __table_args__ = (
+        UniqueConstraint("physical_object_id", name="uq_object_configurations_physical_object"),
+        UniqueConstraint("id", "physical_object_id", name="uq_object_configuration_owner"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     base_revision_id: Mapped[uuid.UUID] = mapped_column(
@@ -600,6 +604,9 @@ class ModuleBay(Base):
             name="mount_type",
         ),
         UniqueConstraint("base_revision_id", "bay_key"),
+        UniqueConstraint("base_revision_id", "hardware_interface_key", name="uq_base_hardware_interface_key"),
+        CheckConstraint("hardware_interface_key IS NULL OR mount_kind = 'MODULE_PORT'",
+                        name="hardware_interface_requires_port"),
         ForeignKeyConstraint(["base_revision_id", "panel_key"], ["presentation_panels.base_revision_id", "presentation_panels.panel_key"], ondelete="RESTRICT"),
         CheckConstraint("(kind = 'LOGICAL' AND x IS NULL AND y IS NULL AND width IS NULL AND height IS NULL) OR (kind = 'PLACED' AND x BETWEEN 0 AND 1 AND y BETWEEN 0 AND 1 AND x IS NOT NULL AND y IS NOT NULL AND (width IS NULL) = (height IS NULL))", name="bay_representation"),
         CheckConstraint("x >= 0 AND y >= 0 AND width > 0 AND height > 0 AND x + width <= 1 AND y + height <= 1", name="rectangle_inside_panel"),
@@ -608,6 +615,7 @@ class ModuleBay(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     base_revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("base_template_revisions.id", ondelete="RESTRICT"), nullable=False)
     bay_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    hardware_interface_key: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     mount_kind: Mapped[str] = mapped_column(String(11))
     module_port_type_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -722,6 +730,42 @@ class ModuleInstallation(Base):
     bay_key: Mapped[str] = mapped_column(String(255), nullable=False)
     orientation: Mapped[str] = mapped_column(String(16), nullable=False)
     layout: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class HardwareInterfaceAssociation(Base):
+    """An object-owned interface declared at a place in pinned hardware."""
+
+    __tablename__ = "hardware_interface_associations"
+    __table_args__ = (
+        UniqueConstraint("interface_id", name="uq_hardware_association_interface"),
+        ForeignKeyConstraint(
+            ["interface_id", "physical_object_id"],
+            ["network_interface_physical_owners.interface_id", "network_interface_physical_owners.physical_object_id"],
+            name="fk_hardware_association_interface_owner",
+        ),
+        ForeignKeyConstraint(
+            ["configuration_id", "physical_object_id"],
+            ["object_configurations.id", "object_configurations.physical_object_id"],
+            name="fk_hardware_association_configuration_owner",
+        ),
+        ForeignKeyConstraint(
+            ["parent_installation_id", "configuration_id"],
+            ["module_installations.id", "module_installations.configuration_id"],
+            name="fk_hardware_association_parent_configuration",
+        ),
+        Index("uq_hardware_association_place", "configuration_id", "parent_installation_id", "bay_key",
+              unique=True, postgresql_nulls_not_distinct=True),
+        Index("uq_hardware_association_key", "configuration_id", "parent_installation_id", "hardware_interface_key",
+              unique=True, postgresql_nulls_not_distinct=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    interface_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    physical_object_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    configuration_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    parent_installation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    bay_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    hardware_interface_key: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
 
 class ModuleEndpointMapping(Base):

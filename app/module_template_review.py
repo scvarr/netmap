@@ -10,6 +10,7 @@ from app.base_template_review import BaseTemplateReview, endpoint_dependencies
 from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.errors import ModelError, ValidationError
 from app.hardware_catalog import HardwareCatalog
+from app.hardware_interfaces import preserves_associations
 from app.port_types import validate_port_type_assignments
 from app.module_placement_reconciliation import configuration_installations, plan_module_placements
 from app.module_port_types import (
@@ -82,6 +83,9 @@ def analyze_installation(session, installation, candidate, placement_plan=None):
                                                 configuration_installations(session, config.id))
     _, placement_reasons = placement_plan
     reasons = list(placement_reasons)
+    if not preserves_associations(session, config.id, installation.id, before.get("module_places", ()),
+                                  candidate.get("module_places", ()), place_key="key"):
+        reasons.append({"code": "HARDWARE_INTERFACE_ASSOCIATION_CHANGE"})
     if any(row.definition_id not in definitions for row in rows):
         reasons.append({"code": "INVALID_ENDPOINT_MAPPING"})
     for key, definition in old.items():

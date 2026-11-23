@@ -31,11 +31,13 @@ export function parseMount(value: Record<string, unknown>): ModuleMount {
 export type PlacedModuleBay = ModuleMount & {
   kind?: "PLACED";
   bay_key: string; display_name: string; panel_key: string;
+  hardware_interface_key?: string;
   x: number; y: number; width?: number | null; height?: number | null;
 };
 export type LogicalModuleBay = ModuleMount & {
   kind: "LOGICAL";
   bay_key: string; display_name: string; panel_key: string;
+  hardware_interface_key?: string;
   x?: null; y?: null; width?: null; height?: null;
 };
 export type ModuleBay = PlacedModuleBay | LogicalModuleBay;
@@ -43,6 +45,7 @@ export const isPlacedBay = (bay: ModuleBay): bay is PlacedModuleBay => bay.kind 
 export interface ModuleEndpoint { key: string; display_name: string; kind: BlueprintSlotKind; port_type_id: string }
 export type ModulePlaceDefinition = ModuleMount & {
   key: string; display_name: string;
+  hardware_interface_key?: string;
   x: number; y: number; width?: number | null; height?: number | null;
 };
 export type ModulePortMarker = { key: string; display_name: string; kind: MountKind; port_type_id?: never };
@@ -114,6 +117,7 @@ export interface ModuleReviewDataSource {
   checkDraft(id: string, generation: number): Promise<ModuleDraftDocument>;
 }
 export type InstalledModulePlace = PlacedModuleBay & {
+  network_interface_id?: string;
   installation_id: string | null;
   global_position: Pick<PlacedModuleBay, 'panel_key' | 'x' | 'y' | 'width' | 'height'>;
 };
@@ -132,7 +136,7 @@ export interface ModuleInstallation {
     connection_point_id: string; network_interface_id: string | null; x: number; y: number;
   }>;
 }
-export interface HardwareConfiguration { configuration_id: string | null; base_revision_id?: string; panels?: Array<{ panel_key: string; display_name: string; width: number; height: number }>; bays: Array<ModuleBay & { installation: ModuleInstallation | null }>; nested_installations?: ModuleInstallation[] }
+export interface HardwareConfiguration { configuration_id: string | null; base_revision_id?: string; panels?: Array<{ panel_key: string; display_name: string; width: number; height: number }>; bays: Array<ModuleBay & { installation: ModuleInstallation | null; network_interface_id?: string }>; nested_installations?: ModuleInstallation[] }
 export interface HardwareModuleDataSource {
   saveLayout?(objectId: string, installationId: string, input: unknown): Promise<HardwareConfiguration>;
   listModules(): Promise<{ modules: ModuleTemplate[] }>;

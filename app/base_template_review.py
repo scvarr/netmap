@@ -17,6 +17,7 @@ from app.module_port_types import base_assignments, mount_identity, mount_docume
 from app.module_placement_reconciliation import configuration_installations, validate_nested_placements
 from app.module_layout import validate_layout
 from app.schemas import CreateBaseTemplateRequest, ModuleBayRequest
+from app.hardware_interfaces import preserves_associations
 
 
 def validate_definition(value):
@@ -43,7 +44,7 @@ def published_definition(session, template_id, revision_id):
         "panels": [{k: getattr(p, k) for k in ("panel_key", "panel_number", "display_name", "x", "y", "width", "height", "face")} for p in detail.panels],
         "slots": [{"key": s.slot_key, "display_name": s.display_name, "kind": s.kind, "cardinality": s.cardinality, "port_type_id": s.port_type_id, "panel_key": s.panel_key,
                    "rendered_position": {"x": s.position_x, "y": s.position_y}} for s in detail.slots],
-        "bays": [{**row_mount(b), **{k: getattr(b, k) for k in ("bay_key", "display_name", "panel_key", "kind", "x", "y", "width", "height")}} for b in detail.bays],
+        "bays": [{**row_mount(b), **{k: getattr(b, k) for k in ("bay_key", "display_name", "panel_key", "kind", "x", "y", "width", "height", "hardware_interface_key")}} for b in detail.bays],
         "internal_links": [{"from_slot_key": a, "to_slot_key": b, "member_mappings": mappings} for a, b, mappings in detail.internal_links],
     })
 
@@ -51,7 +52,7 @@ def published_definition(session, template_id, revision_id):
 def physical_structure(definition):
     d = CreateBaseTemplateRequest.model_validate(definition).model_dump(mode="json")
     slots = sorted((s["key"], s["kind"], s["cardinality"], s["port_type_id"]) for s in d["slots"])
-    bays = sorted((b["bay_key"], mount_identity(b), b["kind"]) for b in d["bays"])
+    bays = sorted((b["bay_key"], mount_identity(b), b["kind"], b["hardware_interface_key"]) for b in d["bays"])
     links = []
     for link in d["internal_links"]:
         for mapping in link["member_mappings"]:
@@ -149,6 +150,8 @@ def analyze_object(session, config, candidate):
     before = published_definition(session, revision.template_id, revision.id)
     changes = structural_changes(before, candidate)
     reasons, placements = [], {}
+    if not preserves_associations(session, config.id, None, before["bays"], candidate["bays"], place_key="bay_key"):
+        reasons.append({"code": "HARDWARE_INTERFACE_ASSOCIATION_CHANGE"})
     old = {s["key"]: s for s in before["slots"]}
     new = {s["key"]: s for s in candidate["slots"]}
     definitions = {d.id: d.slot_key for d in session.scalars(select(m.BuiltInEndpointDefinition).where(m.BuiltInEndpointDefinition.base_revision_id == revision.id))}

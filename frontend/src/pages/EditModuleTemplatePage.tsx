@@ -78,6 +78,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
     MODULE_LAYOUT_PANEL_CONFLICT: 'changeInspector.panelConflict',
     NESTED_MODULE_PORTS_UNSUPPORTED: 'moduleReview.nestedPortsUnsupported',
     BAY_COMPATIBILITY_MISMATCH: 'moduleReview.compatibility', PHYSICAL_STRUCTURE_IMMUTABLE: 'review.reason.immutable', ENDPOINT_DEPENDENCIES: 'review.reason.dependencies',
+    HARDWARE_INTERFACE_ASSOCIATION_CHANGE: 'review.reason.hardwareInterface',
     ENDPOINT_KIND_CHANGE: 'review.reason.kind', MISSING_ENDPOINT_MAPPING: 'review.reason.mapping',
     INVALID_ENDPOINT_MAPPING: 'reconciliation.mapping', IDENTITY_AND_DATA_PRESERVED: 'review.reason.preserved',
   } as const;

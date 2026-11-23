@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.errors import ModelError, ValidationError
+from app.hardware_interfaces import associations, declared_interfaces
 from app.models import (
-    BuiltInEndpointMapping, Connection, ConnectionPoint, EntityMetadata,
+    BuiltInEndpointMapping, Connection, ConnectionPoint, EntityMetadata, HardwareInterfaceAssociation,
     InterfacePhysicalBinding, L2Binding, L3Binding, ModuleEndpointDefinition,
-    ModuleEndpointMapping, ModuleInstallation, NATPolicyAttachment, NetworkInterface,
+    ModuleEndpointMapping, ModuleInstallation, ModuleTemplateRevision, NATPolicyAttachment, NetworkInterface,
     NetworkInterfacePhysicalOwner, NetworkInterfaceRealization, ObjectConfiguration,
     PacketProcessingPlanAttachment, PhysicalObject, RoutingPolicyRule, SecurityPolicyAttachment,
 )
@@ -42,7 +43,16 @@ class ModuleInstallationDeletionCatalog:
             ModuleEndpointMapping.installation_id == installation_id,
         ).order_by(ModuleEndpointMapping.id).with_for_update()))
         point_ids = tuple(sorted({m.connection_point_id for m in mappings}, key=str))
-        interface_ids = tuple(sorted({m.network_interface_id for m in mappings if m.network_interface_id}, key=str))
+        hardware = associations(self.session, config.id, installation.id)
+        revision = self.session.get(ModuleTemplateRevision, installation.module_revision_id)
+        endpoint_interfaces = {m.network_interface_id for m in mappings if m.network_interface_id}
+        hardware_interfaces = {row.interface_id for row in hardware}
+        if (endpoint_interfaces & hardware_interfaces
+                or {row.bay_key: row.hardware_interface_key for row in hardware}
+                != declared_interfaces(revision.module_places, place_key="key")):
+            raise ModelError("ModuleInstallation has inconsistent hardware interfaces",
+                             {"reason": "INVALID_HARDWARE_INTERFACE_ASSOCIATION"})
+        interface_ids = tuple(sorted(endpoint_interfaces | hardware_interfaces, key=str))
         if interface_ids:
             # JSON references have no FK/key-share locks. Block scope/predicate writes
             # (including new rows) until this transaction completes its preflight/delete.
@@ -59,6 +69,8 @@ class ModuleInstallationDeletionCatalog:
             })
         # All DELETEs are after the complete preflight, in RESTRICT FK order.
         self.session.execute(delete(ModuleEndpointMapping).where(ModuleEndpointMapping.installation_id == installation_id))
+        self.session.execute(delete(HardwareInterfaceAssociation).where(
+            HardwareInterfaceAssociation.parent_installation_id == installation_id))
         self.session.execute(delete(InterfacePhysicalBinding).where(or_(InterfacePhysicalBinding.point_id.in_(point_ids), InterfacePhysicalBinding.interface_id.in_(interface_ids))))
         self.session.execute(delete(NetworkInterfacePhysicalOwner).where(NetworkInterfacePhysicalOwner.interface_id.in_(interface_ids)))
         self.session.execute(delete(EntityMetadata).where(or_(EntityMetadata.connection_point_id.in_(point_ids), EntityMetadata.network_interface_id.in_(interface_ids))))

@@ -13,6 +13,7 @@ from app.models import (
     ConnectionMember,
     ConnectionPoint,
     BuiltInEndpointDefinition,
+    HardwareInterfaceAssociation,
     ObjectConfiguration,
     BuiltInEndpointMapping,
     BaseInternalLink,
@@ -95,6 +96,7 @@ def clean_database(request: pytest.FixtureRequest):
         session.execute(delete(MapPlacement))
         session.execute(delete(SavedMap))
         session.execute(delete(ModuleEndpointMapping))
+        session.execute(delete(HardwareInterfaceAssociation))
         session.execute(delete(ModuleInstallation))
         session.execute(delete(ModuleEndpointDefinition))
         session.execute(delete(ModuleTemplateRevision))

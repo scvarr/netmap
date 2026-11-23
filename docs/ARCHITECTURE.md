@@ -319,9 +319,10 @@ API-first core независим от React state. User/ACL semantics прин�
 Применённые Alembic revisions immutable: исправления только forward migration.
 Сохраняются canonical user/network data, stable identity и retained immutable
 snapshots; development-stage authoring/runtime compatibility не является целью.
-Workspace JSON v14 включает физические справочники и их ссылки по UUID,
+Workspace JSON v15 включает физические справочники и их ссылки по UUID,
 в том числе обязательный CableType и необязательные ConnectorType A/B.
-Импорт принимает пакеты v14. Справочники ModulePortType и ModuleBayType, вид посадочного
+Формат сохраняет ассоциации аппаратных NetworkInterface с местами.
+Импорт принимает пакеты v14 и v15. Справочники ModulePortType и ModuleBayType, вид посадочного
 места и UUID-ссылки сохраняются в ревизиях, черновиках, кандидатах и результатах review.
 Исторические snapshots внутри пакета сохраняют
 исходные определения.

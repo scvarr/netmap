@@ -846,7 +846,7 @@ def get_object_blueprint_version(
             }
             for slot in version.slots
         ],
-        "bays": [{**row_mount(bay), **{key: getattr(bay, key) for key in ("bay_key", "display_name", "panel_key", "kind", "x", "y", "width", "height")}} for bay in version.bays],
+        "bays": [{**row_mount(bay), **{key: getattr(bay, key) for key in ("bay_key", "display_name", "panel_key", "kind", "x", "y", "width", "height", "hardware_interface_key")}} for bay in version.bays],
         "internal_links": [
             {"from_slot_key": left, "to_slot_key": right, "member_mappings": mappings}
             for left, right, mappings in version.internal_links

@@ -1,4 +1,4 @@
-"""Version 13 exchange contract for the current implicit workspace dataset.
+"""Versioned exchange contract for the current implicit workspace dataset.
 
 The public names and fields below are deliberately fixed independently of table
 names. A storage change must adapt this mapping or introduce a new format version.
@@ -22,11 +22,12 @@ from app import models
 from app.port_types import CableTypeInput, ConnectorTypeInput, MountTypeInput, PortTypeInput
 from app.module_port_types import MOUNT_CATALOGS, MOUNT_FIELDS, mount_identity, result_mounts
 from app.schemas import ModuleBayRequest, ModuleMount, AutomaticLocationLayout
+from app.hardware_interfaces import declared_interfaces
 from pydantic import ValidationError
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 14
+FORMAT_VERSION = 15
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -77,7 +78,7 @@ ENTITIES = (
     ("authoring", "BaseInternalLink", "BaseInternalLink", "id base_revision_id slot_a_id slot_b_id member_mappings"),
     ("authoring", "ObjectConfiguration", "ObjectConfiguration", "id base_revision_id physical_object_id"),
     ("authoring", "BuiltInEndpointMapping", "BuiltInEndpointMapping", "id configuration_id definition_id connection_point_id network_interface_id"),
-    ("authoring", "ModuleBay", "ModuleBay", "id base_revision_id bay_key display_name mount_kind module_port_type_id module_bay_type_id panel_key kind x y width height"),
+    ("authoring", "ModuleBay", "ModuleBay", "id base_revision_id bay_key display_name mount_kind module_port_type_id module_bay_type_id panel_key kind x y width height hardware_interface_key"),
     ("authoring", "ModuleTemplate", "ModuleTemplate", "id name"),
     ("authoring", "ModuleTemplatePublication", "ModuleTemplatePublication", "id revision_id"),
     ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number name mount_kind module_port_type_id module_bay_type_id geometry module_places transceiver"),
@@ -85,6 +86,7 @@ ENTITIES = (
     ("authoring", "ModuleTemplateCandidate", "ModuleTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
     ("authoring", "ModuleEndpointDefinition", "ModuleEndpointDefinition", "id module_revision_id definition_key order_index display_name kind port_type_id"),
     ("authoring", "ModuleInstallation", "ModuleInstallation", "id configuration_id parent_installation_id module_revision_id bay_key orientation layout"),
+    ("authoring", "HardwareInterfaceAssociation", "HardwareInterfaceAssociation", "id interface_id physical_object_id configuration_id parent_installation_id bay_key hardware_interface_key"),
     ("authoring", "ModuleEndpointMapping", "ModuleEndpointMapping", "id installation_id definition_id connection_point_id network_interface_id"),
     ("presentation", "SavedMap", "SavedMap", "id name created_at updated_at"),
     ("presentation", "MapPresentationVariant", "MapPresentationVariant", "id map_id name automatic_layout default_face"),
@@ -178,7 +180,8 @@ def _decode(value, column, label):
 def validate_package(package: object) -> dict:
     if not isinstance(package, dict) or package.get("format") != FORMAT:
         raise PackageError("Not a NetMap workspace package")
-    if type(package.get("format_version")) is not int or package["format_version"] != FORMAT_VERSION:
+    version = package.get("format_version")
+    if type(version) is not int or version not in (14, FORMAT_VERSION):
         raise PackageError("Unsupported NetMap workspace format_version")
     profiles = ("module_geometry_version", "module_layout_version", "module_places_version")
     sections = ("canonical", "authoring", "presentation", "settings")
@@ -188,12 +191,17 @@ def validate_package(package: object) -> dict:
         raise PackageError("Unsupported module profile")
 
     specs = _specs()
+    input_specs = specs if version == FORMAT_VERSION else [
+        (section, name, model, [field for field in fields
+                               if model is not models.ModuleBay or field != "hardware_interface_key"])
+        for section, name, model, fields in specs if model is not models.HardwareInterfaceAssociation
+    ]
     result = {}
     for section in sections:
-        expected = {name for part, name, _, _ in specs if part == section}
+        expected = {name for part, name, _, _ in input_specs if part == section}
         if not isinstance(package[section], dict) or set(package[section]) != expected:
             raise PackageError(f"Incomplete {section} section")
-    for section, name, model, fields in specs:
+    for section, name, model, fields in input_specs:
         records = package[section][name]
         if not isinstance(records, list):
             raise PackageError(f"{name} must be a list")
@@ -207,6 +215,8 @@ def validate_package(package: object) -> dict:
             if not isinstance(record, dict) or not required_fields <= record.keys() <= expected_fields:
                 raise PackageError(f"{name} has incomplete or unknown fields")
             row = {field: _decode(record.get(field), columns[field], f"{name}.{field}") for field in fields}
+            if version == 14 and model is models.ModuleBay:
+                row["hardware_interface_key"] = None
             if model is models.MapPresentationVariant and row["automatic_layout"] is not None:
                 try:
                     row["automatic_layout"] = TypeAdapter(AutomaticLocationLayout).validate_python(row["automatic_layout"]).model_dump(mode="json")
@@ -236,6 +246,8 @@ def validate_package(package: object) -> dict:
             ids.add(row["id"])
             parsed.append(row)
         result[model.__table__.name] = parsed
+    if version == 14:
+        result["hardware_interface_associations"] = []
     singleton = result["cable_label_settings"]
     if len(singleton) != 1 or singleton[0]["id"] != 1:
         raise PackageError("CableLabelSettings singleton is missing")
@@ -280,9 +292,18 @@ def validate_package(package: object) -> dict:
                 raise PackageError("Location hierarchy contains a cycle")
             seen.add(current)
             current = locations[current]
-    _validate_hardware_configuration(result)
     _validate_template_reviews(result)
     _validate_module_template_reviews(result)
+    if version == 14:
+        definitions = [(r["module_places"], "key") for r in result["module_template_revisions"]]
+        definitions.extend(
+            (r["definition"].get(places, ()), key)
+            for prefix, places, key in (("base", "bays", "bay_key"), ("module", "module_places", "key"))
+            for state in ("drafts", "candidates") for r in result[f"{prefix}_template_{state}"]
+        )
+        if any(declared_interfaces(places, place_key=key) for places, key in definitions):
+            raise PackageError("Hardware interface declarations require Workspace v15")
+    _validate_hardware_configuration(result)
     capacities = {row["id"]: len(row["members"]) for row in result["port_types"]}
     for prefix, section in (("base", "slots"), ("module", "endpoints")):
         for state in ("drafts", "candidates"):
@@ -418,7 +439,7 @@ def _validate_template_reviews(rows):
             "body": {"kind": revision["body_kind"], "width": revision["width"], "height": revision["height"], "fill_color": revision["fill_color"]},
             "panels": [{k: p[k] for k in ("panel_key", "panel_number", "display_name", "x", "y", "width", "height", "face")} for p in rows["presentation_panels"] if p["base_revision_id"] == revision["id"]],
             "slots": [{"key": s["slot_key"], "display_name": s["display_name"], "kind": s["kind"], "cardinality": s["cardinality"], "port_type_id": str(s["port_type_id"]), "panel_key": s["panel_key"], "rendered_position": {"x": s["position_x"], "y": s["position_y"]}} for s in rows["built_in_endpoint_definitions"] if s["base_revision_id"] == revision["id"]],
-            "bays": [{k: b[k] for k in ("bay_key", "display_name", "panel_key", "kind", "x", "y", "width", "height", *MOUNT_FIELDS)} for b in rows["module_bays"] if b["base_revision_id"] == revision["id"]],
+            "bays": [{k: b[k] for k in ("bay_key", "display_name", "panel_key", "kind", "x", "y", "width", "height", "hardware_interface_key", *MOUNT_FIELDS)} for b in rows["module_bays"] if b["base_revision_id"] == revision["id"]],
         }
         keys = {s["id"]: s["slot_key"] for s in rows["built_in_endpoint_definitions"]}
         actual["internal_links"] = [{"from_slot_key": keys[l["slot_a_id"]], "to_slot_key": keys[l["slot_b_id"]], "member_mappings": l["member_mappings"]} for l in rows["base_internal_links"] if l["base_revision_id"] == revision["id"]]
@@ -450,6 +471,10 @@ def _validate_hardware_configuration(rows):
     """Cross-record provenance must describe the materialized canonical facts."""
     configs = {r["id"]: r for r in rows["object_configurations"]}
     bays = {(r["base_revision_id"], r["bay_key"]): r for r in rows["module_bays"]}
+    declared_bays = [row for row in rows["module_bays"] if row["hardware_interface_key"] is not None]
+    if (len(bays) != len(rows["module_bays"])
+            or len({(r["base_revision_id"], r["hardware_interface_key"]) for r in declared_bays}) != len(declared_bays)):
+        raise PackageError("Duplicate base place or hardware interface declaration")
     revisions = {r["id"]: r for r in rows["module_template_revisions"]}
     installations = {r["id"]: r for r in rows["module_installations"]}
     definitions = {r["id"]: r for r in rows["built_in_endpoint_definitions"]}
@@ -457,6 +482,8 @@ def _validate_hardware_configuration(rows):
     points = {r["id"]: r for r in rows["connection_points"]}
     capacities = {row["id"]: len(row["members"]) for row in rows["port_types"]}
     owners = {(r["interface_id"], r["physical_object_id"]) for r in rows["network_interface_physical_owners"]}
+    if len({interface_id for interface_id, _ in owners}) != len(rows["network_interface_physical_owners"]):
+        raise PackageError("Network interface has multiple physical owners")
     bindings = {(r["interface_id"], r["point_id"], r["point_member"]) for r in rows["interface_physical_bindings"]}
     panel_keys = {(r["base_revision_id"], r["panel_key"]) for r in rows["presentation_panels"]}
     if any((r["base_revision_id"], r["panel_key"]) not in panel_keys for r in bays.values()):
@@ -559,6 +586,30 @@ def _validate_hardware_configuration(rows):
         raise PackageError("Configuration is missing a built-in endpoint mapping")
     if any((i["id"], d["id"]) not in module_pairs for i in installations.values() for d in module_definitions.values() if i["module_revision_id"] == d["module_revision_id"]):
         raise PackageError("Installation is missing a module endpoint mapping")
+
+    base_keys = defaultdict(dict)
+    for bay in declared_bays:
+        base_keys[bay["base_revision_id"]][bay["bay_key"]] = bay["hardware_interface_key"]
+    board_keys = {revision_id: declared_interfaces(revision["module_places"], place_key="key")
+                  for revision_id, revision in revisions.items()}
+    expected = {(config["id"], None, place): key for config in configs.values()
+                for place, key in base_keys[config["base_revision_id"]].items()}
+    expected.update({(board["configuration_id"], board["id"], place): key for board in installations.values()
+                     for place, key in board_keys[board["module_revision_id"]].items()})
+    bound_interfaces = {interface_id for interface_id, _, _ in bindings}
+    for association in rows["hardware_interface_associations"]:
+        config_id = association["configuration_id"]
+        object_id = association["physical_object_id"]
+        interface_id = association["interface_id"]
+        place = (config_id, association["parent_installation_id"], association["bay_key"])
+        if (expected.pop(place, None) != association["hardware_interface_key"]
+                or configs[config_id]["physical_object_id"] != object_id
+                or (interface_id, object_id) not in owners
+                or interface_id in seen_interfaces or interface_id in bound_interfaces):
+            raise PackageError("Invalid or duplicate hardware interface association")
+        seen_interfaces.add(interface_id)
+    if expected:
+        raise PackageError("Configuration is missing a hardware interface association")
 
 
 def _validate_cable_connections(rows):

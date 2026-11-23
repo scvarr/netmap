@@ -796,6 +796,7 @@ class ModuleMount(BaseModel):
 class ModuleBayRequest(ModuleMount):
     model_config = ConfigDict(extra="forbid")
     bay_key: str = Field(min_length=1, max_length=255)
+    hardware_interface_key: uuid.UUID | None = None
     display_name: str = Field(min_length=1, max_length=255)
     panel_key: str = Field(min_length=1, max_length=255)
     kind: Literal["LOGICAL", "PLACED"] = "PLACED"
@@ -806,6 +807,8 @@ class ModuleBayRequest(ModuleMount):
 
     @model_validator(mode="after")
     def rectangle_inside_panel(self):
+        if self.hardware_interface_key is not None and self.mount_kind != "MODULE_PORT":
+            raise PydanticCustomError("hardware_validation", "Hardware interfaces require a MODULE_PORT")
         geometry = (self.x, self.y, self.width, self.height)
         if (self.kind == "LOGICAL" and any(v is not None for v in geometry)) or (
             self.kind == "PLACED" and (self.x is None or self.y is None or (self.width is None) != (self.height is None))
@@ -835,12 +838,15 @@ class ModuleEndpointPosition(BaseModel):
 class ModulePlaceDefinition(ModuleEndpointPosition, ModuleMount):
     model_config = ConfigDict(strict=True, extra="forbid")
     key: str = Field(min_length=1, max_length=255)
+    hardware_interface_key: uuid.UUID | None = Field(default=None, strict=False)
     display_name: str = Field(min_length=1, max_length=255)
     width: FiniteFloat | None = Field(default=None, gt=0, le=1)
     height: FiniteFloat | None = Field(default=None, gt=0, le=1)
 
     @model_validator(mode="after")
     def valid_module_port(self):
+        if self.hardware_interface_key is not None and self.mount_kind != "MODULE_PORT":
+            raise PydanticCustomError("hardware_validation", "Hardware interfaces require a MODULE_PORT")
         if any(not value.strip() for value in (self.key, self.display_name)):
             raise PydanticCustomError("hardware_validation", "Module port strings must not be blank")
         if (self.width is None) != (self.height is None) or (
@@ -898,6 +904,10 @@ class CreateModuleTemplateRequest(ModuleMount):
         keys = [item.key for item in [*self.endpoints, *self.module_places]]
         if len(set(keys)) != len(keys):
             raise PydanticCustomError("hardware_validation", "Module definition keys must be unique")
+        interface_keys = [place.hardware_interface_key for place in self.module_places
+                          if place.hardware_interface_key is not None]
+        if interface_keys and (self.mount_kind != "MODULE_BAY" or len(set(interface_keys)) != len(interface_keys)):
+            raise PydanticCustomError("hardware_validation", "Hardware interface keys must be unique within a board")
         return self
 
 
@@ -929,6 +939,9 @@ class CreateBaseTemplateRequest(BaseModel):
             raise PydanticCustomError("hardware_validation", "Panel keys and numbers must be unique")
         if len({b.bay_key for b in self.bays}) != len(self.bays) or any(b.panel_key not in panel_keys for b in self.bays):
             raise PydanticCustomError("hardware_validation", "Bay keys must be unique and reference a template panel")
+        interface_keys = [bay.hardware_interface_key for bay in self.bays if bay.hardware_interface_key is not None]
+        if len(set(interface_keys)) != len(interface_keys):
+            raise PydanticCustomError("hardware_validation", "Hardware interface keys must be unique within a base template")
         if len({slot.key for slot in self.slots}) != len(self.slots):
             raise PydanticCustomError("blueprint_duplicate_slot_key", "Blueprint slot keys must be unique")
         if any(slot.panel_key not in {panel.panel_key for panel in self.panels} for slot in self.slots):
@@ -973,7 +986,7 @@ class BaseTemplateImpactReason(BaseModel):
                   "NESTED_INSTALLATION_RECONCILE_BLOCKED", "PHYSICAL_STRUCTURE_IMMUTABLE",
                   "INTERNAL_LINK_CONNECTIONS", "INTERNAL_LINK_CARDINALITY", "IDENTITY_AND_DATA_PRESERVED",
                   "INVALID_NESTED_PLACEMENT", "NESTED_PLACE_COMPATIBILITY_MISMATCH",
-                  "TRANSCEIVER_BINDING_REQUIRED"]
+                  "TRANSCEIVER_BINDING_REQUIRED", "HARDWARE_INTERFACE_ASSOCIATION_CHANGE"]
     key: str | list[str] | None = None
     endpoint_name: str | None = None
     dependencies: list[str] | None = None
@@ -1037,7 +1050,8 @@ class ModuleTemplateImpactReason(BaseTemplateImpactReason):
                   "MODULE_LAYOUT_PANEL_CONFLICT",
                   "IDENTITY_AND_DATA_PRESERVED", "NESTED_MODULE_PORTS_UNSUPPORTED", "NESTED_INSTALLATION_RECONCILE_BLOCKED",
                   "INVALID_NESTED_PLACEMENT", "NESTED_PLACE_COMPATIBILITY_MISMATCH",
-                  "NO_COMPATIBLE_NESTED_PLACEMENT", "AMBIGUOUS_NESTED_PLACEMENT", "TRANSCEIVER_BINDING_REQUIRED"]
+                  "NO_COMPATIBLE_NESTED_PLACEMENT", "AMBIGUOUS_NESTED_PLACEMENT", "TRANSCEIVER_BINDING_REQUIRED",
+                  "HARDWARE_INTERFACE_ASSOCIATION_CHANGE"]
 
 
 class ModuleTemplateInstallationImpact(BaseModel):
