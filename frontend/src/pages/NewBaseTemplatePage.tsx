@@ -18,7 +18,12 @@ export function NewBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateDa
     if (!source && !revision) setInitial(newBlueprintEditorState());
     else if (!source || !revision) setFailed(true);
     else void dataSource.loadBaseTemplateRevision(source, revision).then(document => {
-      if (active) setInitial({ ...hydrateBlueprintEditorState(structuredClone(document)), name: t('templateCopy.name', { name: document.name }) });
+      if (active) {
+        const state = hydrateBlueprintEditorState(structuredClone(document));
+        setInitial({ ...state, name: t('templateCopy.name', { name: document.name }),
+          bays: state.bays?.map(bay => bay.hardware_interface_key
+            ? { ...bay, hardware_interface_key: crypto.randomUUID() } : bay) });
+      }
     }).catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [source, revision, dataSource, retry, t]);

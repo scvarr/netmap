@@ -986,7 +986,8 @@ class BaseTemplateImpactReason(BaseModel):
                   "NESTED_INSTALLATION_RECONCILE_BLOCKED", "PHYSICAL_STRUCTURE_IMMUTABLE",
                   "INTERNAL_LINK_CONNECTIONS", "INTERNAL_LINK_CARDINALITY", "IDENTITY_AND_DATA_PRESERVED",
                   "INVALID_NESTED_PLACEMENT", "NESTED_PLACE_COMPATIBILITY_MISMATCH",
-                  "TRANSCEIVER_BINDING_REQUIRED", "HARDWARE_INTERFACE_ASSOCIATION_CHANGE"]
+                  "TRANSCEIVER_BINDING_REQUIRED", "HARDWARE_INTERFACE_ASSOCIATION_CHANGE",
+                  "HARDWARE_INTERFACE_SOCKET_OCCUPIED"]
     key: str | list[str] | None = None
     endpoint_name: str | None = None
     dependencies: list[str] | None = None

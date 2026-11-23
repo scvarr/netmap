@@ -328,6 +328,7 @@ export const copySelectionToPanel = (state: BlueprintEditorState, keys: Readonly
     if (isModulePlaceMarker(source)) {
       const original = state.bays!.find(bay => bay.bay_key === source.key)!;
       bays.push({ kind: 'PLACED', bay_key: key, display_name, panel_key: destinationPanelKey,
+        ...(original.hardware_interface_key && { hardware_interface_key: crypto.randomUUID() }),
         ...moduleMount(original.mount_kind, mountTypeId(original)), ...source.rendered_position });
     } else {
       slots.push({ ...source, key, display_name, panel_key: destinationPanelKey, rendered_position: { ...source.rendered_position } });
@@ -379,6 +380,7 @@ export const addModulePlaces = (state: BlueprintEditorState, panelKey: string, c
   if (!batch) return state;
   const bays = batch.markers.map(({ key, rendered_position, ...marker }) => ({
     ...marker, ...rendered_position, kind: 'PLACED' as const, bay_key: key, ...mount,
+    hardware_interface_key: crypto.randomUUID(),
   }));
   return { ...state, nextLocalNumberByPanel: batch.nextLocalNumberByPanel, bays: [...state.bays ?? [], ...bays] };
 };

@@ -768,6 +768,28 @@ a { color: inherit; }
 .blueprint-composer__contextual .blueprint-composer__selected label { display: grid; gap: 4px; flex: 1 1 125px; min-width: min(125px, 100%); }
 .blueprint-composer__contextual .blueprint-composer__selected :is(input, select) { height: 34px; margin: 0; }
 .blueprint-composer__contextual .blueprint-composer__selected .text-action { align-self: end; min-height: 34px; }
+
+.hardware-interface-actions { display: flex; flex-wrap: wrap; gap: 8px; grid-column: 1 / -1; }
+.hardware-interface-actions button { white-space: normal; }
+.hardware-interface-checkbox,
+.blueprint-composer__contextual .blueprint-composer__selected .hardware-interface-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.hardware-interface-checkbox input[type="checkbox"],
+.blueprint-composer__contextual .blueprint-composer__selected .hardware-interface-checkbox input[type="checkbox"] {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: #61cfbd;
+  cursor: pointer;
+}
+.hardware-interface-checkbox input:focus-visible { outline: 2px solid #61cfbd; outline-offset: 3px; }
 @media (min-width: 761px) {
   /* route-content is the shell's full-height content area beside the sidebar. */
   .route-content:has(> .blueprint-editor-page) { height: 100dvh; min-height: 0; }

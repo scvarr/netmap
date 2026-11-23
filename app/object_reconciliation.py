@@ -11,7 +11,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.sql.sqltypes import JSON
 
 from app import models as m
-from app.base_template_review import physical_structure, analyze_object, endpoint_dependencies, published_definition
+from app.base_template_review import added_hardware_interfaces, analyze_object, endpoint_dependencies, published_definition
 from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.errors import ModelError, ValidationError
 from app.hardware_catalog import HardwareCatalog
@@ -113,7 +113,8 @@ class ObjectReconciliation:
         for key in removed:
             if key in by_key:
                 endpoint_dependencies(session, config, by_key[key], old[key], lock_rows=True)
-        if physical_structure(before) != physical_structure(after):
+        added_interfaces = added_hardware_interfaces(before, after)
+        if added_interfaces is None:
             return {**result, "status": "requires_intervention", "reasons": [{"code": "PHYSICAL_STRUCTURE_IMMUTABLE"}]}
         analysis = analyze_object(session, config, after)
         if analysis["classification"] == "requires_intervention":
@@ -152,6 +153,9 @@ class ObjectReconciliation:
                 left, right = change["key"]
                 repository.add_connection(by_key[left].connection_point_id, by_key[right].connection_point_id, 1,
                                           [ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)])
+        HardwareCatalog(session)._materialize_hardware_interfaces(
+            config, None, [bay for bay in after["bays"] if bay["bay_key"] in added_interfaces], place_key="bay_key",
+        )
         config.base_revision_id = latest.id
         session.flush()
         return {**result, "status": "updated", "reasons": []}

@@ -1,9 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { useState } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
 import { NewModuleTemplatePage } from './NewModuleTemplatePage';
-import { hardwareModuleDataSource } from '../topology/hardwareModules';
+import { hardwareModuleDataSource, initialModuleGeometry, type ModuleTemplateInput } from '../topology/hardwareModules';
 import { ModuleTemplateEditor } from '../components/ModuleTemplateEditor';
 
 const catalog = [
@@ -14,6 +15,35 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async url => Response.json(String(url).endsWith('/module-bay-types') ? ['Parent A', 'Parent', 'PCIe'].map(name => ({ id: name, name, is_active: true })) : String(url).endsWith('/module-port-types') ? ['PCIe', 'Parent A', 'Parent', 'Lab / original', 'Lab / custom', 'Custom / 42'].map(name => ({ id: name, name, is_active: true })) : catalog)));
 });
 afterEach(() => vi.unstubAllGlobals());
+
+it('assigns selected and remaining board sockets while retaining existing declarations', () => {
+  const changed = vi.fn();
+  function Editor() {
+    const [value, setValue] = useState<ModuleTemplateInput>({
+      name: 'Board', mount_kind: 'MODULE_BAY', module_bay_type_id: 'Parent', endpoints: [],
+      geometry: initialModuleGeometry(),
+      module_places: ['A', 'B', 'C'].map((key, index) => ({
+        key, display_name: key, mount_kind: 'MODULE_PORT', module_port_type_id: 'PCIe',
+        x: .2 + index * .3, y: .5, hardware_interface_key: index === 2 ? 'existing' : undefined,
+      })),
+    });
+    return <ModuleTemplateEditor value={value} onChange={next => { setValue(next); changed(next); }} />;
+  }
+  render(<I18nProvider><MemoryRouter><Editor /></MemoryRouter></I18nProvider>);
+  const selected = screen.getByRole('button', { name: 'Назначить интерфейсы выделенным гнёздам' });
+  fireEvent.click(selected);
+  expect(selected).toBeDisabled();
+  const first = changed.mock.lastCall![0].module_places;
+  expect(first.map((port: { hardware_interface_key?: string }) => port.hardware_interface_key)).toEqual([
+    expect.stringMatching(/^[0-9a-f-]{36}$/), undefined, 'existing',
+  ]);
+  const all = screen.getByRole('button', { name: 'Назначить интерфейсы всем гнёздам' });
+  fireEvent.click(all);
+  expect(all).toBeDisabled();
+  expect(changed.mock.lastCall![0].module_places[0]).toEqual(first[0]);
+  expect(changed.mock.lastCall![0].module_places[2]).toEqual(first[2]);
+  expect(changed.mock.lastCall![0].module_places[1].hardware_interface_key).toMatch(/^[0-9a-f-]{36}$/);
+});
 
 it('creates NIC-2GE with two stable keys and retains input after failure', async () => {
   const createModule = vi.fn().mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce({});
@@ -84,7 +114,7 @@ it('authors a diamond-shaped module port without assigning a PortType', async ()
   expect(diamond.tagName).toBe('polygon');
   expect(group.queryByLabelText('Ширина')).toBeNull();
   expect(group.queryByLabelText('Высота')).toBeNull();
-  fireEvent.click(group.getByRole('checkbox', { name: 'Назначить аппаратный интерфейс' }));
+  expect(group.getByRole('checkbox', { name: 'Назначить аппаратный интерфейс' })).toBeChecked();
   fireEvent.change(group.getByLabelText('Название'), { target: { value: 'Child bay' } });
   fireEvent.change(group.getByLabelText('Совместимость'), { target: { value: 'Lab / custom' } });
   const input = group.getByLabelText('X (0–1)');
@@ -127,6 +157,8 @@ it.each([2, 48, 256])('creates and reopens %i separate module ports', async coun
   expect(saved.endpoints).toEqual([]);
   expect(ports).toHaveLength(count);
   expect(new Set(ports.map(port => port.key)).size).toBe(count);
+  expect(ports.every(port => !!port.hardware_interface_key)).toBe(true);
+  expect(new Set(ports.map(port => port.hardware_interface_key)).size).toBe(count);
   expect(ports.map(port => port.display_name)).toEqual(Array.from({ length: count }, (_, i) => `Модульный порт ${i + 1}`));
   expect(ports.every(port => port.module_port_type_id === 'Custom / 42')).toBe(true);
   expect(new Set(ports.map(port => `${port.x}:${port.y}`)).size).toBe(count);

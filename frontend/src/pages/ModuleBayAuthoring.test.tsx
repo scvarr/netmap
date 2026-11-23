@@ -68,6 +68,8 @@ it.each([1, 2, 48])('creates %i independent module markers and reopens their sav
   expect(saved.bays!.slice(0, 2)).toEqual([historical, logical]);
   expect(saved.slots).toEqual(state().slots);
   expect(new Set(added.map(bay => bay.bay_key)).size).toBe(count);
+  expect(added.every(bay => !!bay.hardware_interface_key)).toBe(true);
+  expect(new Set(added.map(bay => bay.hardware_interface_key)).size).toBe(count);
   expect(new Set(added.map(bay => `${bay.x}:${bay.y}`)).size).toBe(count);
   expect(added.map(bay => bay.display_name)).toEqual(Array.from({ length: count }, (_, i) => `1-${i + 1}`));
   expect(added.every(bay => bay.kind === 'PLACED' && bay.module_port_type_id === 'Open / 42' && !('width' in bay))).toBe(true);
@@ -82,6 +84,7 @@ it.each([1, 2, 48])('creates %i independent module markers and reopens their sav
 
 it('uses the same snap, alignment, distribution and panel copy for a mixed selection', () => {
   const original = state();
+  original.bays![0].hardware_interface_key = 'original-interface';
   const selected = new Set(['history', 'circle', 'square']);
   expect(blueprintMarkers(original).find(marker => marker.key === 'history')?.rendered_position).toEqual({ x: expect.closeTo(.3), y: .4 });
   const snap = snapSelectionTranslation(blueprintMarkers(original), new Set(['history']), .14, 0, .02, .02);
@@ -100,8 +103,34 @@ it('uses the same snap, alignment, distribution and panel copy for a mixed selec
   const copiedBay = copy.state.bays!.at(-1)!;
   expect(copiedBay).toMatchObject({ kind: 'PLACED', panel_key: 'two', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'Old', x: .1 });
   expect(copiedBay.bay_key).not.toBe('history');
+  expect(copiedBay.hardware_interface_key).toMatch(/^[0-9a-f-]{36}$/);
+  expect(copiedBay.hardware_interface_key).not.toBe('original-interface');
   expect(copy.state.individualLinks).toHaveLength(2);
   expect(copy.state.individualLinks.every(link => link.from_slot_key !== 'history' && link.to_slot_key !== copiedBay.bay_key)).toBe(true);
+});
+
+it('assigns selected and then remaining sockets without changing keys', async () => {
+  const initial = state();
+  initial.bays!.push({ ...historical, bay_key: 'retained', hardware_interface_key: 'retained-interface', x: .75 });
+  const view = show(initial);
+  fireEvent.pointerDown(view.container.querySelector('[data-slot-key="history"] [data-module-port-marker]')!, { button: 0 });
+  const selected = screen.getByRole('button', { name: 'Назначить интерфейсы выделенным гнёздам' });
+  fireEvent.click(selected);
+  expect(selected).toBeDisabled();
+  const save = screen.getByRole('button', { name: 'Save' });
+  fireEvent.click(save);
+  await waitFor(() => expect(view.save).toHaveBeenCalledTimes(1));
+  const first = view.save.mock.calls[0][0] as BlueprintEditorState;
+  expect(first.bays!.map(bay => !!bay.hardware_interface_key)).toEqual([true, false, true]);
+  const all = screen.getByRole('button', { name: 'Назначить интерфейсы всем гнёздам' });
+  fireEvent.click(all);
+  expect(all).toBeDisabled();
+  fireEvent.click(save);
+  await waitFor(() => expect(view.save).toHaveBeenCalledTimes(2));
+  const second = view.save.mock.calls[1][0] as BlueprintEditorState;
+  expect(second.bays!.map(bay => bay.hardware_interface_key)).toEqual([
+    first.bays![0].hardware_interface_key, expect.stringMatching(/^[0-9a-f-]{36}$/), 'retained-interface',
+  ]);
 });
 
 it('removes a marquee selection of mixed markers while retaining logical capacity', () => {

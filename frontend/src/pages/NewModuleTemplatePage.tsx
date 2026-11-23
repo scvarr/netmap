@@ -18,7 +18,9 @@ export function NewModuleTemplatePage({ dataSource = hardwareModuleDataSource, t
   const title = t(transceiver ? 'transceiver.new' : 'hardware.newModule');
   const library = '/library/base-templates?tab=' + (transceiver ? 'transceivers' : 'modules');
   const [definition, setDefinition] = useState<ModuleTemplateInput>(() => copy?.mount_kind === kind
-    ? { ...copy, name: t('templateCopy.name', { name: copy.name }) }
+    ? { ...copy, name: t('templateCopy.name', { name: copy.name }),
+        module_places: copy.module_places?.map(port => port.hardware_interface_key
+          ? { ...port, hardware_interface_key: crypto.randomUUID() } : port) }
     : { name: '', ...moduleMount(kind, ''), endpoints: [], geometry: initialModuleGeometry() });
   const { name, endpoints, geometry, module_places } = definition;
   const [error, setError] = useState(''); const [pending, setPending] = useState(false);

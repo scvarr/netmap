@@ -261,7 +261,11 @@ def validate_package(package: object) -> dict:
         for row in result[model.__table__.name]:
             for column in model.__table__.columns:
                 for fk in column.foreign_keys:
-                    if row[column.key] is not None and row[column.key] not in values_by_column[(fk.column.table.name, fk.column.key)]:
+                    # PostgreSQL MATCH SIMPLE skips a composite FK if any of its
+                    # source columns is NULL, including a root socket's parent.
+                    if any(row[element.parent.key] is None for element in fk.constraint.elements):
+                        continue
+                    if row[column.key] not in values_by_column[(fk.column.table.name, fk.column.key)]:
                         raise PackageError(f"{name}.{column.key} refers to a missing entity")
     _validate_cable_connections(result)
     panel_memberships = {(row["base_revision_id"], row["panel_key"]) for row in result["presentation_panels"]}

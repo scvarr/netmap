@@ -1,6 +1,7 @@
 import { isModulePlaceMarker, isMountKind, moduleMount, mountTypeId, type ModuleMount, type ModulePlaceDefinition } from '../topology/hardwareModules';
 import { MountTypeSelect, mountKindLabels, useMountTypes } from './ModulePortTypeSelect';
 import { HardwareInterfaceCheckbox } from './HardwareInterfaceCheckbox';
+import { HardwareInterfaceActions } from './HardwareInterfaceActions';
 import { useState } from 'react';
 import { PortTypeSelect, usePortTypes } from './PortTypeSelect';
 import { TemplateElementCreator } from './TemplateElementKindSelect';
@@ -33,6 +34,7 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
   const moduleCatalog = useMountTypes();
   const places = value.module_places ?? [];
   const modulePorts = places.filter(port => port.mount_kind === 'MODULE_PORT' && value.mount_kind === 'MODULE_BAY');
+  const unassigned = modulePorts.filter(port => !port.hardware_interface_key);
   const unsupportedPlaces = places.filter(port => !modulePorts.includes(port));
   const moduleMarkers: ModulePortMarker[] = modulePorts.map(({ key, display_name, mount_kind }) => ({ key, display_name, kind: mount_kind }));
   const markers = [...value.endpoints, ...moduleMarkers];
@@ -61,7 +63,8 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
     let number = 1;
     const added = Array.from({ length: count }, () => {
       while (names.has(`${prefix} ${number}`)) number++;
-      return { key: crypto.randomUUID(), display_name: `${prefix} ${number++}`, ...mount };
+      return { key: crypto.randomUUID(), display_name: `${prefix} ${number++}`, ...mount,
+        hardware_interface_key: crypto.randomUUID() };
     });
     const positions = moduleEndpointPositions([...markers, ...added], markerGeometry.endpoints);
     onChange({ ...value, module_places: [...places, ...added.map(port => ({ ...port, ...positions[port.key] }))] });
@@ -93,6 +96,11 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
           changeEndpoints([...value.endpoints, ...added]);
           setSelection(new Set(added.map(endpoint => endpoint.key)));
         }} />
+      {modulePorts.length > 0 && <HardwareInterfaceActions hasUnassigned={unassigned.length > 0}
+        hasSelectedUnassigned={unassigned.some(port => selected.has(port.key))}
+        onAssign={selectedOnly => onChange({ ...value, module_places: places.map(port =>
+          unassigned.includes(port) && (!selectedOnly || selected.has(port.key))
+            ? { ...port, hardware_interface_key: crypto.randomUUID() } : port) })} />}
       {unsupportedPlaces.length > 0 && <div>
         <p role="status">{t('moduleMount.removeUnsupportedPlaces')}</p>
         <ul>{unsupportedPlaces.map(place => <li key={place.key}>{place.display_name}{' '}

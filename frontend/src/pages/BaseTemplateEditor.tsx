@@ -1,6 +1,7 @@
 import { moduleMount, mountTypeId, type ModuleMount } from '../topology/hardwareModules';
 import { MountTypeSelect, useMountTypes } from '../components/ModulePortTypeSelect';
 import { HardwareInterfaceCheckbox } from '../components/HardwareInterfaceCheckbox';
+import { HardwareInterfaceActions } from '../components/HardwareInterfaceActions';
 import { EndpointLinkWorkspace } from '../components/EndpointLinkWorkspace';
 import { TemplateElementCreator } from '../components/TemplateElementKindSelect';
 import { LogicalModulePlacesEditor } from '../components/LogicalModulePlacesEditor';
@@ -90,6 +91,8 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
   const [error, setError] = useState<string>();
   const selectedSlot = selected.size === 1 ? editor.slots.find((slot) => selected.has(slot.key) && slot.panel_key === panelKey) : undefined;
   const selectedBay = selected.size === 1 ? editor.bays?.filter(isPlacedBay).find(bay => selected.has(bay.bay_key)) : undefined;
+  const modulePorts = editor.bays?.filter(bay => bay.mount_kind === 'MODULE_PORT') ?? [];
+  const unassigned = modulePorts.filter(bay => !bay.hardware_interface_key);
   const selectedPosition = selectionPosition(editor, selected);
   const shownPosition = (value: number) => String(Number(value.toFixed(4)));
   const applyPosition = (axis: 'x' | 'y', raw: string) => {
@@ -240,6 +243,14 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
                         setSelected(new Set(next.slots.slice(editor.slots.length).map(slot => slot.key)));
               setMenu(undefined);
             }} />
+          {modulePorts.length > 0 && <HardwareInterfaceActions hasUnassigned={unassigned.length > 0}
+            hasSelectedUnassigned={unassigned.some(bay => selected.has(bay.bay_key))}
+            onAssign={selectedOnly => {
+              const keys = new Map(unassigned.filter(bay => !selectedOnly || selected.has(bay.bay_key))
+                .map(bay => [bay.bay_key, crypto.randomUUID()]));
+              setEditor(old => ({ ...old, bays: old.bays?.map(bay => keys.has(bay.bay_key)
+                ? { ...bay, hardware_interface_key: keys.get(bay.bay_key) } : bay) }));
+            }} />}
         </div>
         <div className="blueprint-composer__panels" role="group" aria-label={t('blueprint.panel.list')}>{[...editor.panels].sort((a, b) => a.panel_number - b.panel_number).map((panel) => <button key={panel.panel_key} type="button" aria-pressed={panel.panel_key === panelKey} onClick={() => activatePanel(panel.panel_key)}>{panel.display_name}</button>)}</div>
         <div className="blueprint-composer__panel-actions">

@@ -60,6 +60,29 @@ def physical_structure(definition):
     return slots, bays, sorted(links)
 
 
+def added_hardware_interfaces(before, after):
+    """Return new base sockets to provision, or None for an incompatible revision."""
+    old_slots, old_bays, old_links = physical_structure(before)
+    new_slots, new_bays, new_links = physical_structure(after)
+    if old_slots != new_slots or old_links != new_links or len(old_bays) != len(new_bays):
+        return None
+    added = set()
+    for old_bay, new_bay in zip(old_bays, new_bays):
+        if old_bay[:3] != new_bay[:3]:
+            return None
+        if old_bay[3] != new_bay[3]:
+            if old_bay[3] is not None or new_bay[1][0] != "MODULE_PORT":
+                return None
+            added.add(new_bay[0])
+    return added
+
+
+_STRUCTURE_ERROR = (
+    "В опубликованной конструкции можно только назначить аппаратный интерфейс "
+    "ранее необъявленному модульному порту. Для других изменений конструкции создайте копию шаблона."
+)
+
+
 def structural_changes(before, after):
     changes = []
     for section, key in (("panels", "panel_key"), ("slots", "key"), ("bays", "bay_key")):
@@ -155,7 +178,9 @@ def analyze_object(session, config, candidate):
     before = published_definition(session, revision.template_id, revision.id)
     changes = structural_changes(before, candidate)
     reasons, placements = [], {}
-    if not preserves_associations(session, config.id, None, before["bays"], candidate["bays"], place_key="bay_key"):
+    added = added_hardware_interfaces(before, candidate)
+    retained_bays = [bay for bay in candidate["bays"] if bay["bay_key"] not in (added or ())]
+    if not preserves_associations(session, config.id, None, before["bays"], retained_bays, place_key="bay_key"):
         reasons.append({"code": "HARDWARE_INTERFACE_ASSOCIATION_CHANGE"})
     old = {s["key"]: s for s in before["slots"]}
     new = {s["key"]: s for s in candidate["slots"]}
@@ -205,6 +230,9 @@ def analyze_object(session, config, candidate):
     installations = [installation for installation in installations if installation.parent_installation_id is None]
     displaced = []
     for installation in sorted(installations, key=lambda i: str(i.id)):
+        if added and installation.bay_key in added:
+            reasons.append({"code": "HARDWARE_INTERFACE_SOCKET_OCCUPIED", "key": installation.bay_key,
+                            "installation_id": str(installation.id)})
         mount = mount_identity(row_mount(session.get(m.ModuleTemplateRevision, installation.module_revision_id)))
         bay = bays.get(installation.bay_key)
         if bay and mount_identity(bay) == mount:
@@ -326,8 +354,8 @@ class BaseTemplateReview:
             raise ModelError("Draft changed; reload before checking", {"reason": "DRAFT_CONFLICT"})
         definition = validate_definition(draft.definition)
         published = published_definition(self.session, template_id, draft.source_revision_id)
-        if physical_structure(published) != physical_structure(definition):
-            raise ModelError("Физическая конструкция опубликованного шаблона неизменна. Создайте копию шаблона.", {"reason": "PHYSICAL_STRUCTURE_IMMUTABLE"})
+        if added_hardware_interfaces(published, definition) is None:
+            raise ModelError(_STRUCTURE_ERROR, {"reason": "PHYSICAL_STRUCTURE_IMMUTABLE"})
         fingerprint = self._inputs()
         configs = self.session.scalars(select(m.ObjectConfiguration).join(m.BaseTemplateRevision, m.ObjectConfiguration.base_revision_id == m.BaseTemplateRevision.id).where(m.BaseTemplateRevision.template_id == template_id).order_by(m.ObjectConfiguration.physical_object_id)).all()
         candidate = m.BaseTemplateCandidate(template_id=template_id, source_revision_id=draft.source_revision_id,
@@ -386,8 +414,8 @@ class BaseTemplateReview:
         if candidate.input_fingerprint != self._inputs():
             stale("REVIEW_INPUTS_CHANGED")
         query = CreateBaseTemplateRequest.model_validate(candidate.definition)
-        if physical_structure(published_definition(self.session, template_id, latest.id)) != physical_structure(candidate.definition):
-            raise ModelError("Published physical structure is immutable. Create a template copy.", {"reason": "PHYSICAL_STRUCTURE_IMMUTABLE"})
+        if added_hardware_interfaces(published_definition(self.session, template_id, latest.id), candidate.definition) is None:
+            raise ModelError(_STRUCTURE_ERROR, {"reason": "PHYSICAL_STRUCTURE_IMMUTABLE"})
         revision = HardwareCatalog(self.session)._create_version(template_id, latest.version_number + 1, query)
         self.session.get(m.BaseTemplate, template_id).name = query.name
         receipt = m.BaseTemplatePublication(id=candidate.id, revision_id=revision.id)

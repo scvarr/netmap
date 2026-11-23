@@ -5,7 +5,7 @@ export function HardwareInterfaceCheckbox({ value, onChange }: {
   onChange: (value: string | undefined) => void;
 }) {
   const { t } = useI18n();
-  return <label>
+  return <label className="hardware-interface-checkbox">
     <input type="checkbox" checked={!!value} onChange={event =>
       onChange(event.target.checked ? value ?? crypto.randomUUID() : undefined)} />
     {t('hardware.assignInterface')}
