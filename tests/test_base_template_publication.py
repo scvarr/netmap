@@ -14,7 +14,7 @@ from app.database import SessionLocal
 from app.hardware_catalog import HardwareCatalog
 from tests.cable_type_fixtures import copper_cable_spec
 from tests.test_base_template_review import check, open_draft, save
-from tests.test_hardware_configuration import client, create_base, create_object, create_module, install
+from tests.test_hardware_configuration import client, create_base, create_board_base, create_object, create_module, install
 
 
 def publish(template_id, candidate_id):
@@ -32,7 +32,7 @@ def prepared(template_id):
 
 
 def test_publication_preserves_old_objects_and_revisions_and_new_objects_pin_current():
-    template_id, payload = create_base()
+    template_id, payload = create_board_base()
     old = create_object(template_id)
     object_id = old['physical_object_ref']['entity_id']
     module = create_module()

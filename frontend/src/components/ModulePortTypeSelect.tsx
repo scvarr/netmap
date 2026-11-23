@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n, type MessageKey } from '../i18n';
-import { moduleMount, mountTypeId, type ModuleMount, type MountKind, type SelectedMount } from '../topology/hardwareModules';
+import { mountTypeId, type ModuleMount, type MountKind } from '../topology/hardwareModules';
 
 export interface MountType {
   id: string;
@@ -78,20 +78,4 @@ export function MountTypeSelect({ types, value, onChange, label = 'hardware.comp
       </option>)}
     </select>
   </label>;
-}
-
-export function ModuleMountFields({ catalogs, mount, onChange }: {
-  catalogs: MountCatalogs;
-  mount: ModuleMount;
-  onChange: (mount: SelectedMount) => void;
-}) {
-  const { t } = useI18n();
-  const kind = mount.mount_kind;
-  return <>
-    <label>{t('moduleMount.kind')}<select value={kind} onChange={event => onChange(moduleMount(event.target.value as MountKind, ''))}>
-      <option value="MODULE_PORT">{t(mountKindLabels.MODULE_PORT)}</option>
-      <option value="MODULE_BAY">{t(mountKindLabels.MODULE_BAY)}</option>
-    </select></label>
-    <MountTypeSelect types={catalogs[kind].types} value={mountTypeId(mount)} onChange={id => onChange(moduleMount(kind, id))} />
-  </>;
 }

@@ -858,15 +858,39 @@ class ModuleGeometry(BaseModel):
     endpoints: dict[str, ModuleEndpointPosition]
 
 
+class TransceiverSpecifications(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    manufacturer: str | None = Field(default=None, max_length=255)
+    part_number: str | None = Field(default=None, max_length=255)
+    description: str | None = Field(default=None, max_length=4000)
+    speed_mbps: FiniteFloat | None = Field(default=None, gt=0)
+    reach_m: FiniteFloat | None = Field(default=None, gt=0)
+    tx_wavelength_nm: FiniteFloat | None = Field(default=None, gt=0)
+    rx_wavelength_nm: FiniteFloat | None = Field(default=None, gt=0)
+    fiber_type: str | None = Field(default=None, max_length=255)
+    notes: str | None = Field(default=None, max_length=4000)
+
+
 class CreateModuleTemplateRequest(ModuleMount):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=255)
     endpoints: list[ModuleEndpointRequest]
     geometry: ModuleGeometry
     module_places: list[ModulePlaceDefinition] = Field(default_factory=list)
+    transceiver: TransceiverSpecifications | None = None
 
     @model_validator(mode="after")
     def valid_definitions(self):
+        if self.transceiver is not None and any(
+            isinstance(value, str) and "\x00" in value for value in self.transceiver.model_dump().values()
+        ):
+            raise PydanticCustomError("hardware_validation", "Transceiver specifications cannot contain NUL characters")
+        if self.transceiver is not None and (
+            self.mount_kind != "MODULE_PORT" or self.module_places
+            or len(self.endpoints) != 1 or self.endpoints[0].kind != "CONNECTION_POINT"
+        ):
+            raise PydanticCustomError("hardware_validation",
+                                      "A transceiver specification requires one physical ending and a ModulePortType")
         if not self.name.strip() or any(not e.key.strip() or not e.display_name.strip() for e in self.endpoints):
             raise PydanticCustomError("hardware_validation", "Module strings must not be blank")
         if set(self.geometry.endpoints) != {e.key for e in self.endpoints}:
@@ -984,8 +1008,8 @@ class ModuleTemplateStructuralChange(BaseModel):
     section: Literal["properties", "endpoints", "module_places", "geometry"]
     key: str
     operation: Literal["added", "removed", "changed"]
-    before: str | ModuleEndpointSnapshot | ModulePlaceDefinition | ModuleGeometry | ModuleMount | None
-    after: str | ModuleEndpointSnapshot | ModulePlaceDefinition | ModuleGeometry | ModuleMount | None
+    before: str | ModuleEndpointSnapshot | ModulePlaceDefinition | ModuleGeometry | ModuleMount | TransceiverSpecifications | None
+    after: str | ModuleEndpointSnapshot | ModulePlaceDefinition | ModuleGeometry | ModuleMount | TransceiverSpecifications | None
 
     @model_validator(mode="after")
     def valid_change(self):
@@ -993,8 +1017,9 @@ class ModuleTemplateStructuralChange(BaseModel):
         if self.section == "geometry":
             valid = self.key == "geometry" and self.operation == "changed" and len(values) == 2 and all(isinstance(v, ModuleGeometry) for v in values)
         elif self.section == "properties":
-            value_type = {"name": str, "mount": ModuleMount}.get(self.key)
-            valid = value_type is not None and self.operation == "changed" and len(values) == 2 and all(isinstance(v, value_type) for v in values)
+            value_type = {"name": str, "mount": ModuleMount, "transceiver": TransceiverSpecifications}.get(self.key)
+            valid = value_type is not None and all(isinstance(v, value_type) for v in values) and (
+                self.key == "transceiver" or self.operation == "changed")
         elif self.section == "module_places":
             valid = all(isinstance(v, ModulePlaceDefinition) and v.key == self.key for v in values)
         else:

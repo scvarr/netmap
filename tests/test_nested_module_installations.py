@@ -43,6 +43,19 @@ def module(name, mount, places=(), has_endpoint=False):
     return response.json()
 
 
+def physical_transceiver(mount):
+    connector_name = f"Lab socket {uuid.uuid4()}"
+    connector = created(client.post("/v1/connector-types", json={
+        "name": connector_name, "mating_profile": "Lab", "termination": "SOCKET", "color": "#336699",
+    }))
+    port = created(client.post("/v1/port-types", json={
+        "name": "Lab termination", "medium": "FIBER", "members": ["Optical"],
+        "connector_type_id": connector["id"], "color": "#336699",
+    }))
+    return {"name": "Physical transceiver", **mount, "transceiver": {}, "geometry": initial_geometry(["optical"]),
+            "endpoints": [{"key": "optical", "display_name": "Optical", "kind": "CONNECTION_POINT", "port_type_id": port["id"]}]}
+
+
 def place(key, mount):
     return {"key": key, "display_name": key, "x": .25, "y": .65, **mount}
 
@@ -206,7 +219,7 @@ def test_invalid_targets_and_concurrent_occupancy():
     oid = obj["physical_object_ref"]["entity_id"]
     root = created(install(oid, card, "root"))["bays"][0]["installation"]
     other = create_object(base)["physical_object_ref"]["entity_id"]
-    physical = module("Physical transceiver", sfp, has_endpoint=True)
+    physical = created(client.post("/v1/library/module-templates", json=physical_transceiver(sfp)))
     other_type = module("Other port", {**sfp, "module_port_type_id": ensure_module_port_type_id("QSFP")})
     before = package()
     reason(install(oid, physical, "SFP port", root["id"]), 409, "TRANSCEIVER_BINDING_REQUIRED")
@@ -325,7 +338,7 @@ def test_unsafe_assignment_refused_in_review_and_apply(count, code):
 
 
 def test_nested_transceiver_and_incompatible_target_mount_are_refused():
-    _, obj, card, transceiver, _ = setup()
+    _, obj, card, transceiver, sfp = setup()
     oid = obj["physical_object_ref"]["entity_id"]
     root = created(install(oid, card, "root"))["bays"][0]["installation"]
     created(install(oid, transceiver, "SFP port", root["id"]))
@@ -336,13 +349,14 @@ def test_nested_transceiver_and_incompatible_target_mount_are_refused():
     pinned = read(oid)
     assert pinned["bays"][0]["installation"]["module_revision_id"] == card["revision_id"]
     assert pinned["nested_installations"][0]["module_revision_id"] == target["revision_id"]
-    revision(tid, lambda d: d["endpoints"].append(card["endpoints"][0]))
-    before = package()
-    assert apply(tid)[0]["reasons"][0]["code"] == "TRANSCEIVER_BINDING_REQUIRED"
-    assert package() == before
     revision(tid, lambda d: d.update(endpoints=[], module_port_type_id=ensure_module_port_type_id("QSFP")))
     before = package()
     assert apply(tid)[0]["reasons"][0]["code"] == "NESTED_PLACE_COMPATIBILITY_MISMATCH"
+    assert package() == before
+    definition = physical_transceiver(sfp)
+    revision(tid, lambda d: d.update(definition))
+    before = package()
+    assert apply(tid)[0]["reasons"][0]["code"] == "TRANSCEIVER_BINDING_REQUIRED"
     assert package() == before
 
 

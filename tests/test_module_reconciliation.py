@@ -1,6 +1,6 @@
 """E3 live preflight, identity, independent commits and v5 provenance."""
 
-from tests.module_port_type_fixtures import ensure_module_port_type_id
+from tests.module_port_type_fixtures import ensure_module_bay_type_id
 import copy
 import uuid
 
@@ -66,7 +66,7 @@ def test_skipped_revisions_identity_add_remove_and_retry():
     assert package()['canonical'] == before['canonical']
 
 
-@pytest.mark.parametrize('blocker', ['metadata', 'json', 'fk', 'binding', 'kind', 'missing', 'module_port_type_id'])
+@pytest.mark.parametrize('blocker', ['metadata', 'json', 'fk', 'binding', 'kind', 'missing', 'module_bay_type_id'])
 def test_refusal_is_atomic(blocker):
     _, module, ids = setup_installations(1)
     tid = module['template_id']
@@ -86,8 +86,8 @@ def test_refusal_is_atomic(blocker):
         if blocker == 'missing':
             session.delete(mapping)
     def edit(d):
-        if blocker == 'module_port_type_id':
-            d['module_port_type_id'] = ensure_module_port_type_id('different')
+        if blocker == 'module_bay_type_id':
+            d['module_bay_type_id'] = ensure_module_bay_type_id('different')
         elif blocker == 'kind':
             e = next(e for e in d['endpoints'] if e['key'] == key)
             e['kind'] = 'CONNECTION_POINT' if e['kind'] == 'NETWORK_PORT' else 'NETWORK_PORT'

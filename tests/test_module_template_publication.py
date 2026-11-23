@@ -1,6 +1,6 @@
 """E2 atomic module publication and retained installation provenance."""
 
-from tests.module_port_type_fixtures import ensure_module_port_type_id
+from tests.module_port_type_fixtures import ensure_module_bay_type_id
 import copy
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -10,7 +10,7 @@ from app.database import SessionLocal
 from app.hardware_catalog import HardwareCatalog
 from app.module_template_review import ModuleTemplateReview
 from tests.test_module_template_review import open_draft, save, check, setup_installations
-from tests.test_hardware_configuration import client, create_base, create_module, create_object, install
+from tests.test_hardware_configuration import client, create_board_base, create_module, create_object, install
 
 
 def publish(template_id, candidate_id):
@@ -121,9 +121,9 @@ def test_invalid_e2_archive_rejected(damage):
 
 @pytest.mark.parametrize('type_name', ['OCP3', 'SFP+', ' OCP3', 'OCP3 '])
 def test_new_installation_pins_latest_with_exact_compatibility(type_name):
-    base_id, payload = create_base(); module = create_module(); tid = module['template_id']
+    base_id, payload = create_board_base(); module = create_module(); tid = module['template_id']
     draft = open_draft(tid)
-    checked = check(tid, save(tid, draft, {**draft['definition'], 'mount_kind': "MODULE_PORT", 'module_port_type_id': ensure_module_port_type_id(type_name)}))
+    checked = check(tid, save(tid, draft, {**draft['definition'], 'mount_kind': "MODULE_BAY", 'module_bay_type_id': ensure_module_bay_type_id(type_name)}))
     result = publish(tid, checked['review']['candidate_id']).json()
     obj = create_object(base_id)
     response = install(obj['physical_object_ref']['entity_id'], tid, payload['bays'][0]['bay_key'])
@@ -154,7 +154,7 @@ def test_input_writers_blocked_during_publication(monkeypatch):
 def test_diagnostics_intervention_and_delete_publication():
     _, module, _ = setup_installations(1); tid = module['template_id']
     draft = open_draft(tid)
-    checked = check(tid, save(tid, draft, {**draft['definition'], 'mount_kind': "MODULE_PORT", 'module_port_type_id': ensure_module_port_type_id('Different slot')}))
+    checked = check(tid, save(tid, draft, {**draft['definition'], 'mount_kind': "MODULE_BAY", 'module_bay_type_id': ensure_module_bay_type_id('Different slot')}))
     assert publish(tid, checked['review']['candidate_id']).status_code == 200
     state = open_draft(tid)['publication_state']
     assert state['awaiting_update_count'] == 0 and state['requires_intervention_count'] == 1

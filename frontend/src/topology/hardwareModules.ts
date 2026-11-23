@@ -70,7 +70,21 @@ export function moduleBayMarkers(bays: ModuleBay[]) {
 }
 export interface ModuleGeometry { width: number; height: number; fill_color: string; endpoints: Record<string, { x: number; y: number }> }
 export const initialModuleGeometry = (): ModuleGeometry => ({ width: 240, height: 80, fill_color: "#64748b", endpoints: {} });
-export type ModuleTemplateInput = ModuleMount & { geometry: ModuleGeometry; name: string; endpoints: ModuleEndpoint[]; module_places?: ModulePlaceDefinition[] };
+export interface TransceiverSpecifications {
+  manufacturer?: string;
+  part_number?: string;
+  description?: string;
+  speed_mbps?: number;
+  reach_m?: number;
+  tx_wavelength_nm?: number;
+  rx_wavelength_nm?: number;
+  fiber_type?: string;
+  notes?: string;
+}
+export type ModuleTemplateInput = ModuleMount & {
+  geometry: ModuleGeometry; name: string; endpoints: ModuleEndpoint[];
+  module_places?: ModulePlaceDefinition[]; transceiver?: TransceiverSpecifications;
+};
 export type ModuleTemplate = ModuleTemplateInput & { template_id: string; revision_id: string; publication_state?: ModuleDraftDocument["publication_state"] };
 export interface ModuleDraftDocument {
   template_id: string; source_revision_id: string; generation: number; definition: ModuleTemplateInput;
@@ -85,8 +99,8 @@ export interface ModuleDraftDocument {
 }
 export interface ModuleStructuralChange {
   section: 'properties' | 'endpoints' | 'module_places' | 'geometry'; key: string; operation: 'added' | 'removed' | 'changed';
-  before: ModuleGeometry | ModulePlaceDefinition | ModuleMount | string | (ModuleEndpoint & { order_index: number }) | null;
-  after: ModuleGeometry | ModulePlaceDefinition | ModuleMount | string | (ModuleEndpoint & { order_index: number }) | null;
+  before: ModuleGeometry | ModulePlaceDefinition | ModuleMount | TransceiverSpecifications | string | (ModuleEndpoint & { order_index: number }) | null;
+  after: ModuleGeometry | ModulePlaceDefinition | ModuleMount | TransceiverSpecifications | string | (ModuleEndpoint & { order_index: number }) | null;
 }
 export interface ModuleReconciliationResult {
   revision_id: string; version_number: number;

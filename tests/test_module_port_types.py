@@ -135,12 +135,12 @@ def legacy_database():
     isolated = sa.create_engine(url)
     env = {**os.environ, "DATABASE_URL": url.render_as_string(hide_password=False)}
 
-    def upgrade(target="head", mapping=None):
+    def upgrade(target="head", mapping=None, *, direction="upgrade"):
         migration_env = dict(env)
         migration_env.pop("NETMAP_CAT_D_05_MOUNT_KINDS", None)
         if mapping is not None:
             migration_env["NETMAP_CAT_D_05_MOUNT_KINDS"] = json.dumps(mapping)
-        return subprocess.run(["alembic", "upgrade", target], env=migration_env, capture_output=True, text=True)
+        return subprocess.run(["alembic", direction, target], env=migration_env, capture_output=True, text=True)
 
     try:
         initial = upgrade("mod01_module_port_markers")
@@ -283,7 +283,7 @@ def test_forward_migration_preserves_installation_and_seed(legacy_database, prev
             )).scalars().all() for table in stable_tables}
 
     before_nested = nested_upgrade_snapshot()
-    upgraded = upgrade()
+    upgraded = upgrade("mod02a_nested_installations")
     assert upgraded.returncode == 0, upgraded.stderr
     assert nested_upgrade_snapshot() == before_nested
     with db.connect() as conn:
@@ -295,6 +295,19 @@ def test_forward_migration_preserves_installation_and_seed(legacy_database, prev
     with db.connect() as conn:
         assert dict(conn.execute(sa.text("SELECT name,id FROM module_port_types")).all()) == names
         assert dict(conn.execute(sa.text("SELECT name,id FROM module_bay_types")).all()) == bays
+        assert conn.scalar(sa.text("SELECT count(*) FROM module_template_revisions WHERE transceiver IS NOT NULL")) == 0
+
+    with db.begin() as conn:
+        conn.execute(sa.text("UPDATE module_template_revisions SET transceiver = '{}'::jsonb"))
+    blocked = upgrade("mod02a_nested_installations", direction="downgrade")
+    assert blocked.returncode != 0 and "Downgrade would discard transceiver definitions" in blocked.stderr
+    with db.begin() as conn:
+        conn.execute(sa.text("UPDATE module_template_revisions SET transceiver = NULL"))
+    downgraded = upgrade("mod02a_nested_installations", direction="downgrade")
+    assert downgraded.returncode == 0, downgraded.stderr
+    assert nested_upgrade_snapshot() == before_nested
+    reupgraded = upgrade()
+    assert reupgraded.returncode == 0, reupgraded.stderr
 
 
 @pytest.mark.parametrize("value", ["sfp", "Legacy"])

@@ -1,5 +1,5 @@
 import { isModulePlaceMarker, isMountKind, moduleMount, mountTypeId, type ModuleMount, type ModulePlaceDefinition } from '../topology/hardwareModules';
-import { ModuleMountFields, MountTypeSelect, mountKindLabels, useMountTypes } from './ModulePortTypeSelect';
+import { MountTypeSelect, mountKindLabels, useMountTypes } from './ModulePortTypeSelect';
 import { useState } from 'react';
 import { PortTypeSelect, usePortTypes } from './PortTypeSelect';
 import { TemplateElementCreator } from './TemplateElementKindSelect';
@@ -79,7 +79,8 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
   return <fieldset disabled={disabled} className="module-template-editor">
     <aside className="blueprint-editor-controls module-template-editor__controls">
       <label>{t('hardware.name')}<input required value={value.name} onChange={e => onChange({ ...value, name: e.target.value })} /></label>
-      <ModuleMountFields catalogs={moduleCatalog} mount={value} onChange={mount => onChange({ ...value, ...mount })} />
+      <MountTypeSelect types={moduleCatalog.MODULE_BAY.types} value={mountTypeId(value)}
+        onChange={id => onChange({ ...value, ...moduleMount('MODULE_BAY', id) })} />
       <h2>{t('blueprint.endpoint.elements')}</h2>
       <p role="status">{t('blueprint.layout.selected', { count: selected.size })}</p>
       <TemplateElementCreator moduleCatalog={moduleCatalog} catalog={catalog} allowModulePorts={value.mount_kind === 'MODULE_BAY'}

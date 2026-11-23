@@ -52,6 +52,21 @@ def validate_module_authoring(definition):
                               {"reason": "TRANSCEIVER_CHILD_PLACES_FORBIDDEN"})
 
 
+def validate_transceiver_authoring(definition, source=None):
+    if source and source.get("transceiver") is not None and definition.get("transceiver") is None:
+        raise ValidationError("Опубликованное определение трансивера требует физического окончания",
+                              {"reason": "TRANSCEIVER_SPECIFICATIONS_REQUIRED"})
+    if definition["mount_kind"] != "MODULE_PORT" or definition.get("transceiver") is not None:
+        return
+    if source and source["mount_kind"] == "MODULE_PORT" and source.get("transceiver") is None:
+        retained = {(e["key"], e["kind"], e["port_type_id"]) for e in source["endpoints"]}
+        if all((e["key"], e["kind"], e["port_type_id"]) in retained for e in definition["endpoints"]):
+            return
+    if definition["endpoints"]:
+        raise ValidationError("Для физического окончания трансивера требуется определение его характеристик",
+                              {"reason": "TRANSCEIVER_SPECIFICATIONS_REQUIRED"})
+
+
 def validate_nested_installation(parent_mount_kind, place_mount_kind, *, parent_is_root):
     if not parent_is_root or parent_mount_kind != "MODULE_BAY" or place_mount_kind != "MODULE_PORT":
         raise ModelError("Вложенная установка допустима только для трансивера в порту платы, установленной в базовый отсек",

@@ -1,4 +1,4 @@
-from tests.module_port_type_fixtures import ensure_module_port_type_id
+from tests.module_port_type_fixtures import ensure_module_bay_type_id
 from tests.port_type_fixtures import ensure_port_type_id
 import uuid
 
@@ -7,12 +7,12 @@ from sqlalchemy import select
 
 from app.database import SessionLocal
 from app.models import ModuleTemplate, ModuleTemplateRevision, ModuleEndpointDefinition
-from tests.test_hardware_configuration import client, create_base, create_module, create_object, install
+from tests.test_hardware_configuration import client, create_board_base, create_module, create_object, install
 
 
 def add_revision(template_id):
     with SessionLocal.begin() as session:
-        revision = ModuleTemplateRevision(template_id=uuid.UUID(template_id), version_number=2, name='Historical module', mount_kind="MODULE_PORT", module_port_type_id=uuid.UUID(ensure_module_port_type_id('OCP3')), geometry={'width': 240, 'height': 80, 'fill_color': '#64748b', 'endpoints': {'new-port': {'x': .5, 'y': .5}}})
+        revision = ModuleTemplateRevision(template_id=uuid.UUID(template_id), version_number=2, name='Historical module', mount_kind="MODULE_BAY", module_bay_type_id=uuid.UUID(ensure_module_bay_type_id('OCP3')), geometry={'width': 240, 'height': 80, 'fill_color': '#64748b', 'endpoints': {'new-port': {'x': .5, 'y': .5}}})
         session.add(revision)
         session.flush()
         session.add(ModuleEndpointDefinition(module_revision_id=revision.id, definition_key='new-port',
@@ -40,7 +40,7 @@ def test_unused_module_deletes_all_revisions_and_definitions():
 
 @pytest.mark.parametrize('installed_revision', [1, 2])
 def test_installed_revision_blocks_root_deletion_without_changing_any_data(installed_revision):
-    template_id, payload = create_base()
+    template_id, payload = create_board_base()
     object_id = create_object(template_id)['physical_object_ref']['entity_id']
     module = create_module()
     if installed_revision == 2:

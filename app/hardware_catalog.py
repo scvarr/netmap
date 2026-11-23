@@ -9,6 +9,7 @@ from app.port_types import validate_port_type_assignments
 from app.module_port_types import (
     MOUNT_FIELDS, base_assignments, module_assignments, mount_identity, row_mount,
     validate_module_authoring, validate_mount_types, validate_nested_installation,
+    validate_transceiver_authoring,
 )
 from app.module_layout import compose_layout, initial_layout, nested_place, validate_layout
 from app.device_catalog import DISPLAY_ALIAS_KEY, PHYSICAL_OBJECT_CLASS_KEY
@@ -378,7 +379,9 @@ class HardwareCatalog:
     def create_module(self, query):
         definition = query.model_dump(mode="json")
         validate_module_authoring(definition)
-        validate_port_type_assignments(self.session, definition["endpoints"])
+        validate_transceiver_authoring(definition)
+        validate_port_type_assignments(self.session, definition["endpoints"],
+                                       require_connector=query.transceiver is not None)
         validate_mount_types(self.session, module_assignments(definition))
         template = ModuleTemplate(name=query.name)
         self.session.add(template)
@@ -388,6 +391,7 @@ class HardwareCatalog:
 
     def _create_module_revision(self, template_id, version_number, query):
         revision = ModuleTemplateRevision(template_id=template_id, name=query.name, version_number=version_number, geometry=query.geometry.model_dump(mode="json"),
+            transceiver=query.transceiver.model_dump(mode="json", exclude_defaults=True) if query.transceiver is not None else None,
             **{key: getattr(query, key) for key in MOUNT_FIELDS})
         revision.module_places = [port.model_dump(mode="json", exclude_none=True) for port in query.module_places]
         self.session.add(revision)
@@ -402,7 +406,10 @@ class HardwareCatalog:
         return revision
 
     def module_document(self, template, revision):
-        return {"template_id": str(template.id), "revision_id": str(revision.id), "name": revision.name, **row_mount(revision), "geometry": revision.geometry, "module_places": revision.module_places, "endpoints": [{"key": e.definition_key, "display_name": e.display_name, "kind": e.kind, "port_type_id": str(e.port_type_id)} for e in self.session.scalars(select(ModuleEndpointDefinition).where(ModuleEndpointDefinition.module_revision_id == revision.id).order_by(ModuleEndpointDefinition.order_index))]}
+        document = {"template_id": str(template.id), "revision_id": str(revision.id), "name": revision.name, **row_mount(revision), "geometry": revision.geometry, "module_places": revision.module_places, "endpoints": [{"key": e.definition_key, "display_name": e.display_name, "kind": e.kind, "port_type_id": str(e.port_type_id)} for e in self.session.scalars(select(ModuleEndpointDefinition).where(ModuleEndpointDefinition.module_revision_id == revision.id).order_by(ModuleEndpointDefinition.order_index))]}
+        if revision.transceiver is not None:
+            document["transceiver"] = revision.transceiver
+        return document
 
     def list_modules(self):
         latest = select(ModuleTemplateRevision.id).where(ModuleTemplateRevision.template_id == ModuleTemplate.id).order_by(ModuleTemplateRevision.version_number.desc()).limit(1).correlate(ModuleTemplate).scalar_subquery()
@@ -481,8 +488,8 @@ class HardwareCatalog:
         definitions = list(self.session.scalars(select(ModuleEndpointDefinition).where(
             ModuleEndpointDefinition.module_revision_id == revision.id
         ).order_by(ModuleEndpointDefinition.order_index)))
-        if parent_id is not None and revision.mount_kind == "MODULE_PORT" and definitions:
-            raise ModelError("Физические окончания вложенного трансивера требуют привязки MOD-03",
+        if revision.mount_kind == "MODULE_PORT" and definitions:
+            raise ModelError("Физические окончания трансивера требуют привязки MOD-03",
                              {"reason": "TRANSCEIVER_BINDING_REQUIRED"})
         layout = initial_layout(place, revision.geometry, query.orientation, frame, places)
         validate_layout(layout, place["panel_key"])

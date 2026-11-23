@@ -11,7 +11,7 @@ from app import models as m
 from app.database import SessionLocal
 from app.main import reconcile_base_template_objects
 from app.object_reconciliation import ObjectReconciliation
-from tests.test_hardware_configuration import create_base, create_object, create_module, install
+from tests.test_hardware_configuration import create_base, create_board_base, create_object, create_module, install
 from tests.test_object_reconciliation import add_dependency, add_slot, connect, endpoint, oid, package, reconcile, revision
 
 
@@ -94,7 +94,7 @@ def test_preflight_locks_protect_against_new_fk_json_and_existing_row_writers(mo
 def test_module_install_committed_while_object_lock_waited_causes_fresh_capacity_refusal():
     from app.hardware_catalog import HardwareCatalog
     from app.schemas import InstallModuleRequest
-    template_id, payload = create_base(); obj = create_object(template_id); module = create_module()
+    template_id, payload = create_board_base(); obj = create_object(template_id); module = create_module()
     revision(template_id, lambda d: d.update(bays=[]))
     attempting_object_lock = threading.Event()
     with SessionLocal() as updater, SessionLocal.begin() as writer, ThreadPoolExecutor(max_workers=1) as pool:
@@ -119,7 +119,7 @@ def test_module_install_committed_while_object_lock_waited_causes_fresh_capacity
 
 def test_module_uninstall_and_reconciliation_share_object_lock_order(monkeypatch):
     from app.module_installation_deletion import ModuleInstallationDeletionCatalog
-    template_id, payload = create_base(); obj = create_object(template_id); module = create_module()
+    template_id, payload = create_board_base(); obj = create_object(template_id); module = create_module()
     installed = install(oid(obj), module['template_id'], payload['bays'][0]['bay_key']).json()['bays'][0]['installation']
     revision(template_id, lambda d: add_slot(d))
     paused, release = threading.Event(), threading.Event()

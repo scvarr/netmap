@@ -15,21 +15,17 @@ from app.models import (
 )
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from tests.cable_type_fixtures import copper_cable_fields
-from tests.test_hardware_configuration import base_payload, client, create_base, create_module, create_object, install
+from tests.test_hardware_configuration import board_base_payload, client, create_base, create_module, create_object, install
 
 
 def setup_installation(two=False, kind='NETWORK_PORT'):
-    payload = base_payload()
+    payload = board_base_payload()
     if two:
         payload['bays'].append({**payload['bays'][0], 'bay_key': str(uuid.uuid4()), 'display_name': 'Other bay'})
     template_id, payload = create_base(payload)
     obj = create_object(template_id)
     object_id = obj['physical_object_ref']['entity_id']
-    module = create_module()
-    if kind != 'NETWORK_PORT':
-        response = client.post('/v1/library/module-templates', json={'name': 'Passive', 'compatibility': 'OCP3', 'endpoints': [{'key': 'p', 'display_name': 'P', 'kind': kind}]})
-        assert response.status_code == 201
-        module = response.json()
+    module = create_module(kind=kind)
     for bay in payload['bays']:
         response = install(object_id, module['template_id'], bay['bay_key'])
         assert response.status_code == 201

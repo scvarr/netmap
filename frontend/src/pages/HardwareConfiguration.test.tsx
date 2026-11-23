@@ -14,10 +14,10 @@ import type { HardwareModuleDataSource, HardwareConfiguration } from '../topolog
 const ref = (entity_type: 'BaseTemplate' | 'BaseTemplateRevision', entity_id: string) => ({ ref_type: 'LIBRARY_RECORD' as const, entity_type, entity_id });
 const base = { blueprint_ref: ref('BaseTemplate', 'base'), version_ref: ref('BaseTemplateRevision', 'rev'), name: 'Server base', version_number: 1, version_count: 1, slot_count: 1, internal_link_count: 0, body: { kind: 'RECTANGLE' as const, width: 160, height: 60 } };
 const panel = { panel_key: 'panel', panel_number: 1, display_name: 'Panel', x: 0, y: 0, width: 160, height: 60 };
-const module = { geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { p1: { x: .3, y: .5 }, p2: { x: .7, y: .5 } } }, template_id: 'module', revision_id: 'module-rev', name: 'OCP NIC', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'OCP3', endpoints: [{ key: 'p1', display_name: 'P1', kind: 'NETWORK_PORT' as const }, { key: 'p2', display_name: 'P2', kind: 'NETWORK_PORT' as const }] };
-const config: HardwareConfiguration = { configuration_id: 'config', bays: [{ bay_key: 'bay', display_name: 'OCP bay', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'OCP3', panel_key: 'panel', x: .1, y: .1, width: .8, height: .8, installation: null }] };
+const module = { geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { p1: { x: .3, y: .5 }, p2: { x: .7, y: .5 } } }, template_id: 'module', revision_id: 'module-rev', name: 'OCP NIC', mount_kind: 'MODULE_BAY' as const, module_bay_type_id: 'OCP3', endpoints: [{ key: 'p1', display_name: 'P1', kind: 'NETWORK_PORT' as const }, { key: 'p2', display_name: 'P2', kind: 'NETWORK_PORT' as const }] };
+const config: HardwareConfiguration = { configuration_id: 'config', bays: [{ bay_key: 'bay', display_name: 'OCP bay', mount_kind: 'MODULE_BAY' as const, module_bay_type_id: 'OCP3', panel_key: 'panel', x: .1, y: .1, width: .8, height: .8, installation: null }] };
 const bases = (): BaseTemplateDataSource => ({ loadBaseTemplates: vi.fn().mockResolvedValue({ schema_version: '2.0', blueprints: [base] }), loadBaseTemplateRevision: vi.fn().mockResolvedValue({ ...base, schema_version: '2.0', next_panel_number: 2, panels: [panel], slots: [], internal_links: [], bays: config.bays }), createBaseTemplate: vi.fn().mockResolvedValue({ schema_version: '2.0', blueprint_ref: base.blueprint_ref, version_ref: base.version_ref }), createPhysicalObject: vi.fn().mockResolvedValue({ physical_object_ref: { entity_id: 'object' } }) });
-const modules = (): HardwareModuleDataSource => ({ listModules: vi.fn().mockResolvedValue({ modules: [module, { ...module, template_id: 'wrong', name: 'Other NIC', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'ocp3' }] }), createModule: vi.fn().mockResolvedValue(module), deleteModule: vi.fn().mockResolvedValue(undefined), uninstallModule: vi.fn().mockResolvedValue(config), loadConfiguration: vi.fn().mockResolvedValue(config), installModule: vi.fn().mockResolvedValue({ ...config, bays: [{ ...config.bays[0], installation: { id: 'installation', name: module.name, orientation: 'VERTICAL', module_template_id: module.template_id, module_revision_id: module.revision_id, endpoints: [] } }] }) });
+const modules = (): HardwareModuleDataSource => ({ listModules: vi.fn().mockResolvedValue({ modules: [module, { ...module, template_id: 'wrong', name: 'Other NIC', mount_kind: 'MODULE_BAY' as const, module_bay_type_id: 'ocp3' }] }), createModule: vi.fn().mockResolvedValue(module), deleteModule: vi.fn().mockResolvedValue(undefined), uninstallModule: vi.fn().mockResolvedValue(config), loadConfiguration: vi.fn().mockResolvedValue(config), installModule: vi.fn().mockResolvedValue({ ...config, bays: [{ ...config.bays[0], installation: { id: 'installation', name: module.name, orientation: 'VERTICAL', module_template_id: module.template_id, module_revision_id: module.revision_id, endpoints: [] } }] }) });
 function show(element: React.ReactNode) { return render(<I18nProvider><MemoryRouter><Routes><Route path="/" element={element} /><Route path="/infrastructure/objects/object" element={<h1>Created object</h1>} /><Route path="/library/base-templates" element={<h1>Saved library</h1>} /></Routes></MemoryRouter></I18nProvider>); }
 beforeEach(() => { localStorage.clear(); vi.restoreAllMocks(); });
 afterEach(() => vi.unstubAllGlobals());
@@ -38,7 +38,7 @@ describe('09.6-A user path', () => {
   it('offers styled module deletion and does nothing when confirmation is declined', async () => {
     const source = modules(); const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     show(<BaseTemplateLibraryPage dataSource={bases()} moduleDataSource={source} />);
-    await userEvent.click(screen.getByRole('tab', { name: 'Модули' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Шаблоны плат' }));
     const summary = await screen.findByRole('button', { name: /^OCP NIC/ });
     await userEvent.click(summary);
     const row = summary.closest('li')!;
@@ -53,7 +53,7 @@ describe('09.6-A user path', () => {
     const source = modules(); vi.spyOn(window, 'confirm').mockReturnValue(true);
     source.listModules = vi.fn().mockResolvedValueOnce({ modules: [module] }).mockResolvedValue({ modules: [] });
     show(<BaseTemplateLibraryPage dataSource={bases()} moduleDataSource={source} />);
-    await userEvent.click(screen.getByRole('tab', { name: 'Модули' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Шаблоны плат' }));
     const summary = await screen.findByRole('button', { name: /^OCP NIC/ });
     await userEvent.click(summary);
     const row = summary.closest('li')!;
@@ -68,7 +68,7 @@ describe('09.6-A user path', () => {
     const source = modules(); vi.spyOn(window, 'confirm').mockReturnValue(true);
     source.deleteModule = vi.fn().mockRejectedValue(new Error('ModuleTemplate revision is installed'));
     show(<BaseTemplateLibraryPage dataSource={bases()} moduleDataSource={source} />);
-    await userEvent.click(screen.getByRole('tab', { name: 'Модули' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Шаблоны плат' }));
     const summary = await screen.findByRole('button', { name: /^OCP NIC/ });
     await userEvent.click(summary);
     const row = summary.closest('li')!;
@@ -89,7 +89,7 @@ describe('09.6-A user path', () => {
     await waitFor(() => expect(source.loadBaseTemplates).toHaveBeenCalledTimes(2));
     expect(source.deleteBaseTemplate).toHaveBeenCalledWith('base');
     await waitFor(() => expect(screen.queryByRole('button', { name: /^Server base/ })).not.toBeInTheDocument());
-    await userEvent.click(screen.getByRole('tab', { name: 'Модули' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Шаблоны плат' }));
     expect(await screen.findByRole('button', { name: /^OCP NIC/ })).toBeInTheDocument();
     expect(modulesSource.deleteModule).not.toHaveBeenCalled();
   });
@@ -114,7 +114,7 @@ describe('09.6-A user path', () => {
     expect(await screen.findByRole('heading', { name: 'Created object' })).toBeInTheDocument();
   });
   it('creates physical module definitions in their displayed order with opaque keys', async () => {
-    vi.stubGlobal('fetch', vi.fn(async url => Response.json(String(url).endsWith('/module-port-types') ? ['OCP3'].map(name => ({ id: name, name, is_active: true })) : [
+    vi.stubGlobal('fetch', vi.fn(async url => Response.json(String(url).endsWith('/module-bay-types') ? ['OCP3'].map(name => ({ id: name, name, is_active: true })) : [
       { id: 'copper', name: 'Copper', cardinality: 1, color: '#336699', is_active: true },
     ])));
     const source = modules(); show(<NewModuleTemplatePage dataSource={source} />);
@@ -130,7 +130,7 @@ describe('09.6-A user path', () => {
     await userEvent.click(screen.getByRole('button', { name: '#2' }));
     await userEvent.type(within(screen.getByRole('group', { name: 'Свойства выбранного порта' })).getByLabelText('Название'), 'P2');
     await userEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));
-    expect(source.createModule).toHaveBeenCalledWith({ geometry: expect.objectContaining({ width: 240, height: 80, endpoints: expect.any(Object) }), name: 'NIC', mount_kind: 'MODULE_PORT', module_port_type_id: 'OCP3', module_bay_type_id: null, endpoints: [{ key: expect.any(String), display_name: 'P1', kind: 'NETWORK_PORT', port_type_id: 'copper' }, { key: expect.any(String), display_name: 'P2', kind: 'CONNECTION_POINT', port_type_id: 'copper' }] });
+    expect(source.createModule).toHaveBeenCalledWith({ geometry: expect.objectContaining({ width: 240, height: 80, endpoints: expect.any(Object) }), name: 'NIC', mount_kind: 'MODULE_BAY', module_bay_type_id: 'OCP3', module_port_type_id: null, endpoints: [{ key: expect.any(String), display_name: 'P1', kind: 'NETWORK_PORT', port_type_id: 'copper' }, { key: expect.any(String), display_name: 'P2', kind: 'CONNECTION_POINT', port_type_id: 'copper' }] });
     expect(await screen.findByRole('heading', { name: 'Saved library' })).toBeInTheDocument();
   });
   it('installs only an exactly compatible module, sends orientation, and refreshes physical details', async () => {

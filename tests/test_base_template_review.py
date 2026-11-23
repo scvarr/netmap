@@ -1,4 +1,4 @@
-from tests.module_port_type_fixtures import ensure_module_port_type_id
+from tests.module_port_type_fixtures import ensure_module_bay_type_id
 import copy
 import uuid
 
@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.database import SessionLocal
 from app.models import BaseTemplateCandidate, EntityMetadata, Connection, ConnectionMember, NetworkInterfaceRealization
-from tests.test_hardware_configuration import client, create_base, create_object, create_module, install, base_payload
+from tests.test_hardware_configuration import client, create_base, create_object, create_module, install, board_base_payload
 
 
 def open_draft(template_id):
@@ -148,7 +148,7 @@ def test_removed_endpoint_dependencies_require_attention_and_are_per_object(depe
 
 @pytest.mark.parametrize('capacity', [0, 1, 2])
 def test_occupied_bay_capacity_and_deterministic_placement(capacity):
-    payload = base_payload()
+    payload = board_base_payload()
     payload['bays'] += [{**payload['bays'][0], 'bay_key': str(uuid.uuid4())}]
     template_id, _ = create_base(payload)
     object_id = create_object(template_id)['physical_object_ref']['entity_id']
@@ -214,22 +214,22 @@ def test_conflict_and_invalid_link_do_not_destroy_draft():
     assert open_draft(template_id)['definition']['name'] == 'Saved'
 
 
-@pytest.mark.parametrize('change', ['module_port_type_id', 'kind', 'internal_link', 'remove_initial_panel'])
+@pytest.mark.parametrize('change', ['module_bay_type_id', 'kind', 'internal_link', 'remove_initial_panel'])
 def test_structural_changes_keep_keys_and_fail_closed_when_needed(change):
-    payload = base_payload()
+    payload = board_base_payload()
     payload['panels'].append({**payload['panels'][0], 'panel_key': str(uuid.uuid4()), 'panel_number': 2})
     payload['slots'].append({**payload['slots'][0], 'key': str(uuid.uuid4()), 'display_name': 'Second'})
     if change == 'internal_link':
         payload['internal_links'] = [{'from_slot_key': payload['slots'][0]['key'], 'to_slot_key': payload['slots'][1]['key']}]
     template_id, _ = create_base(payload)
     object_id = create_object(template_id)['physical_object_ref']['entity_id']
-    if change == 'module_port_type_id':
+    if change == 'module_bay_type_id':
         module = create_module()
         assert install(object_id, module['template_id'], payload['bays'][0]['bay_key']).status_code == 201
     draft = open_draft(template_id)
     definition = copy.deepcopy(draft['definition'])
-    if change == 'module_port_type_id':
-        definition['bays'][0]['module_port_type_id'] = ensure_module_port_type_id('Different slot')
+    if change == 'module_bay_type_id':
+        definition['bays'][0]['module_bay_type_id'] = ensure_module_bay_type_id('Different slot')
     elif change == 'kind':
         definition['slots'][0]['kind'] = 'CONNECTION_POINT'
     elif change == 'internal_link':
@@ -246,6 +246,6 @@ def test_structural_changes_keep_keys_and_fail_closed_when_needed(change):
         check(template_id, saved)
     result = analyze_saved_definition(template_id, saved)[0]
     assert result['classification'] == ('potentially_safe' if change == 'remove_initial_panel' else 'requires_intervention')
-    if change in ('kind', 'module_port_type_id'):
+    if change in ('kind', 'module_bay_type_id'):
         section = 'slots' if change == 'kind' else 'bays'
         assert [c['operation'] for c in result['changes'] if c['section'] == section] == ['changed']

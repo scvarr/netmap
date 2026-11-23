@@ -120,7 +120,7 @@ SNAPSHOT_SECTIONS = (
 )
 
 
-def validate_port_type_assignments(session, endpoints, previous=()):
+def validate_port_type_assignments(session, endpoints, previous=(), *, require_connector=False):
     retained = {(endpoint["key"], endpoint["port_type_id"]) for endpoint in previous}
     ids = {uuid.UUID(endpoint["port_type_id"]) for endpoint in endpoints}
     if not ids:
@@ -134,6 +134,8 @@ def validate_port_type_assignments(session, endpoints, previous=()):
         raise ValidationError("Port type not found")
     for endpoint in endpoints:
         item = types[uuid.UUID(endpoint["port_type_id"])]
+        if require_connector and item.connector_type_id is None:
+            raise ValidationError("Transceiver PortType requires a connector")
         if not item.is_active and (endpoint["key"], endpoint["port_type_id"]) not in retained:
             raise ValidationError("An archived port type cannot be newly assigned")
         if endpoint["kind"] == "NETWORK_PORT" and item.cardinality != 1:

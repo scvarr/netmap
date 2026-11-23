@@ -1,4 +1,4 @@
-from tests.module_port_type_fixtures import ensure_module_port_type_id
+from tests.module_port_type_fixtures import ensure_module_bay_type_id
 import copy
 
 import pytest
@@ -87,7 +87,7 @@ def test_assignment_lifecycle_and_workspace_round_trip(template_kind, section):
         for endpoint in (first, second):
             endpoint.update(panel_key="panel-1", rendered_position={"x": .5, "y": .5})
     else:
-        definition.update(mount_kind="MODULE_PORT", module_port_type_id=ensure_module_port_type_id("OCP3"), geometry=initial_geometry(("first", "second")))
+        definition.update(mount_kind="MODULE_BAY", module_bay_type_id=ensure_module_bay_type_id("OCP3"), geometry=initial_geometry(("first", "second")))
 
     assert client.post(library, json=definition).status_code == 422
     for endpoint in (first, second):
@@ -175,7 +175,7 @@ def test_connected_retained_endpoint_type_is_immutable(template_kind, replacemen
     from app.hardware_catalog import HardwareCatalog
     from app.module_geometry import initial_geometry
     from app.schemas import CreateBaseTemplateRequest, CreateModuleTemplateRequest
-    from tests.test_hardware_configuration import base_payload, create_base, create_object, install
+    from tests.test_hardware_configuration import board_base_payload, create_base, create_object, install
     from tests.test_module_reconciliation import apply
     from tests.test_object_reconciliation import connect, reconcile
 
@@ -192,7 +192,7 @@ def test_connected_retained_endpoint_type_is_immutable(template_kind, replacemen
     original, replacement = port_types
     assert original["cardinality"] == replacement["cardinality"] == 1
 
-    base = base_payload()
+    base = board_base_payload()
     base["slots"][0]["port_type_id"] = original["id"]
     base_id, base = create_base(base)
     obj = create_object(base_id)
@@ -207,7 +207,7 @@ def test_connected_retained_endpoint_type_is_immutable(template_kind, replacemen
         impact_section = "objects"
     else:
         endpoint = {"key": "port", "kind": "NETWORK_PORT", "display_name": "P1", "port_type_id": original["id"]}
-        created = client.post(library, json={"name": "Module", "mount_kind": "MODULE_PORT", "module_port_type_id": ensure_module_port_type_id("OCP3"), "endpoints": [endpoint],
+        created = client.post(library, json={"name": "Module", "mount_kind": "MODULE_BAY", "module_bay_type_id": ensure_module_bay_type_id("OCP3"), "endpoints": [endpoint],
                                             "geometry": initial_geometry([endpoint["key"]])})
         assert created.status_code == 201, created.text
         template_id, section = created.json()["template_id"], "endpoints"
@@ -379,11 +379,11 @@ def test_multimember_module_materializes_passive_point_but_rejects_network_port(
     from app.database import SessionLocal
     from app.models import ConnectionPoint
     from app.module_geometry import initial_geometry
-    from tests.test_hardware_configuration import create_base, create_object, install
+    from tests.test_hardware_configuration import create_board_base, create_object, install
 
     port = create_port({"name": "Duplex", "medium": "FIBER", "members": ["A", "B"], "color": "#123456"}).json()
     endpoint = {"key": "duplex", "display_name": "Duplex", "kind": "NETWORK_PORT", "port_type_id": port["id"]}
-    definition = {"name": "Passive", "mount_kind": "MODULE_PORT", "module_port_type_id": ensure_module_port_type_id("OCP3"), "endpoints": [endpoint],
+    definition = {"name": "Passive", "mount_kind": "MODULE_BAY", "module_bay_type_id": ensure_module_bay_type_id("OCP3"), "endpoints": [endpoint],
                   "geometry": initial_geometry([endpoint["key"]])}
     library = "/v1/library/module-templates"
     assert client.post(library, json=definition).status_code == 422
@@ -391,7 +391,7 @@ def test_multimember_module_materializes_passive_point_but_rejects_network_port(
     created = client.post(library, json=definition)
     assert created.status_code == 201, created.text
     template_id = created.json()["template_id"]
-    base_id, base = create_base()
+    base_id, base = create_board_base()
     obj = create_object(base_id)
     installation = install(obj["physical_object_ref"]["entity_id"], template_id, base["bays"][0]["bay_key"])
     assert installation.status_code == 201, installation.text

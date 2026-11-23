@@ -28,14 +28,14 @@ const revision: BaseTemplateRevisionDocument = {
 const listed = { ...revision, default_physical_object_class: 'server', slot_count: 1, version_count: 2, internal_link_count: 0 };
 const second = { ...listed, blueprint_ref: { ...listed.blueprint_ref, entity_id: 'other' }, name: 'Other', default_physical_object_class: null };
 const module = {
-  template_id: 'nic', revision_id: 'nic-rev', name: 'NIC', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'OCP3',
+  template_id: 'nic', revision_id: 'nic-rev', name: 'NIC', mount_kind: 'MODULE_BAY' as const, module_bay_type_id: 'OCP3',
   geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { p1: { x: .3, y: .5 }, p2: { x: .7, y: .75 } } },
   endpoints: [{ key: 'p1', display_name: 'P1', port_type_id: 'test-type', kind: 'NETWORK_PORT' as const }, { key: 'p2', display_name: 'P2', port_type_id: 'test-type', kind: 'CONNECTION_POINT' as const }],
   publication_state: { revision_id: 'nic-rev', version_number: 3, outdated_count: 0, awaiting_update_count: 0, requires_intervention_count: 1, installations: [] },
 };
 
 function show(loadBaseTemplateRevision = vi.fn().mockResolvedValue(revision)) {
-  const listModules = vi.fn().mockResolvedValue({ modules: [module] });
+  const listModules = vi.fn().mockResolvedValue({ modules: [module, { ...module, template_id: 'optic', name: 'Historical optic', mount_kind: 'MODULE_PORT', module_bay_type_id: undefined, module_port_type_id: 'SFP+' }] });
   const dataSource = {
     loadBaseTemplates: vi.fn().mockResolvedValue({ schema_version: '2.0', blueprints: [listed, second] }),
     loadBaseTemplateRevision, createBaseTemplate: vi.fn(), loadDraft: vi.fn(),
@@ -52,7 +52,20 @@ function show(loadBaseTemplateRevision = vi.fn().mockResolvedValue(revision)) {
 
 const serverRow = () => screen.findByRole('button', { name: /^Server/ });
 const objectsTab = () => screen.getByRole('tab', { name: 'Объекты' });
-const modulesTab = () => screen.getByRole('tab', { name: 'Модули' });
+const modulesTab = () => screen.getByRole('tab', { name: 'Шаблоны плат' });
+
+it('lists transceivers separately by mount kind and opens their specialized editor', async () => {
+  const { user } = show();
+  const tab = screen.getByRole('tab', { name: 'Шаблоны трансиверов' });
+  await user.click(tab);
+  expect(screen.getByRole('link', { name: 'Создать шаблон трансивера' }))
+    .toHaveAttribute('href', '/library/transceiver-templates/new');
+  expect(screen.queryByRole('button', { name: /^NIC/ })).not.toBeInTheDocument();
+  await user.click(await screen.findByRole('button', { name: /^Historical optic/ }));
+  expect(screen.getByRole('link', { name: 'Изменить шаблон' }))
+    .toHaveAttribute('href', '/library/transceiver-templates/optic/edit');
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+});
 
 it('shows only the active compact list and creation link, with keyboard tab navigation', async () => {
   const { user, loadBaseTemplateRevision, listModules } = show();
@@ -66,7 +79,7 @@ it('shows only the active compact list and creation link, with keyboard tab navi
   expect(screen.queryByText('NIC')).not.toBeInTheDocument();
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Создать базовый шаблон' })).toHaveAttribute('href', '/library/base-templates/new');
-  expect(screen.queryByRole('link', { name: 'Создать шаблон модуля' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Создать шаблон платы' })).not.toBeInTheDocument();
   objectsTab().focus();
   await user.keyboard('{ArrowRight}');
   expect(modulesTab()).toHaveFocus();
@@ -77,7 +90,7 @@ it('shows only the active compact list and creation link, with keyboard tab navi
   expect(nic).toHaveTextContent('Портов: 2');
   expect(nic).toHaveTextContent('Требуют вмешательства: 1');
   expect(nic).not.toHaveTextContent('Ожидают обновления: 0');
-  expect(screen.getByRole('link', { name: 'Создать шаблон модуля' })).toHaveAttribute('href', '/library/module-templates/new');
+  expect(screen.getByRole('link', { name: 'Создать шаблон платы' })).toHaveAttribute('href', '/library/module-templates/new');
   expect(screen.queryByRole('link', { name: 'Создать базовый шаблон' })).not.toBeInTheDocument();
   expect(loadBaseTemplateRevision).not.toHaveBeenCalled();
   expect(listModules).toHaveBeenCalledOnce();

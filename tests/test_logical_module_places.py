@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from app.schemas import ModuleBayRequest
 from app.workspace_portability import validate_package, PackageError
 from tests.cable_type_fixtures import copper_cable_fields
-from tests.test_hardware_configuration import base_payload, create_base, create_object, create_module, install, client
+from tests.test_hardware_configuration import base_payload, board_base_payload, create_base, create_object, create_module, install, client
 from tests.test_module_reconciliation import package
 from tests.test_module_layout import setup, revision, reconcile
 
@@ -18,7 +18,7 @@ def logical(bay):
 
 
 def test_logical_configuration_atomic_install_and_archive():
-    payload = base_payload()
+    payload = board_base_payload()
     payload['bays'].append(logical({**payload['bays'][0], 'bay_key': str(uuid.uuid4())}))
     base, _ = create_base(payload)
     obj = create_object(base)['physical_object_ref']['entity_id']
@@ -75,7 +75,7 @@ def test_d2_logical_assignment_preserves_installation():
 
 @pytest.mark.parametrize('remaining', [0, 1])
 def test_logical_count_reduction_reconciles_only_when_capacity_remains(remaining):
-    payload = base_payload()
+    payload = board_base_payload()
     bay = logical(payload['bays'][0])
     payload['bays'] = [{**bay, 'bay_key': key} for key in ('a', 'z')]
     base, _ = create_base(payload)
@@ -233,7 +233,7 @@ def test_logical_grid_order_and_panel_fit(size, orientation):
 
 def test_logical_install_order_edit_reset_reinstall():
     from tests.test_module_layout_editing import request
-    payload = base_payload()
+    payload = board_base_payload()
     payload['bays'] = [logical({**payload['bays'][0], 'bay_key': str(uuid.uuid4())}) for _ in range(3)]
     base, _ = create_base(payload)
     module = create_module()

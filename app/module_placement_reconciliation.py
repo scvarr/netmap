@@ -97,6 +97,8 @@ def plan_module_placements(session, installation, candidate, installations):
             m.ModuleBay.base_revision_id == config.base_revision_id, m.ModuleBay.bay_key == installation.bay_key))
         if bay is None or mount_identity(row_mount(bay)) != mount:
             reasons.append({"code": "BAY_COMPATIBILITY_MISMATCH", "mount": mount_document(*mount)})
+        elif mount[0] == "MODULE_PORT" and candidate["endpoints"]:
+            reasons.append(placement_reason("TRANSCEIVER_BINDING_REQUIRED", installation, mount))
         else:
             try:
                 validate_layout(installation.layout, bay.panel_key)

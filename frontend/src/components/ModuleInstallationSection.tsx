@@ -135,10 +135,10 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
         </tr>;
   const renderPlace = (bay: ModuleBay, installation: ModuleInstallation | undefined, parentId?: string, parentIsRootBoard = false) => {
     const installable = !parentId || (parentIsRootBoard && bay.mount_kind === 'MODULE_PORT');
-    const compatible = installable ? modules.filter(module =>
-      module.mount_kind === bay.mount_kind && mountTypeId(module) === mountTypeId(bay) &&
-      (!parentId || module.endpoints.length === 0)
+    const matches = installable ? modules.filter(module =>
+      module.mount_kind === bay.mount_kind && mountTypeId(module) === mountTypeId(bay)
     ) : [];
+    const compatible = bay.mount_kind === 'MODULE_PORT' ? matches.filter(module => !module.endpoints.length) : matches;
     const choiceKey = placeChoiceKey(bay.bay_key, parentId);
     const choice = choices[choiceKey] ?? { module: '', orientation: 'HORIZONTAL' as const };
     const disabled = pending || editing;
@@ -172,7 +172,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
         onChange={e => setChoices(old => ({ ...old, [choiceKey]: { ...choice, module: e.target.value } }))}>
         <option value="">{t('hardware.selectModule')}</option>
         {compatible.map(m => <option key={m.template_id} value={m.template_id}>{m.name}</option>)}
-      </select> : t(installable ? 'hardware.noModules' : 'hardware.historicalPlace')}</td>
+      </select> : t(matches.length ? 'hardware.error.transceiver' : installable ? 'hardware.noModules' : 'hardware.historicalPlace')}</td>
       <td>{installation ? t(installation.orientation === 'VERTICAL' ? 'hardware.vertical' : 'hardware.horizontal') :
         installable && <select aria-label={t('hardware.orientation')} disabled={disabled || !compatible.length} value={choice.orientation}
           onChange={e => setChoices(old => ({ ...old, [choiceKey]: { ...choice, orientation: e.target.value as ModuleInstallation['orientation'] } }))}>

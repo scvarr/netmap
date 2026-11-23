@@ -1,7 +1,8 @@
 import { moduleMount, mountTypeId } from '../topology/hardwareModules';
+import { TransceiverPortFacts, TransceiverSpecificationFacts } from '../components/TransceiverTemplateForm';
 import { mountTypeName, useMountTypes } from '../components/ModulePortTypeSelect';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { usePortTypes, type PortType } from '../components/PortTypeSelect';
 import { BlueprintPreview } from '../components/BlueprintPreview';
 import { PageHeader, PageShell } from '../components/PageChrome';
@@ -9,8 +10,9 @@ import { useI18n } from '../i18n';
 import type { BaseTemplateDataSource, BaseTemplateListItem, BaseTemplateRevisionDocument } from '../topology/baseTemplateTypes';
 import { hardwareModuleDataSource, type HardwareModuleDataSource, type ModuleTemplate } from '../topology/hardwareModules';
 
-const tabs = ['objects', 'modules'] as const;
+const tabs = ['objects', 'modules', 'transceivers'] as const;
 type Tab = typeof tabs[number];
+const tabLabels = { objects: 'templateLibrary.objects', modules: 'templateLibrary.modules', transceivers: 'transceiver.library' } as const;
 type Load<T> = { status: 'loading' } | { status: 'ready'; data: T } | { status: 'failed'; error: string };
 type Publication = Pick<NonNullable<BaseTemplateListItem['publication_state']>, 'outdated_count' | 'awaiting_update_count' | 'requires_intervention_count'>;
 
@@ -65,7 +67,9 @@ export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwar
   const moduleTypes = useMountTypes();
   const id = useId();
   const { types: portTypes } = usePortTypes();
-  const [tab, setTab] = useState<Tab>('objects');
+  const [params, setParams] = useSearchParams();
+  const tab = tabs.find(item => item === params.get('tab')) ?? 'objects';
+  const setTab = (value: Tab) => setParams(value === 'objects' ? {} : { tab: value });
   const [expanded, setExpanded] = useState<Partial<Record<Tab, string>>>({});
   const [bases, setBases] = useState<Load<BaseTemplateListItem[]>>({ status: 'loading' });
   const [modules, setModules] = useState<Load<ModuleTemplate[]>>({ status: 'loading' });
@@ -78,7 +82,7 @@ export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwar
     let active = true;
     setBases({ status: 'loading' });
     setModules({ status: 'loading' });
-    setExpanded(previous => ({ modules: previous.modules }));
+    setExpanded(({ modules, transceivers }) => ({ modules, transceivers }));
     setPreviews({});
     void dataSource.loadBaseTemplates().then(
       result => { if (active) setBases({ status: 'ready', data: result.blueprints }); },
@@ -120,24 +124,30 @@ export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwar
   }
 
   const isObjects = tab === 'objects';
+  const isTransceiver = tab === 'transceivers';
+  const modulePath = '/library/' + (isTransceiver ? 'transceiver-templates' : 'module-templates');
+  const visibleModules = modules.status === 'ready'
+    ? modules.data.filter(module => module.mount_kind === (isTransceiver ? 'MODULE_PORT' : 'MODULE_BAY')) : [];
   const list = isObjects ? bases : modules;
   return <PageShell className="catalog-page blueprint-library-page">
     <PageHeader title={t('hardware.templates')} eyebrow={t('blueprint.library.section')} actions={
-      <Link className="primary-action" to={isObjects ? '/library/base-templates/new' : '/library/module-templates/new'}>
-        {t(isObjects ? 'hardware.newBase' : 'hardware.newModule')}
+      <Link className="primary-action" to={isObjects ? '/library/base-templates/new' : modulePath + '/new'}>
+        {t(isObjects ? 'hardware.newBase' : isTransceiver ? 'transceiver.new' : 'hardware.newModule')}
       </Link>
     } />
     <div className="catalog-tabs" role="tablist" aria-label={t('hardware.templates')}>
       {tabs.map(item => <button key={item} type="button" className="secondary-action" role="tab" id={`${id}-${item}`}
         aria-controls={`${id}-${item}-panel`} aria-selected={tab === item} tabIndex={tab === item ? 0 : -1}
         onClick={() => setTab(item)} onKeyDown={event => {
-          const next = event.key === 'Home' ? 'objects' : event.key === 'End' ? 'modules'
-            : ['ArrowLeft', 'ArrowRight'].includes(event.key) ? (item === 'objects' ? 'modules' : 'objects') : undefined;
+          const index = tabs.indexOf(item);
+          const next = event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs[tabs.length - 1]
+            : event.key === 'ArrowRight' ? tabs[(index + 1) % tabs.length]
+            : event.key === 'ArrowLeft' ? tabs[(index + tabs.length - 1) % tabs.length] : undefined;
           if (!next) return;
           event.preventDefault();
           setTab(next);
           document.getElementById(`${id}-${next}`)?.focus();
-        }}>{t(item === 'objects' ? 'templateLibrary.objects' : 'templateLibrary.modules')}</button>)}
+        }}>{t(tabLabels[item])}</button>)}
     </div>
     {deleteError && <p role="alert">{t('hardware.failed', { error: deleteError })}</p>}
     {tabs.map(item => <section key={item} role="tabpanel" id={`${id}-${item}-panel`}
@@ -147,7 +157,7 @@ export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwar
         {list.status === 'failed' && <p role="alert">{t('hardware.failed', { error: list.error })}{' '}
           <button type="button" className="secondary-action" onClick={() => setReload(value => value + 1)}>{t('action.retry')}</button>
         </p>}
-        {list.status === 'ready' && (list.data.length === 0 ? <p>{t('blueprint.library.empty')}</p> :
+        {list.status === 'ready' && ((isObjects ? list.data : visibleModules).length === 0 ? <p>{t('blueprint.library.empty')}</p> :
           <ul className="template-library-list">
             {isObjects && bases.status === 'ready' && bases.data.map(base => {
               const templateId = base.blueprint_ref.entity_id;
@@ -182,23 +192,26 @@ export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwar
                 </div>
               </TemplateRow>;
             })}
-            {!isObjects && modules.status === 'ready' && modules.data.map(module => {
-              const open = expanded.modules === module.template_id;
+            {!isObjects && visibleModules.map(module => {
+              const open = expanded[tab] === module.template_id;
               return <TemplateRow key={module.template_id} name={module.name} metadata={mountTypeName(moduleTypes, module)}
                 ports={module.endpoints.length} publication={module.publication_state} expanded={open}
-                onToggle={() => setExpanded({ ...expanded, modules: open ? undefined : module.template_id })}>
-                <ModulePreview portTypes={portTypes} module={module} />
+                onToggle={() => setExpanded({ ...expanded, [tab]: open ? undefined : module.template_id })}>
+                {isTransceiver ? <>
+                  <TransceiverPortFacts endpoints={module.endpoints} types={portTypes} />
+                  <TransceiverSpecificationFacts specifications={module.transceiver} />
+                </> : <ModulePreview portTypes={portTypes} module={module} />}
                 <div className="template-library-facts">
                   <span>{t('templateLibrary.compatibility', { value: mountTypeName(moduleTypes, module) })}</span>
                   <span>{t('physical.portCount', { count: module.endpoints.length })}</span>
                   {module.publication_state && <span>{t('publication.revision', { number: module.publication_state.version_number })}</span>}
                 </div>
                 <div className="template-library-actions">
-                  <Link className="secondary-action" to={`/library/module-templates/${module.template_id}/edit`}>{t('review.edit')}</Link>
-                  <Link className="secondary-action" to="/library/module-templates/new" state={{ moduleCopy: {
+                  <Link className="secondary-action" to={`${modulePath}/${module.template_id}/edit`}>{t('review.edit')}</Link>
+                  {(!isTransceiver || module.transceiver) && <Link className="secondary-action" to={modulePath + '/new'} state={{ moduleCopy: {
                     name: module.name, ...moduleMount(module.mount_kind, mountTypeId(module)), endpoints: module.endpoints,
-                    geometry: module.geometry, module_places: module.module_places,
-                  } }}>{t('templateCopy.action')}</Link>
+                    geometry: module.geometry, module_places: module.module_places, transceiver: module.transceiver,
+                  } }}>{t('templateCopy.action')}</Link>}
                   <button type="button" className="text-action"
                     onClick={() => void remove(t('hardware.deleteModuleConfirm', { name: module.name }), () => moduleDataSource.deleteModule(module.template_id))}>{t('hardware.remove')}</button>
                 </div>

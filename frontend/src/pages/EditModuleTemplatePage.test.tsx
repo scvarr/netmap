@@ -16,7 +16,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 const draft = (): ModuleDraftDocument => ({ template_id: 'module', source_revision_id: 'revision', generation: 3,
-  definition: { geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { first: { x: .3, y: .5 }, second: { x: .7, y: .5 } } }, name: 'Сохранённый модуль', mount_kind: 'MODULE_PORT' as const, module_port_type_id: ' OCP3 ', endpoints: [
+  definition: { geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { first: { x: .3, y: .5 }, second: { x: .7, y: .5 } } }, name: 'Сохранённый модуль', mount_kind: 'MODULE_BAY' as const, module_bay_type_id: ' OCP3 ', endpoints: [
     { key: 'first', display_name: 'P1', port_type_id: 'test-type', kind: 'NETWORK_PORT' }, { key: 'second', display_name: 'P2', port_type_id: 'test-type', kind: 'CONNECTION_POINT' },
   ] }, review: null });
 const reviewed = (doc: ModuleDraftDocument): ModuleDraftDocument => ({ ...doc, review: {
@@ -57,7 +57,7 @@ describe('module persisted draft and review', () => {
     expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
     await screen.findByText('Черновик сохранён');
-    expect(source.saveDraft).toHaveBeenCalledWith('module', expect.objectContaining({ name: 'Новое имя', mount_kind: 'MODULE_PORT' as const, module_port_type_id: ' OCP3 ', endpoints: [
+    expect(source.saveDraft).toHaveBeenCalledWith('module', expect.objectContaining({ name: 'Новое имя', mount_kind: 'MODULE_BAY' as const, module_bay_type_id: ' OCP3 ', endpoints: [
       { key: 'second', display_name: 'P2', port_type_id: 'test-type', kind: 'CONNECTION_POINT' }, { key: 'first', display_name: 'Renamed', port_type_id: 'test-type', kind: 'NETWORK_PORT' },
       { key: expect.any(String), display_name: 'P3', port_type_id: 'test-type', kind: 'NETWORK_PORT' },
     ] }), 3);

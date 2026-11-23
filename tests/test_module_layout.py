@@ -1,6 +1,6 @@
 """F2a presentation persistence, projection and reconciliation guarantees."""
 
-from tests.module_port_type_fixtures import ensure_module_port_type_id
+from tests.module_port_type_fixtures import ensure_module_bay_type_id
 import copy
 import uuid
 import pytest
@@ -9,19 +9,15 @@ from app.database import SessionLocal
 from app import models as m
 from app.module_layout import initial_layout, endpoint_position, validate_layout
 from app.workspace_portability import validate_package, PackageError
-from tests.test_hardware_configuration import client, create_base, create_object, create_module, install
+from tests.test_hardware_configuration import board_base_payload, client, create_base, create_historical_board_base, create_object, create_module, install
 from tests.test_object_reconciliation import revision, reconcile, package
 from tests.test_module_template_review import open_draft, save, check
 from tests.test_module_template_publication import publish
 
 
 def setup(logical=False):
-    from tests.test_hardware_configuration import base_payload
-    payload = base_payload()
-    if logical:
-        from tests.test_logical_module_places import logical as logical_bay
-        payload['bays'] = [logical_bay(b) for b in payload['bays']]
-    base, payload = create_base(payload)
+    payload = board_base_payload(placed=not logical)
+    base, payload = create_base(payload) if logical else create_historical_board_base(payload)
     obj = create_object(base)['physical_object_ref']['entity_id']
     module = create_module()
     response = install(obj, module['template_id'], payload['bays'][0]['bay_key'])
@@ -116,7 +112,7 @@ def test_d2_final_assignment_panel_conflict_is_atomic(replace_key, logical):
         if replace_key:
             # Original bay survives but becomes incompatible: D2 must reassign.
             d['bays'].append({**original, 'bay_key': 'replacement', 'panel_key': 'other'})
-            original['module_port_type_id'] = ensure_module_port_type_id('incompatible')
+            original['module_bay_type_id'] = ensure_module_bay_type_id('incompatible')
         else:
             original['panel_key'] = 'other'
     revision(base, edit)

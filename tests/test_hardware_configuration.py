@@ -1,4 +1,4 @@
-from tests.module_port_type_fixtures import ensure_module_port_type_id
+from tests.module_port_type_fixtures import ensure_module_bay_type_id, ensure_module_port_type_id
 from tests.l1_builders import post_confirmed_physical
 from tests.cable_type_fixtures import copper_cable_fields
 from tests.port_type_fixtures import ensure_port_type_id
@@ -32,8 +32,38 @@ def create_base(payload=None):
     return response.json()['blueprint_ref']['entity_id'], payload
 
 
-def create_module(module_port_type_id='OCP3', names=('P1', 'P2')):
-    payload = {"name": " NIC exact ", "mount_kind": "MODULE_PORT", "module_port_type_id": ensure_module_port_type_id(module_port_type_id if module_port_type_id != "ocp3" else "Different slot"), "endpoints": [{"key": str(uuid.uuid4()), "display_name": name, 'port_type_id': ensure_port_type_id(), "kind": "NETWORK_PORT"} for name in names]}
+def board_base_payload(*, placed=False):
+    payload = base_payload()
+    bay = payload["bays"][0]
+    del bay["module_port_type_id"]
+    bay.update(mount_kind="MODULE_BAY", module_bay_type_id=ensure_module_bay_type_id())
+    if not placed:
+        bay.update(kind="LOGICAL", x=None, y=None, width=None, height=None)
+    return payload
+
+
+def create_board_base(payload=None):
+    return create_base(payload if payload is not None else board_base_payload())
+
+
+def create_historical_board_base(payload):
+    from app.hardware_catalog import HardwareCatalog
+    from app.models import BaseTemplate
+    from app.schemas import CreateBaseTemplateRequest
+
+    with SessionLocal.begin() as session:
+        template = BaseTemplate(name=payload["name"])
+        session.add(template)
+        session.flush()
+        HardwareCatalog(session)._create_version(template.id, 1, CreateBaseTemplateRequest.model_validate(payload))
+        return str(template.id), payload
+
+
+def create_module(bay_type_name='OCP3', names=('P1', 'P2'), *, kind='NETWORK_PORT'):
+    bay_type_id = ensure_module_bay_type_id(bay_type_name if bay_type_name != "ocp3" else "Different slot")
+    payload = {"name": " NIC exact ", "mount_kind": "MODULE_BAY", "module_bay_type_id": bay_type_id,
+               "endpoints": [{"key": str(uuid.uuid4()), "display_name": name, 'port_type_id': ensure_port_type_id(), "kind": kind}
+                             for name in names]}
     from app.module_geometry import initial_geometry
     payload["geometry"] = initial_geometry(e["key"] for e in payload["endpoints"])
     response = client.post('/v1/library/module-templates', json=payload)
@@ -58,7 +88,7 @@ def counts():
 
 @pytest.mark.parametrize('orientation', ['HORIZONTAL', 'VERTICAL'])
 def test_materialization_identity_binding_geometry_and_round_trip(orientation):
-    template_id, payload = create_base()
+    template_id, payload = create_historical_board_base(board_base_payload(placed=True))
     module = create_module()
     objects = [create_object(template_id) for _ in range(2)]
     object_ids = [o['physical_object_ref']['entity_id'] for o in objects]
@@ -101,7 +131,7 @@ def test_materialization_identity_binding_geometry_and_round_trip(orientation):
 
 
 def test_rejected_installations_are_atomic():
-    template_id, payload = create_base()
+    template_id, payload = create_board_base()
     module = create_module()
     incompatible = create_module('ocp3')
     object_id = create_object(template_id)['physical_object_ref']['entity_id']
@@ -120,7 +150,7 @@ def test_rejected_installations_are_atomic():
 
 
 def test_two_installations_in_one_object_have_distinct_definition_mappings_and_projection():
-    payload = base_payload()
+    payload = board_base_payload()
     payload['panels'][0]['display_name'] = 'Back'
     payload['bays'][0]['display_name'] = 'PCIe1'
     payload['bays'].append({**payload['bays'][0], 'bay_key': str(uuid.uuid4()), 'display_name': 'PCIe2'})
@@ -209,7 +239,7 @@ def test_two_installations_in_one_object_have_distinct_definition_mappings_and_p
 
 
 def test_repeated_bay_names_on_different_panels_use_full_context():
-    payload = base_payload()
+    payload = board_base_payload()
     payload['panels'][0]['display_name'] = 'Front'
     back = {**payload['panels'][0], 'panel_key': str(uuid.uuid4()), 'panel_number': 2, 'display_name': 'Back'}
     payload['panels'].append(back)
@@ -278,7 +308,7 @@ def test_runtime_port_types_follow_pinned_base_and_module_without_port_queries()
     from sqlalchemy import event
     from tests.test_l1_physical_projection_e2e import projection_query, node_by_object
 
-    template_id, payload = create_base()
+    template_id, payload = create_board_base()
     module = create_module()
     obj = create_object(template_id)
     object_id = obj['physical_object_ref']['entity_id']
@@ -303,7 +333,7 @@ def test_runtime_port_types_follow_pinned_base_and_module_without_port_queries()
 
 
 def test_trace_panel_context_uses_configured_panels_and_installed_modules_without_map():
-    payload = base_payload()
+    payload = board_base_payload()
     front = payload['panels'][0]
     front.update(display_name='Custom', face='FRONT')
     rear = {**front, 'panel_key': str(uuid.uuid4()), 'panel_number': 2, 'face': 'REAR'}

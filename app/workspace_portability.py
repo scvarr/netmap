@@ -80,7 +80,7 @@ ENTITIES = (
     ("authoring", "ModuleBay", "ModuleBay", "id base_revision_id bay_key display_name mount_kind module_port_type_id module_bay_type_id panel_key kind x y width height"),
     ("authoring", "ModuleTemplate", "ModuleTemplate", "id name"),
     ("authoring", "ModuleTemplatePublication", "ModuleTemplatePublication", "id revision_id"),
-    ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number name mount_kind module_port_type_id module_bay_type_id geometry module_places"),
+    ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number name mount_kind module_port_type_id module_bay_type_id geometry module_places transceiver"),
     ("authoring", "ModuleTemplateDraft", "ModuleTemplateDraft", "id template_id source_revision_id generation definition"),
     ("authoring", "ModuleTemplateCandidate", "ModuleTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
     ("authoring", "ModuleEndpointDefinition", "ModuleEndpointDefinition", "id module_revision_id definition_key order_index display_name kind port_type_id"),
@@ -133,7 +133,9 @@ def export_package(session: Session) -> dict:
     for section, name, model, fields in _specs():
         rows = session.scalars(select(model).order_by(model.id)).all()
         package[section][name] = [
-            {field: _json_value(getattr(row, field)) for field in fields} for row in rows
+            {field: _json_value(getattr(row, field)) for field in fields
+             if model is not models.ModuleTemplateRevision or field != "transceiver" or row.transceiver is not None}
+            for row in rows
         ]
     return package
 
@@ -198,11 +200,13 @@ def validate_package(package: object) -> dict:
         columns = {column.key: column for column in model.__table__.columns}
         parsed = []
         ids = set()
-        expected_fields = set(fields)
+        required_fields = expected_fields = set(fields)
+        if model is models.ModuleTemplateRevision:
+            required_fields = expected_fields - {"transceiver"}
         for record in records:
-            if not isinstance(record, dict) or set(record) != expected_fields:
+            if not isinstance(record, dict) or not required_fields <= record.keys() <= expected_fields:
                 raise PackageError(f"{name} has incomplete or unknown fields")
-            row = {field: _decode(record[field], columns[field], f"{name}.{field}") for field in fields}
+            row = {field: _decode(record.get(field), columns[field], f"{name}.{field}") for field in fields}
             if model is models.MapPresentationVariant and row["automatic_layout"] is not None:
                 try:
                     row["automatic_layout"] = TypeAdapter(AutomaticLocationLayout).validate_python(row["automatic_layout"]).model_dump(mode="json")
@@ -336,13 +340,21 @@ def _validate_module_template_reviews(rows):
     if len(published) != len(set(published)) or set(published) != {r["id"] for r in revisions.values() if r["version_number"] > 1}:
         raise PackageError("Every noninitial module revision requires one publication receipt")
     definitions = {}
+    connected_types = {str(row["id"]) for row in rows["port_types"] if row["connector_type_id"] is not None}
+
+    def validate_transceiver(definition):
+        if "transceiver" in definition and definition["endpoints"][0]["port_type_id"] not in connected_types:
+            raise PackageError("Transceiver PortType requires a connector")
+
     for revision in revisions.values():
         try:
-            definitions[revision["id"]] = validate_definition({**{k: revision[k] for k in ("name", "geometry", "module_places", *MOUNT_FIELDS)}, "endpoints": [
+            definition = validate_definition({**{k: revision[k] for k in ("name", "geometry", "module_places", "transceiver", *MOUNT_FIELDS)}, "endpoints": [
                 {"key": e["definition_key"], "display_name": e["display_name"], "kind": e["kind"], "port_type_id": str(e["port_type_id"])}
                 for e in sorted(rows["module_endpoint_definitions"], key=lambda e: e["order_index"]) if e["module_revision_id"] == revision["id"]]})
         except (SchemaError, TypeError) as exc:
             raise PackageError("Invalid module revision definition") from exc
+        validate_transceiver(definition)
+        definitions[revision["id"]] = definition
     for receipt in receipts:
         candidate = candidates[receipt["id"]]
         revision = revisions[receipt["revision_id"]]
@@ -365,7 +377,7 @@ def _validate_module_template_reviews(rows):
                     raise PackageError("Duplicate module template draft")
                 templates.add(row["template_id"])
             try:
-                validate_definition(row["definition"])
+                validate_transceiver(validate_definition(row["definition"]))
                 if table == "module_template_candidates":
                     ModuleTemplateImpactResult.model_validate(row["result"])
             except (SchemaError, TypeError) as exc:
@@ -481,6 +493,8 @@ def _validate_hardware_configuration(rows):
     for installation in installations.values():
         config = configs[installation["configuration_id"]]
         revision_id = installation["module_revision_id"]
+        if revisions[revision_id]["transceiver"] is not None:
+            raise PackageError("Transceiver endpoints require MOD-03 binding")
         parent_id = installation["parent_installation_id"]
         key = installation["bay_key"]
         occupancy = (config["id"], parent_id, key)

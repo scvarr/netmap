@@ -1,15 +1,18 @@
 import { mountTypeId } from '../topology/hardwareModules';
 import { moduleEndpointPositions } from '../topology/hardwareModules';
 import { ModuleTemplateEditor } from '../components/ModuleTemplateEditor';
+import { TransceiverTemplateForm } from '../components/TransceiverTemplateForm';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { PageHeader, PageShell } from '../components/PageChrome';
+import { Breadcrumbs, PageHeader, PageShell } from '../components/PageChrome';
 import { useI18n } from '../i18n';
 import { moduleReviewDataSource, type ModuleReconciliationResult, type ModuleDraftDocument, type ModuleReviewDataSource, type ModuleTemplateInput } from '../topology/hardwareModules';
 
-const signature = (d: ModuleTemplateInput) => JSON.stringify([d.name, d.mount_kind, mountTypeId(d), d.geometry, d.module_places ?? [], d.endpoints.map(e => [e.key, e.display_name, e.kind])]);
+const signature = (d: ModuleTemplateInput) => JSON.stringify([d.name, d.mount_kind, mountTypeId(d), d.geometry, d.module_places ?? [], d.endpoints, d.transceiver]);
 
-export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: { dataSource?: ModuleReviewDataSource }) {
+export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, transceiverRoute = false }: {
+  dataSource?: ModuleReviewDataSource; transceiverRoute?: boolean;
+}) {
   const { templateId = '' } = useParams(); const { t } = useI18n();
   const [results, setResults] = useState<ModuleReconciliationResult>();
   const [document, setDocument] = useState<ModuleDraftDocument>();
@@ -54,6 +57,8 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
     } catch (e) { setError(String(e)); } finally { setBusy(false); }
   };
   const review = document?.review;
+  const transceiver = definition ? definition.mount_kind === 'MODULE_PORT' : transceiverRoute;
+  const title = t(transceiver ? 'transceiver.edit' : 'review.edit');
   const dependencyLabels = {
     CONNECTIONS: 'review.dep.connections', ENTITY_METADATA: 'review.dep.metadata', INTERFACE_PHYSICAL_BINDINGS: 'review.dep.bindings',
     L2_BINDINGS: 'review.dep.l2', L3_BINDINGS: 'review.dep.l3', NETWORK_INTERFACE_REALIZATIONS: 'review.dep.realizations',
@@ -77,12 +82,16 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
     INVALID_ENDPOINT_MAPPING: 'reconciliation.mapping', IDENTITY_AND_DATA_PRESERVED: 'review.reason.preserved',
   } as const;
   return <PageShell className="catalog-page">
-    <Link to="/library/base-templates">{t('blueprint.breadcrumb.library')}</Link>
-    <PageHeader title={t('review.edit')} eyebrow={t('hardware.module')} />
+    <Breadcrumbs label={t('blueprint.breadcrumb.library')} items={[{
+      label: t(transceiver ? 'transceiver.library' : 'templateLibrary.modules'),
+      to: '/library/base-templates?tab=' + (transceiver ? 'transceivers' : 'modules'),
+    }, { label: title }]} />
+    <PageHeader title={title} />
     <p>{t('review.description')}</p>
     {error && <p role="alert">{error}</p>}
     {definition && <form className="module-template-form" onSubmit={e => { e.preventDefault(); void run(false); }}>
-      <ModuleTemplateEditor value={definition} onChange={change} disabled={busy} />
+      {transceiver ? <TransceiverTemplateForm value={definition} onChange={change} disabled={busy} />
+        : <ModuleTemplateEditor value={definition} onChange={change} disabled={busy} />}
         <button type="submit" className="primary-action" disabled={busy || revalidating || !definition.name.trim() || !mountTypeId(definition) || definition.endpoints.some(e => !e.display_name.trim()) || definition.module_places?.some(port => !port.display_name.trim() || !mountTypeId(port))}>{t('review.save')}</button>
     </form>}
     {document?.publication_state && <section aria-label={t('publication.state')}>
@@ -128,7 +137,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
         <p>{t('review.candidate', { id: review.candidate_id, time: review.created_at })}</p>
         <p>{t(review.published_revision_id ? 'publication.candidatePublished' : current ? 'review.current' : 'review.stale')}</p>
         {current && <>
-          <ul>{review.result.changes.map((c, i) => <li key={i}>{t(c.section === 'endpoints' ? 'moduleReview.endpoints' : c.section === 'module_places' ? 'moduleMount.places' : 'review.section.properties')} В· {t(`review.operation.${c.operation}`)} В· {c.section === 'properties' ? t(c.key === 'name' ? 'hardware.name' : 'hardware.compatibility') : (typeof c.after === 'object' && c.after && 'display_name' in c.after && c.after.display_name) || (typeof c.before === 'object' && c.before && 'display_name' in c.before && c.before.display_name) || t('moduleGeometry.title')}</li>)}</ul>
+          <ul>{review.result.changes.map((c, i) => <li key={i}>{t(c.section === 'endpoints' ? 'moduleReview.endpoints' : c.section === 'module_places' ? 'moduleMount.places' : 'review.section.properties')} · {t(`review.operation.${c.operation}`)} · {c.section === 'properties' ? t(c.key === 'name' ? 'hardware.name' : c.key === 'transceiver' ? 'transceiver.specifications' : 'hardware.compatibility') : (typeof c.after === 'object' && c.after && 'display_name' in c.after && c.after.display_name) || (typeof c.before === 'object' && c.before && 'display_name' in c.before && c.before.display_name) || t('moduleGeometry.title')}</li>)}</ul>
           {!review.result.installations.length && <p>{t('moduleReview.noInstallations')}</p>}
           <ul>{review.result.installations.map(i => <li key={i.installation_id}>
             <Link to={`/infrastructure/objects/${i.physical_object_id}`}>{i.display_name}</Link>

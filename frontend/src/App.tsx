@@ -94,6 +94,8 @@ export function App(props: AppProps) {
         <Route path="library/base-templates" element={props.baseTemplateDataSource ? <BaseTemplateLibraryPage dataSource={props.baseTemplateDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/module-templates/new" element={<NewModuleTemplatePage />} />
         <Route path="library/module-templates/:templateId/edit" element={<EditModuleTemplatePage />} />
+        <Route path="library/transceiver-templates/new" element={<NewModuleTemplatePage key="transceiver" transceiver />} />
+        <Route path="library/transceiver-templates/:templateId/edit" element={<EditModuleTemplatePage key="transceiver" transceiverRoute />} />
         <Route path="library/base-templates/new" element={props.baseTemplateDataSource ? <NewBaseTemplatePage dataSource={props.baseTemplateDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/base-templates/:templateId/edit" element={props.baseTemplateDataSource?.loadDraft ? <EditBaseTemplatePage dataSource={props.baseTemplateDataSource} /> : <Navigate replace to="/library/base-templates" />} />
         <Route

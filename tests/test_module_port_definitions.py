@@ -102,7 +102,10 @@ def test_base_marker_revision_and_legacy_installation_survive_workspace_roundtri
     base, _ = create_base(payload)
     obj = create_object(base)
     object_id = obj["physical_object_ref"]["entity_id"]
-    module = create_module()
+    from tests.test_nested_module_installations import module as create_structural_transceiver
+    module = create_structural_transceiver("Structural optic", {
+        "mount_kind": "MODULE_PORT", "module_port_type_id": legacy["module_port_type_id"],
+    })
     for bay in (legacy, marker):
         response = install(object_id, module["template_id"], bay["bay_key"])
         assert response.status_code == 201, response.text

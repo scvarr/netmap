@@ -11,7 +11,7 @@ const catalog = [
   { id: 'fiber', name: 'Fiber', color: '#FFAA00', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
 ];
 beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn(async url => Response.json(String(url).endsWith('/module-bay-types') ? ['Parent A', 'Parent'].map(name => ({ id: name, name, is_active: true })) : String(url).endsWith('/module-port-types') ? ['PCIe', 'Parent A', 'Parent', 'Lab / original', 'Lab / custom', 'Custom / 42'].map(name => ({ id: name, name, is_active: true })) : catalog)));
+  vi.stubGlobal('fetch', vi.fn(async url => Response.json(String(url).endsWith('/module-bay-types') ? ['Parent A', 'Parent', 'PCIe'].map(name => ({ id: name, name, is_active: true })) : String(url).endsWith('/module-port-types') ? ['PCIe', 'Parent A', 'Parent', 'Lab / original', 'Lab / custom', 'Custom / 42'].map(name => ({ id: name, name, is_active: true })) : catalog)));
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -73,7 +73,6 @@ it('authors a diamond-shaped module port without assigning a PortType', async ()
     <NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} />
   </MemoryRouter></I18nProvider>);
   fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Carrier' } });
-  fireEvent.change(screen.getByLabelText('Вид посадочного места'), { target: { value: 'MODULE_BAY' } });
   await screen.findByRole('option', { name: 'Parent A' });
   fireEvent.change(screen.getByLabelText('Совместимость'), { target: { value: 'Parent A' } });
   fireEvent.change(screen.getByLabelText('Вид точки'), { target: { value: 'MODULE_PORT' } });
@@ -104,7 +103,6 @@ it.each([2, 48, 256])('creates and reopens %i separate module ports', async coun
     <NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} />
   </MemoryRouter></I18nProvider>);
   fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Carrier' } });
-  fireEvent.change(screen.getByLabelText('Вид посадочного места'), { target: { value: 'MODULE_BAY' } });
   await screen.findByRole('option', { name: 'Parent' });
   fireEvent.change(screen.getByLabelText('Совместимость'), { target: { value: 'Parent' } });
   const chooser = within(container.querySelector('.template-element-creator')! as HTMLElement);
@@ -150,9 +148,7 @@ it('creates a board with two SFP+ sockets and exposes no bay authoring', async (
     <NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} />
   </MemoryRouter></I18nProvider>);
   fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'PCIe card' } });
-  const pointKind = screen.getByLabelText('Вид точки');
-  expect(within(pointKind).queryByRole('option', { name: 'Модульный порт' })).toBeNull();
-  fireEvent.change(screen.getByLabelText('Вид посадочного места'), { target: { value: 'MODULE_BAY' } });
+  expect(screen.queryByLabelText('Вид посадочного места')).not.toBeInTheDocument();
   const compatibility = screen.getByRole('combobox', { name: 'Совместимость' });
   await within(compatibility).findByRole('option', { name: 'PCIe x16' });
   expect(within(compatibility).queryByRole('option', { name: 'SFP+' })).toBeNull();

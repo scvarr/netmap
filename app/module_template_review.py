@@ -14,7 +14,7 @@ from app.port_types import validate_port_type_assignments
 from app.module_placement_reconciliation import configuration_installations, plan_module_placements
 from app.module_port_types import (
     MOUNT_FIELDS, module_assignments, mount_document, mount_identity,
-    validate_module_authoring, validate_mount_types,
+    validate_module_authoring, validate_mount_types, validate_transceiver_authoring,
 )
 from app.schemas import CreateModuleTemplateRequest
 
@@ -26,7 +26,7 @@ def validate_definition(value):
 def published_definition(session, template_id, revision_id):
     document = HardwareCatalog(session).module_document(
         session.get(m.ModuleTemplate, template_id), session.get(m.ModuleTemplateRevision, revision_id))
-    return validate_definition({k: document[k] for k in ("name", "endpoints", "module_places", "geometry", *MOUNT_FIELDS) if k in document})
+    return validate_definition({k: document[k] for k in ("name", "endpoints", "module_places", "geometry", "transceiver", *MOUNT_FIELDS) if k in document})
 
 
 def structural_changes(before, after):
@@ -51,6 +51,10 @@ def structural_changes(before, after):
             changes.append({"section": "properties", "key": key, "operation": "changed", "before": old_value, "after": new_value})
     if before["geometry"] != after["geometry"]:
         changes.append({"section": "geometry", "key": "geometry", "operation": "changed", "before": before["geometry"], "after": after["geometry"]})
+    old_spec, new_spec = before.get("transceiver"), after.get("transceiver")
+    if old_spec != new_spec:
+        changes.append({"section": "properties", "key": "transceiver", "before": old_spec, "after": new_spec,
+                        "operation": "added" if old_spec is None else "removed" if new_spec is None else "changed"})
     return changes
 
 
@@ -176,7 +180,9 @@ class ModuleTemplateReview:
             raise ModelError("Draft changed in another session; reopen before saving", {"reason": "DRAFT_CONFLICT"})
         updated = validate_definition(definition)
         validate_module_authoring(updated)
-        validate_port_type_assignments(self.session, updated["endpoints"], draft.definition["endpoints"])
+        validate_transceiver_authoring(updated, published_definition(self.session, template_id, draft.source_revision_id))
+        validate_port_type_assignments(self.session, updated["endpoints"], draft.definition["endpoints"],
+                                       require_connector="transceiver" in updated)
         validate_mount_types(self.session, module_assignments(updated), module_assignments(draft.definition))
         draft.definition = updated
         draft.generation += 1
@@ -191,6 +197,7 @@ class ModuleTemplateReview:
         published = published_definition(self.session, template_id, draft.source_revision_id)
         definition = validate_definition(draft.definition)
         validate_module_authoring(definition)
+        validate_transceiver_authoring(definition, published)
         _require_retained_port_types(published, definition)
         fingerprint = self._inputs()
         installations = self.session.scalars(select(m.ModuleInstallation).join(m.ModuleTemplateRevision,
@@ -253,7 +260,9 @@ class ModuleTemplateReview:
             stale("REVIEW_INPUTS_CHANGED")
         query = CreateModuleTemplateRequest.model_validate(candidate.definition)
         validate_module_authoring(candidate.definition)
-        _require_retained_port_types(published_definition(self.session, template_id, latest.id), candidate.definition)
+        published = published_definition(self.session, template_id, latest.id)
+        validate_transceiver_authoring(candidate.definition, published)
+        _require_retained_port_types(published, candidate.definition)
         revision = HardwareCatalog(self.session)._create_module_revision(template_id, latest.version_number + 1, query)
         self.session.get(m.ModuleTemplate, template_id).name = query.name
         receipt = m.ModuleTemplatePublication(id=candidate.id, revision_id=revision.id)
