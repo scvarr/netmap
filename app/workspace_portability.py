@@ -513,15 +513,16 @@ def _validate_hardware_configuration(rows):
                 occupied.add(member)
     module_places = {identifier: {place["key"]: place for place in revision["module_places"]}
                      for identifier, revision in revisions.items()}
-    revisions_with_endpoints = {row["module_revision_id"] for row in module_definitions.values()}
+    endpoints_by_revision = defaultdict(list)
+    for definition in module_definitions.values():
+        endpoints_by_revision[definition["module_revision_id"]].append(definition)
     occupied_places = set()
+    physical_transceivers = {}
     children = {}
     ordered_installations = []
     for installation in installations.values():
         config = configs[installation["configuration_id"]]
         revision_id = installation["module_revision_id"]
-        if revisions[revision_id]["transceiver"] is not None:
-            raise PackageError("Transceiver endpoints require MOD-03 binding")
         parent_id = installation["parent_installation_id"]
         key = installation["bay_key"]
         occupancy = (config["id"], parent_id, key)
@@ -539,10 +540,18 @@ def _validate_hardware_configuration(rows):
             place = module_places[parent["module_revision_id"]].get(key)
             panel_key = parent["layout"].get("panel_key") if isinstance(parent["layout"], dict) else None
             children.setdefault(parent_id, []).append(installation)
-            if revisions[revision_id]["mount_kind"] == "MODULE_PORT" and revision_id in revisions_with_endpoints:
-                raise PackageError("Nested transceiver endpoints require MOD-03 binding")
         if place is None or mount_identity(place) != mount_identity(revisions[revision_id]):
             raise PackageError("Installation has no compatible place in its owning revision")
+        endings = endpoints_by_revision[revision_id]
+        if revisions[revision_id]["mount_kind"] == "MODULE_PORT" and endings:
+            if (len(endings) != 1 or endings[0]["kind"] != "CONNECTION_POINT"
+                    or capacities[endings[0]["port_type_id"]] != 1
+                    or place.get("hardware_interface_key") is None):
+                raise PackageError("Physical transceiver requires a declared interface and one single-member ending")
+            if parent_id is not None and (parent["parent_installation_id"] is not None
+                    or revisions[parent["module_revision_id"]]["mount_kind"] != "MODULE_BAY"):
+                raise PackageError("Physical transceiver must be mounted in the base or a root board")
+            physical_transceivers[installation["id"]] = occupancy
         from app.module_layout import validate_layout
         try:
             validate_layout(installation["layout"], panel_key)
@@ -575,12 +584,17 @@ def _validate_hardware_configuration(rows):
             raise PackageError("Built-in mapping belongs to another base revision")
         validate_mapping(mapping, definition, config["physical_object_id"])
         built_pairs.add((config["id"], definition["id"]))
+    physical_points = {}
     for mapping in rows["module_endpoint_mappings"]:
         installation = installations[mapping["installation_id"]]
         definition = module_definitions[mapping["definition_id"]]
         if definition["module_revision_id"] != installation["module_revision_id"]:
             raise PackageError("Module mapping belongs to another module revision")
         validate_mapping(mapping, definition, configs[installation["configuration_id"]]["physical_object_id"])
+        if (installation["id"], definition["id"]) in module_pairs:
+            raise PackageError("Duplicate module endpoint mapping")
+        if installation["id"] in physical_transceivers:
+            physical_points[physical_transceivers[installation["id"]]] = mapping["connection_point_id"]
         module_pairs.add((installation["id"], definition["id"]))
     if any((c["id"], d["id"]) not in built_pairs for c in configs.values() for d in definitions.values() if c["base_revision_id"] == d["base_revision_id"]):
         raise PackageError("Configuration is missing a built-in endpoint mapping")
@@ -596,16 +610,25 @@ def _validate_hardware_configuration(rows):
                 for place, key in base_keys[config["base_revision_id"]].items()}
     expected.update({(board["configuration_id"], board["id"], place): key for board in installations.values()
                      for place, key in board_keys[board["module_revision_id"]].items()})
-    bound_interfaces = {interface_id for interface_id, _, _ in bindings}
+    bindings_by_interface = defaultdict(list)
+    bindings_by_point = defaultdict(list)
+    for row in rows["interface_physical_bindings"]:
+        interface_id, point_id, member = (row["interface_id"], row["point_id"], row["point_member"])
+        bindings_by_interface[interface_id].append((point_id, member))
+        bindings_by_point[point_id].append((interface_id, member))
     for association in rows["hardware_interface_associations"]:
         config_id = association["configuration_id"]
         object_id = association["physical_object_id"]
         interface_id = association["interface_id"]
         place = (config_id, association["parent_installation_id"], association["bay_key"])
+        point_id = physical_points.get(place)
+        expected_bindings = [(point_id, 1)] if point_id is not None else []
         if (expected.pop(place, None) != association["hardware_interface_key"]
                 or configs[config_id]["physical_object_id"] != object_id
                 or (interface_id, object_id) not in owners
-                or interface_id in seen_interfaces or interface_id in bound_interfaces):
+                or interface_id in seen_interfaces
+                or bindings_by_interface[interface_id] != expected_bindings
+                or (point_id is not None and bindings_by_point[point_id] != [(interface_id, 1)])):
             raise PackageError("Invalid or duplicate hardware interface association")
         seen_interfaces.add(interface_id)
     if expected:

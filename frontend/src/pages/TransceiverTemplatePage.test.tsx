@@ -34,7 +34,7 @@ it('creates a physical transceiver with catalog UUIDs and optional typed charact
   expect(await screen.findByText('LC Duplex')).toBeInTheDocument();
   expect(screen.getByText('Физические каналы (2)')).toBeInTheDocument();
   expect(screen.getByText('TX · RX')).toBeInTheDocument();
-  expect(screen.getByText(/MOD-03/)).toBeInTheDocument();
+  expect(screen.getByText(/с одним физическим каналом/)).toBeInTheDocument();
   expect(container.querySelector('svg')).toBeNull();
   expect(screen.queryByLabelText('Вид точки')).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Скорость (Мбит/с)'), { target: { value: '10000' } });

@@ -45,6 +45,9 @@ class ModuleInstallationDeletionCatalog:
         point_ids = tuple(sorted({m.connection_point_id for m in mappings}, key=str))
         hardware = associations(self.session, config.id, installation.id)
         revision = self.session.get(ModuleTemplateRevision, installation.module_revision_id)
+        if revision.mount_kind == "MODULE_PORT" and mappings:
+            raise ModelError("Извлечение физического трансивера пока недоступно",
+                             {"reason": "TRANSCEIVER_REMOVAL_UNSUPPORTED"})
         endpoint_interfaces = {m.network_interface_id for m in mappings if m.network_interface_id}
         hardware_interfaces = {row.interface_id for row in hardware}
         if (endpoint_interfaces & hardware_interfaces

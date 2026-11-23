@@ -145,18 +145,18 @@ class ConfiguredPhysicalObjectDetailsResolver:
             )
         from app.hardware_catalog import HardwareCatalog
         configuration = HardwareCatalog(self.repository.session).configuration_document(object_id)
-        for bay in configuration["bays"]:
-            installation = bay["installation"]
-            if installation:
-                for endpoint in installation["endpoints"]:
-                    contexts[uuid.UUID(endpoint["connection_point_id"])] = EndpointPanelContext(
-                        panel_key=endpoint["panel_key"], panel_name=endpoint["panel_display_name"], port_name=endpoint["local_display_name"],
-                        module_name=installation["name"], bay_name=endpoint["bay_display_name"],
-                    )
-                    slots[uuid.UUID(endpoint["connection_point_id"])] = BlueprintSlotMetadata(
-                        slot_key=f"{installation['id']}:{endpoint['key']}", kind=endpoint["kind"],
-                        port_type_id=endpoint["port_type_id"],
-                    )
+        installed = [bay["installation"] for bay in configuration["bays"] if bay["installation"]]
+        for installation in [*installed, *configuration["nested_installations"]]:
+            for endpoint in installation["endpoints"]:
+                point_id = uuid.UUID(endpoint["connection_point_id"])
+                contexts[point_id] = EndpointPanelContext(
+                    panel_key=endpoint["panel_key"], panel_name=endpoint["panel_display_name"], port_name=endpoint["local_display_name"],
+                    module_name=installation["name"], bay_name=endpoint["bay_display_name"],
+                )
+                slots[point_id] = BlueprintSlotMetadata(
+                    slot_key=f"{installation['id']}:{endpoint['key']}", kind=endpoint["kind"],
+                    port_type_id=endpoint["port_type_id"],
+                )
         return ObjectConfigurationProvenance(blueprint_ref=BlueprintLibraryRef(entity_type="BaseTemplate", entity_id=blueprint.id), version_ref=BlueprintLibraryRef(entity_type="BaseTemplateRevision", entity_id=version.id), version_number=version.version_number), slots, contexts, panels
 
     @staticmethod

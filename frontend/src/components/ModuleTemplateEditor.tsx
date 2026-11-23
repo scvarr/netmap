@@ -1,5 +1,6 @@
 import { isModulePlaceMarker, isMountKind, moduleMount, mountTypeId, type ModuleMount, type ModulePlaceDefinition } from '../topology/hardwareModules';
 import { MountTypeSelect, mountKindLabels, useMountTypes } from './ModulePortTypeSelect';
+import { HardwareInterfaceCheckbox } from './HardwareInterfaceCheckbox';
 import { useState } from 'react';
 import { PortTypeSelect, usePortTypes } from './PortTypeSelect';
 import { TemplateElementCreator } from './TemplateElementKindSelect';
@@ -126,8 +127,10 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
             else changeEndpoint({ display_name: event.target.value });
           }} /></label>
           {isModulePort
-            ? <MountTypeSelect types={moduleCatalog.MODULE_PORT.types} value={mountTypeId(modulePorts[index])}
+            ? <><MountTypeSelect types={moduleCatalog.MODULE_PORT.types} value={mountTypeId(modulePorts[index])}
                 onChange={id => updateModulePort(active.key, moduleMount('MODULE_PORT', id))} />
+              <HardwareInterfaceCheckbox value={modulePorts[index].hardware_interface_key}
+                onChange={hardware_interface_key => updateModulePort(active.key, { hardware_interface_key })} /></>
             : <>
               <PortTypeSelect types={catalog.types} value={active.port_type_id} singleMember={active.kind === 'NETWORK_PORT'}
                 onChange={port_type_id => changeEndpoint({ port_type_id })} />

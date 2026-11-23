@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.errors import ModelError, ValidationError
 from app.models import (
-    ModuleInstallation, ModuleEndpointMapping, ObjectConfiguration, BuiltInEndpointMapping, Connection, ConnectionMember,
+    ModuleInstallation, ModuleEndpointMapping, ModuleTemplateRevision, ObjectConfiguration, BuiltInEndpointMapping, Connection, ConnectionMember,
     ConnectionPoint, EntityMetadata, HardwareInterfaceAssociation, InterfacePhysicalBinding, L2Binding,
     L2EgressRule, L2ForwardingContext, L2IngressRule,
     L3Binding, NetworkInterface, NetworkInterfacePhysicalOwner,
@@ -30,19 +30,32 @@ class PhysicalObjectDeletionCatalog:
         )
         if object_ is None:
             raise ValidationError("PhysicalObject does not exist", {"physical_object_id": str(physical_object_id)})
+        physical_transceiver = select(ModuleEndpointMapping.id).join(
+            ModuleTemplateRevision, ModuleTemplateRevision.id == ModuleInstallation.module_revision_id,
+        ).where(ModuleEndpointMapping.installation_id == ModuleInstallation.id,
+                ModuleTemplateRevision.mount_kind == "MODULE_PORT").correlate(ModuleInstallation).exists()
         if self.session.scalar(select(ModuleInstallation.id).join(
             ObjectConfiguration, ObjectConfiguration.id == ModuleInstallation.configuration_id
         ).where(ObjectConfiguration.physical_object_id == physical_object_id,
-                ModuleInstallation.parent_installation_id.is_not(None)).limit(1)) is not None:
+                ModuleInstallation.parent_installation_id.is_not(None), ~physical_transceiver).limit(1)) is not None:
             raise ModelError("Сначала удалите вложенные установки оборудования",
                              {"reason": "MODULE_INSTALLATION_HAS_CHILDREN"})
 
+        has_hardware_interfaces = self.session.scalar(select(HardwareInterfaceAssociation.id).where(
+            HardwareInterfaceAssociation.physical_object_id == physical_object_id).limit(1)) is not None
+        if has_hardware_interfaces:
+            from app.object_reconciliation import _lock_json_references
+            _lock_json_references(self.session)
         point_ids = self._ids(ConnectionPoint.id, ConnectionPoint.physical_object_id == physical_object_id)
         interface_ids = self._ids(
             NetworkInterfacePhysicalOwner.interface_id,
             NetworkInterfacePhysicalOwner.physical_object_id == physical_object_id,
         )
         blockers = self._ordinary_blockers(point_ids, interface_ids)
+        if has_hardware_interfaces:
+            from app.base_template_review import canonical_json_dependencies
+            for dependency in canonical_json_dependencies(self.session, {str(id_) for id_ in (*point_ids, *interface_ids)}):
+                blockers.setdefault(dependency, 1)
         if blockers:
             raise ModelError(
                 "PhysicalObject is in use",
@@ -117,7 +130,9 @@ class PhysicalObjectDeletionCatalog:
         installation_ids = self._ids(ModuleInstallation.id, ModuleInstallation.configuration_id.in_(instance_ids))
         for mapping in self.session.scalars(select(ModuleEndpointMapping).where(ModuleEndpointMapping.installation_id.in_(installation_ids))): self.session.delete(mapping)
         self.session.flush()
-        for installation in self.session.scalars(select(ModuleInstallation).where(ModuleInstallation.id.in_(installation_ids))): self.session.delete(installation)
+        self.session.execute(delete(ModuleInstallation).where(
+            ModuleInstallation.id.in_(installation_ids), ModuleInstallation.parent_installation_id.is_not(None)))
+        self.session.execute(delete(ModuleInstallation).where(ModuleInstallation.id.in_(installation_ids)))
         self.session.flush()
         if instance_ids:
             for slot in self.session.scalars(select(BuiltInEndpointMapping).where(BuiltInEndpointMapping.configuration_id.in_(instance_ids))): self.session.delete(slot)

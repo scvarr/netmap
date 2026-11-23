@@ -1,5 +1,6 @@
 import { moduleMount, mountTypeId, type ModuleMount } from '../topology/hardwareModules';
 import { MountTypeSelect, useMountTypes } from '../components/ModulePortTypeSelect';
+import { HardwareInterfaceCheckbox } from '../components/HardwareInterfaceCheckbox';
 import { EndpointLinkWorkspace } from '../components/EndpointLinkWorkspace';
 import { TemplateElementCreator } from '../components/TemplateElementKindSelect';
 import { LogicalModulePlacesEditor } from '../components/LogicalModulePlacesEditor';
@@ -311,6 +312,9 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
           <MountTypeSelect types={moduleCatalog[selectedBay.mount_kind].types} value={mountTypeId(selectedBay)}
             onChange={id => setEditor(old => ({ ...old, bays: old.bays?.map(bay =>
               bay.bay_key === selectedBay.bay_key ? { ...bay, ...moduleMount(selectedBay.mount_kind, id) } : bay) }))} />
+          {selectedBay.mount_kind === 'MODULE_PORT' && <HardwareInterfaceCheckbox value={selectedBay.hardware_interface_key}
+            onChange={hardware_interface_key => setEditor(old => ({ ...old, bays: old.bays?.map(bay =>
+              bay.bay_key === selectedBay.bay_key ? { ...bay, hardware_interface_key } : bay) }))} />}
           <button type="button" className="text-action" onClick={deleteSelected}>{t('blueprint.composition.remove')}</button>
         </aside>}
         {selectedSlot && <aside className="blueprint-composer__selected">

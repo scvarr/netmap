@@ -18,7 +18,7 @@ function useReasonDescription() {
       NESTED_INSTALLATION_RECONCILE_BLOCKED: 'review.reason.nestedInstallations',
       INVALID_NESTED_PLACEMENT: 'review.reason.invalidNestedPlacement',
       NESTED_PLACE_COMPATIBILITY_MISMATCH: 'review.reason.nestedMountMismatch',
-      TRANSCEIVER_BINDING_REQUIRED: 'hardware.error.transceiver',
+      TRANSCEIVER_BINDING_REQUIRED: 'hardware.error.transceiverReconcile',
       MODULE_LAYOUT_PANEL_CONFLICT: 'changeInspector.panelConflict',
       CONCURRENT_CHANGE: 'reconciliation.concurrent', OBJECT_CHANGED: 'reconciliation.objectChanged',
       TARGET_REVISION_CHANGED: 'reconciliation.targetChanged', APPLY_FAILED: 'reconciliation.failed',

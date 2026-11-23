@@ -43,13 +43,13 @@ def module(name, mount, places=(), has_endpoint=False):
     return response.json()
 
 
-def physical_transceiver(mount):
+def physical_transceiver(mount, *, medium="FIBER"):
     connector_name = f"Lab socket {uuid.uuid4()}"
     connector = created(client.post("/v1/connector-types", json={
         "name": connector_name, "mating_profile": "Lab", "termination": "SOCKET", "color": "#336699",
     }))
     port = created(client.post("/v1/port-types", json={
-        "name": "Lab termination", "medium": "FIBER", "members": ["Optical"],
+        "name": "Lab termination", "medium": medium, "members": ["1"],
         "connector_type_id": connector["id"], "color": "#336699",
     }))
     return {"name": "Physical transceiver", **mount, "transceiver": {}, "geometry": initial_geometry(["optical"]),

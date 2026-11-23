@@ -26,6 +26,36 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+it('installs only a compatible single-member transceiver and replaces the diamond with its square', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => Response.json(url.endsWith('/port-types') ? [
+    { id: 'single', cardinality: 1 }, { id: 'duplex', cardinality: 2 },
+  ] : [])));
+  const data = source();
+  const endpoint = { key: 'optic', display_name: 'Termination', kind: 'CONNECTION_POINT' as const, port_type_id: 'single' };
+  const available = { ...module, name: 'Optic', endpoints: [endpoint] };
+  vi.mocked(data.listModules).mockResolvedValue({ modules: [
+    available, { ...available, name: 'Duplex', template_id: 'duplex', endpoints: [{ ...endpoint, port_type_id: 'duplex' }] },
+  ] });
+  const socket = { ...free.bays[0], network_interface_id: 'interface' };
+  const installation = occupied.bays[0].installation!;
+  vi.mocked(data.loadConfiguration).mockResolvedValue({ ...free, bays: [socket] });
+  vi.mocked(data.installModule).mockResolvedValue({ ...free, bays: [{ ...socket, installation: {
+    ...installation, name: available.name, endpoints: [{ ...installation.endpoints[0], ...endpoint, network_interface_id: null }],
+  } }] });
+  show(data);
+  expect(await screen.findByRole('option', { name: 'Optic' })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'Duplex' })).toBeNull();
+  expect(document.querySelectorAll('polygon[data-module-port-marker]')).toHaveLength(1);
+  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Выберите совместимый модуль' }), available.template_id);
+  await userEvent.click(screen.getByRole('button', { name: 'Установить' }));
+  expect(data.installModule).toHaveBeenCalledWith('object', {
+    bay_key: 'bay-key', module_template_id: 'template', orientation: 'HORIZONTAL',
+  });
+  expect(document.querySelectorAll('rect[data-endpoint-id="point"]')).toHaveLength(1);
+  expect(document.querySelectorAll('polygon[data-module-port-marker]')).toHaveLength(0);
+  expect(screen.getByText(/Извлечение и замена физического трансивера/)).toBeInTheDocument();
+});
+
 function tableBayKeys() {
   return Array.from(screen.getByRole('table').querySelectorAll('[data-bay-key]'), row => row.getAttribute('data-bay-key'));
 }

@@ -2,6 +2,7 @@ import { mountTypeId, type ModuleMount, type ModuleBay } from '../topology/hardw
 import { mountKindLabels, mountTypeName, useMountTypes, type MountCatalogs } from './ModulePortTypeSelect';
 import { modulePortPosition } from '../topology/hardwareModules';
 import { EndpointMarker } from './EndpointMarker';
+import { usePortTypes } from './PortTypeSelect';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { BlueprintPresentation } from '../topology/types';
 import { panelCompositionBounds } from '../topology/blueprintDisplaySize';
@@ -47,6 +48,9 @@ const operationErrors: Partial<Record<string, MessageKey>> = {
   MODULE_PLACE_OCCUPIED: 'hardware.error.occupied',
   MODULE_MOUNT_MISMATCH: 'hardware.error.mount',
   TRANSCEIVER_BINDING_REQUIRED: 'hardware.error.transceiver',
+  UNSUPPORTED_TRANSCEIVER_TERMINATION: 'hardware.error.transceiverMember',
+  HARDWARE_INTERFACE_ALREADY_BOUND: 'hardware.error.interfaceBound',
+  TRANSCEIVER_REMOVAL_UNSUPPORTED: 'hardware.error.transceiverRemoval',
   MODULE_INSTALLATION_HAS_CHILDREN: 'hardware.error.children',
   MODULE_INSTALLATION_IN_USE: 'hardware.error.inUse',
 };
@@ -64,6 +68,7 @@ function projectInstallationPosition(position: { x: number; y: number }, saved: 
 
 export function ModuleInstallationSection({ objectId, onInstalled, presentation, dataSource = hardwareModuleDataSource }: { objectId: string; presentation?: BlueprintPresentation; onInstalled: () => void | Promise<void>; dataSource?: HardwareModuleDataSource }) {
   const moduleTypes = useMountTypes();
+  const { types: portTypes } = usePortTypes();
   const { t, collator } = useI18n(); const [config, setConfig] = useState<HardwareConfiguration>(); const [modules, setModules] = useState<ModuleTemplate[]>([]); const [error, setError] = useState(''); const [pending, setPending] = useState(false); const [retry, setRetry] = useState(0);
   const [editing, setEditing] = useState(false);
   const [selected, setSelected] = useState<string>();
@@ -91,7 +96,10 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
     ? editing ? 360 : Math.min(360, Math.max(140, Math.ceil(contentWidth * bounds.height / bounds.width + verticalPadding)))
     : undefined;
   const scale = bounds && height ? Math.min(contentWidth / bounds.width, (height - verticalPadding) / bounds.height) : 1;
-  const modulePorts = new Set(config?.bays.flatMap(b => b.installation?.endpoints.map(e => e.connection_point_id) ?? []));
+  const modulePorts = new Set([
+    ...config?.bays.flatMap(b => b.installation?.endpoints ?? []) ?? [],
+    ...config?.nested_installations?.flatMap(i => i.endpoints) ?? [],
+  ].map(e => e.connection_point_id));
   const selectedBay = config?.bays.find(b => b.installation?.id === selected);
   const installed = selectedBay?.installation;
   const dirty = !!draft && JSON.stringify(draft) !== JSON.stringify(installed?.layout);
@@ -133,17 +141,28 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
           <th scope="col">{t('hardware.orientation')}</th>
           <th scope="col">{t('hardware.action')}</th>
         </tr>;
-  const renderPlace = (bay: ModuleBay, installation: ModuleInstallation | undefined, parentId?: string, parentIsRootBoard = false) => {
+  const renderPlace = (bay: ModuleBay & { network_interface_id?: string }, installation: ModuleInstallation | undefined, parentId?: string, parentIsRootBoard = false) => {
     const installable = !parentId || (parentIsRootBoard && bay.mount_kind === 'MODULE_PORT');
     const matches = installable ? modules.filter(module =>
       module.mount_kind === bay.mount_kind && mountTypeId(module) === mountTypeId(bay)
     ) : [];
-    const compatible = bay.mount_kind === 'MODULE_PORT' ? matches.filter(module => !module.endpoints.length) : matches;
+    const compatible = bay.mount_kind === 'MODULE_PORT' ? matches.filter(({ endpoints }) =>
+      endpoints.length === 0 || (bay.network_interface_id && endpoints.length === 1
+        && endpoints[0].kind === 'CONNECTION_POINT'
+        && portTypes?.some(type => type.id === endpoints[0].port_type_id && type.cardinality === 1))) : matches;
+    const physicalTransceiver = bay.mount_kind === 'MODULE_PORT'
+      && installation?.endpoints.some(endpoint => endpoint.kind === 'CONNECTION_POINT');
+    const hasPhysicalChild = installation?.module_places?.some(place =>
+      place.mount_kind === 'MODULE_PORT' && nested.get(place.installation_id ?? '')?.endpoints.length);
     const choiceKey = placeChoiceKey(bay.bay_key, parentId);
     const choice = choices[choiceKey] ?? { module: '', orientation: 'HORIZONTAL' as const };
     const disabled = pending || editing;
     return <tr key={bay.bay_key} data-bay-key={bay.bay_key}>
-      <th scope="row">{bay.display_name}</th>
+      <th scope="row">{bay.display_name}
+        {bay.network_interface_id && <div title={bay.network_interface_id}>
+          {t('hardware.parentInterface')} · <code>{bay.network_interface_id.slice(0, 8)}</code>
+        </div>}
+      </th>
       <td>{installation ? <>
         {installation.name}
         {installation.endpoints.length > 0 && <details key={installation.id}>
@@ -172,7 +191,8 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
         onChange={e => setChoices(old => ({ ...old, [choiceKey]: { ...choice, module: e.target.value } }))}>
         <option value="">{t('hardware.selectModule')}</option>
         {compatible.map(m => <option key={m.template_id} value={m.template_id}>{m.name}</option>)}
-      </select> : t(matches.length ? 'hardware.error.transceiver' : installable ? 'hardware.noModules' : 'hardware.historicalPlace')}</td>
+      </select> : t(matches.length ? (bay.network_interface_id ? 'hardware.error.transceiverMember' : 'hardware.error.transceiver')
+        : installable ? 'hardware.noModules' : 'hardware.historicalPlace')}</td>
       <td>{installation ? t(installation.orientation === 'VERTICAL' ? 'hardware.vertical' : 'hardware.horizontal') :
         installable && <select aria-label={t('hardware.orientation')} disabled={disabled || !compatible.length} value={choice.orientation}
           onChange={e => setChoices(old => ({ ...old, [choiceKey]: { ...choice, orientation: e.target.value as ModuleInstallation['orientation'] } }))}>
@@ -180,7 +200,9 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
           <option value="VERTICAL">{t('hardware.vertical')}</option>
         </select>}</td>
       <td>{installation ?
-        <button type="button" className="text-action" disabled={disabled} onClick={() => void uninstall(installation.id, installation.name, bay.display_name)}>{t('hardware.uninstall')}</button> :
+        physicalTransceiver || hasPhysicalChild
+          ? <span>{t(physicalTransceiver ? 'hardware.error.transceiverRemoval' : 'hardware.error.children')}</span>
+          : <button type="button" className="text-action" disabled={disabled} onClick={() => void uninstall(installation.id, installation.name, bay.display_name)}>{t('hardware.uninstall')}</button> :
         installable && <button type="button" className="primary-action" disabled={disabled || !compatible.some(m => m.template_id === choice.module)} onClick={() => void install(bay.bay_key, parentId)}>{t('hardware.install')}</button>}</td>
     </tr>;
   };
@@ -230,14 +252,16 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
             {i.module_places?.filter(place => place.mount_kind === 'MODULE_PORT').map(place => {
               // The configuration projects the pinned place through the installed orientation.
               const position = projectInstallationPosition(modulePortPosition(place.global_position), i.layout, l);
-              return <EndpointMarker key={place.bay_key} kind={place.mount_kind} label={place.display_name}
+              const endpoint = nested.get(place.installation_id ?? '')?.endpoints[0];
+              return <EndpointMarker key={place.bay_key} kind={endpoint ? 'NETWORK_PORT' : place.mount_kind}
+                label={endpoint?.contextual_display_name ?? place.display_name} data-endpoint-id={endpoint?.connection_point_id}
                 data-module-place-key={place.bay_key} pointerEvents="none"
                 cx={position.x * panel.width} cy={position.y * panel.height}
                 r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />;
             })}
             {i.endpoints.map(e => {
               const position = projectInstallationPosition(e, i.layout, l);
-              return <EndpointMarker key={e.connection_point_id} kind={e.kind} label={e.contextual_display_name}
+              return <EndpointMarker key={e.connection_point_id} kind={b.mount_kind === 'MODULE_PORT' ? 'NETWORK_PORT' : e.kind} label={e.contextual_display_name}
                 data-endpoint-id={e.connection_point_id} pointerEvents="none"
                 cx={position.x * panel.width} cy={position.y * panel.height}
                 r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />;

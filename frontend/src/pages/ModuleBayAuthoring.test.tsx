@@ -32,6 +32,26 @@ function show(initialState = state()) {
 
 afterEach(() => vi.restoreAllMocks());
 
+it('assigns an interface only to the selected socket and preserves its key on rename', async () => {
+  const view = show();
+  fireEvent.pointerDown(view.container.querySelector('polygon[data-module-port-marker]')!, { button: 0 });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Назначить аппаратный интерфейс' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(view.save).toHaveBeenCalledTimes(1));
+  const saved = view.save.mock.calls[0][0] as BlueprintEditorState;
+  const key = saved.bays![0].hardware_interface_key;
+  expect(key).toMatch(/^[0-9a-f-]{36}$/);
+  expect(saved.bays![1].hardware_interface_key).toBeUndefined();
+  view.unmount();
+  const reopened = show(saved);
+  fireEvent.pointerDown(reopened.container.querySelector('polygon[data-module-port-marker]')!, { button: 0 });
+  expect(screen.getByRole('checkbox', { name: 'Назначить аппаратный интерфейс' })).toBeChecked();
+  fireEvent.change(screen.getByLabelText('Название', { exact: true }), { target: { value: 'SFP-1' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(reopened.save).toHaveBeenCalledTimes(1));
+  expect(reopened.save.mock.calls[0][0].bays[0]).toMatchObject({ display_name: 'SFP-1', hardware_interface_key: key });
+});
+
 it.each([1, 2, 48])('creates %i independent module markers and reopens their saved positions', async count => {
   const view = show();
   const chooser = within(view.container.querySelector<HTMLElement>('.template-element-creator')!);

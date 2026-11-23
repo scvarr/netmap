@@ -43,7 +43,6 @@ def _occupied_place(installation, parent, parent_revision, mount):
 
 def validate_nested_placements(session, installations, by_id):
     reasons = []
-    transceivers = []
     for child in installations:
         if child.parent_installation_id is None:
             continue
@@ -54,14 +53,6 @@ def validate_nested_placements(session, installations, by_id):
         _, reason = _occupied_place(child, parent, parent_revision, mount)
         if reason:
             reasons.append(reason)
-        if mount[0] == "MODULE_PORT":
-            transceivers.append((child, mount))
-    if transceivers:
-        physical_revisions = set(session.scalars(select(m.ModuleEndpointDefinition.module_revision_id).where(
-            m.ModuleEndpointDefinition.module_revision_id.in_({row.module_revision_id for row, _ in transceivers})
-        ).distinct()))
-        reasons.extend(placement_reason("TRANSCEIVER_BINDING_REQUIRED", row, mount)
-                       for row, mount in transceivers if row.module_revision_id in physical_revisions)
     return reasons
 
 
@@ -79,6 +70,14 @@ def plan_module_placements(session, installation, candidate, installations):
     reasons = validate_nested_placements(session, [installation, *descendants], by_id)
     updates = {}
     mount = mount_identity(candidate)
+    revision = session.get(m.ModuleTemplateRevision, installation.module_revision_id)
+    if revision.mount_kind == "MODULE_PORT" or mount[0] == "MODULE_PORT":
+        before = {(d.definition_key, d.kind, str(d.port_type_id))
+                  for d in session.scalars(select(m.ModuleEndpointDefinition).where(
+                      m.ModuleEndpointDefinition.module_revision_id == revision.id))}
+        after = {(d["key"], d["kind"], d["port_type_id"]) for d in candidate["endpoints"]}
+        if before != after:
+            reasons.append(placement_reason("TRANSCEIVER_BINDING_REQUIRED", installation, mount))
     if installation.parent_installation_id is not None:
         parent = by_id.get(installation.parent_installation_id)
         if parent is not None:
@@ -89,16 +88,12 @@ def plan_module_placements(session, installation, candidate, installations):
             if place is not None:
                 updates[installation.id] = (installation.bay_key, initial_layout(
                     place, candidate["geometry"], installation.orientation, parent_revision.geometry))
-        if mount[0] == "MODULE_PORT" and candidate["endpoints"]:
-            reasons.append(placement_reason("TRANSCEIVER_BINDING_REQUIRED", installation, mount))
     else:
         config = session.get(m.ObjectConfiguration, installation.configuration_id)
         bay = session.scalar(select(m.ModuleBay).where(
             m.ModuleBay.base_revision_id == config.base_revision_id, m.ModuleBay.bay_key == installation.bay_key))
         if bay is None or mount_identity(row_mount(bay)) != mount:
             reasons.append({"code": "BAY_COMPATIBILITY_MISMATCH", "mount": mount_document(*mount)})
-        elif mount[0] == "MODULE_PORT" and candidate["endpoints"]:
-            reasons.append(placement_reason("TRANSCEIVER_BINDING_REQUIRED", installation, mount))
         else:
             try:
                 validate_layout(installation.layout, bay.panel_key)

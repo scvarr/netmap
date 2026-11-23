@@ -74,7 +74,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
     NESTED_PLACE_COMPATIBILITY_MISMATCH: 'review.reason.nestedMountMismatch',
     NO_COMPATIBLE_NESTED_PLACEMENT: 'review.reason.nestedCapacity',
     AMBIGUOUS_NESTED_PLACEMENT: 'review.reason.nestedAmbiguity',
-    TRANSCEIVER_BINDING_REQUIRED: 'hardware.error.transceiver',
+    TRANSCEIVER_BINDING_REQUIRED: 'hardware.error.transceiverReconcile',
     MODULE_LAYOUT_PANEL_CONFLICT: 'changeInspector.panelConflict',
     NESTED_MODULE_PORTS_UNSUPPORTED: 'moduleReview.nestedPortsUnsupported',
     BAY_COMPATIBILITY_MISMATCH: 'moduleReview.compatibility', PHYSICAL_STRUCTURE_IMMUTABLE: 'review.reason.immutable', ENDPOINT_DEPENDENCIES: 'review.reason.dependencies',

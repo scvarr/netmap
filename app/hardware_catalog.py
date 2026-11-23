@@ -12,7 +12,7 @@ from app.module_port_types import (
     validate_transceiver_authoring,
 )
 from app.module_layout import compose_layout, initial_layout, nested_place, validate_layout
-from app.hardware_interfaces import declared_interfaces
+from app.hardware_interfaces import declared_interfaces, associations
 from app.device_catalog import DISPLAY_ALIAS_KEY, PHYSICAL_OBJECT_CLASS_KEY
 from app.errors import ModelError, ValidationError
 from app.models import (
@@ -26,7 +26,8 @@ from app.models import (
     BaseTemplateRevision,
     PresentationPanel,
     ModuleBay, ModuleTemplate, ModuleTemplateRevision, ModuleEndpointDefinition,
-    HardwareInterfaceAssociation, ModuleInstallation, ModuleEndpointMapping, PhysicalObject, PortType,
+    HardwareInterfaceAssociation, InterfacePhysicalBinding, ModuleInstallation, ModuleEndpointMapping,
+    NetworkInterface, PhysicalObject, PortType,
 )
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from app.module_endpoint_names import endpoint_context
@@ -493,9 +494,25 @@ class HardwareCatalog:
         definitions = list(self.session.scalars(select(ModuleEndpointDefinition).where(
             ModuleEndpointDefinition.module_revision_id == revision.id
         ).order_by(ModuleEndpointDefinition.order_index)))
+        transceiver_interface = None
         if revision.mount_kind == "MODULE_PORT" and definitions:
-            raise ModelError("Физические окончания трансивера требуют привязки MOD-03",
-                             {"reason": "TRANSCEIVER_BINDING_REQUIRED"})
+            key = declared_interfaces([place], place_key="bay_key").get(query.bay_key)
+            association = next((row for row in associations(self.session, config.id, parent_id)
+                                if row.bay_key == query.bay_key and row.hardware_interface_key == key
+                                and row.physical_object_id == obj.id), None)
+            if association is None:
+                raise ModelError("Для гнезда требуется аппаратный интерфейс",
+                                 {"reason": "TRANSCEIVER_BINDING_REQUIRED"})
+            if (len(definitions) != 1 or definitions[0].kind != "CONNECTION_POINT"
+                    or self.session.get(PortType, definitions[0].port_type_id).cardinality != 1):
+                raise ModelError("Трансивер должен иметь одно физическое окончание с одним каналом",
+                                 {"reason": "UNSUPPORTED_TRANSCEIVER_TERMINATION"})
+            transceiver_interface = self.session.scalar(select(NetworkInterface.id).where(
+                NetworkInterface.id == association.interface_id).with_for_update())
+            if transceiver_interface is None or self.session.scalar(select(InterfacePhysicalBinding.id).where(
+                InterfacePhysicalBinding.interface_id == transceiver_interface).limit(1)) is not None:
+                raise ModelError("Аппаратный интерфейс уже имеет физическую привязку",
+                                 {"reason": "HARDWARE_INTERFACE_ALREADY_BOUND"})
         layout = initial_layout(place, revision.geometry, query.orientation, frame, places)
         validate_layout(layout, place["panel_key"])
         installation = ModuleInstallation(layout=layout, configuration_id=config.id,
@@ -516,6 +533,8 @@ class HardwareCatalog:
                 repository.add_interface_physical_binding(interface.id, point.id, point_member=1)
                 self._metadata(network_interface_id=interface.id, key=DISPLAY_ALIAS_KEY, value=definition.display_name)
                 interface_id = interface.id
+            elif transceiver_interface is not None:
+                repository.add_interface_physical_binding(transceiver_interface, point.id, point_member=1)
             self.session.add(ModuleEndpointMapping(installation_id=installation.id, definition_id=definition.id, connection_point_id=point.id, network_interface_id=interface_id))
         self.session.flush()
         return self.configuration_document(object_id)

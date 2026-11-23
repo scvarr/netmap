@@ -15,7 +15,7 @@ from tests.test_hardware_configuration import base_payload, client, create_base,
 from tests.test_module_reconciliation import apply, package, revision
 from tests.test_module_uninstall import uninstall
 from tests.test_nested_module_installations import (
-    bay_mount, created, install, module, physical_transceiver, place, read, reason,
+    bay_mount, created, install, module, place, read, reason,
 )
 from tests.test_object_reconciliation import reconcile
 
@@ -67,8 +67,6 @@ def test_empty_ports_have_distinct_owned_interfaces_and_no_physical_endings(hard
     leaf, = created(install(object_id, optic, "socket", board["id"]))["nested_installations"]
     assert uninstall(object_id, leaf["id"]).status_code == 200
     assert package()["canonical"] == canonical
-    transceiver = created(client.post("/v1/library/module-templates", json=physical_transceiver(sfp)))
-    reason(install(object_id, transceiver, "socket", board["id"]), 409, "TRANSCEIVER_BINDING_REQUIRED")
     response = client.post("/v1/topology/physical-connections", json={
         **copper_cable_fields(),
         "source": {"kind": "NETWORK_INTERFACE", "network_interface_id": child["network_interface_id"]},

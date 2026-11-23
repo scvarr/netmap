@@ -132,9 +132,14 @@ def endpoint_dependencies(session, config, mapping, definition, *, lock_rows=Fal
                 if table.name == "entity_metadata" and row["key"] == DISPLAY_ALIAS_KEY and row["value"] == definition["display_name"]:
                     continue
                 reasons.add(table.name.upper())
+    return sorted(reasons | canonical_json_dependencies(session, ids))
+
+
+def canonical_json_dependencies(session, ids):
     # JSON has no FK. Inspect all canonical JSON fields, not only cable presence.
     from app.workspace_portability import _specs
     from sqlalchemy.sql.sqltypes import JSON
+    reasons = set()
     for section, _, model, _ in _specs():
         if section != "canonical":
             continue
@@ -142,7 +147,7 @@ def endpoint_dependencies(session, config, mapping, definition, *, lock_rows=Fal
             if isinstance(column.type, JSON):
                 if any(_contains_reference(value, ids) for value in session.scalars(select(column))):
                     reasons.add(model.__tablename__.upper())
-    return sorted(reasons)
+    return reasons
 
 
 def analyze_object(session, config, candidate):

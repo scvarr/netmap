@@ -84,6 +84,7 @@ it('authors a diamond-shaped module port without assigning a PortType', async ()
   expect(diamond.tagName).toBe('polygon');
   expect(group.queryByLabelText('Ширина')).toBeNull();
   expect(group.queryByLabelText('Высота')).toBeNull();
+  fireEvent.click(group.getByRole('checkbox', { name: 'Назначить аппаратный интерфейс' }));
   fireEvent.change(group.getByLabelText('Название'), { target: { value: 'Child bay' } });
   fireEvent.change(group.getByLabelText('Совместимость'), { target: { value: 'Lab / custom' } });
   const input = group.getByLabelText('X (0–1)');
@@ -93,7 +94,7 @@ it('authors a diamond-shaped module port without assigning a PortType', async ()
   fireEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));
   await waitFor(() => expect(createModule).toHaveBeenCalledWith(expect.objectContaining({
     endpoints: [],
-    module_places: [{ key: expect.any(String), display_name: 'Child bay', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'Lab / custom', module_bay_type_id: null, x: .2, y: .5 }],
+    module_places: [{ key: expect.any(String), hardware_interface_key: expect.stringMatching(/^[0-9a-f-]{36}$/), display_name: 'Child bay', mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'Lab / custom', module_bay_type_id: null, x: .2, y: .5 }],
   })));
 });
 
