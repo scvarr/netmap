@@ -35,6 +35,15 @@ export interface CreateBulkPhysicalConnectionsRequest {
   compatibility?: PhysicalCompatibilityConfirmation;
 }
 
+export interface BulkPhysicalConnectionItem {
+  source_connection_point_id: string;
+  target_connection_point_id: string;
+  source_member_index: number;
+  target_member_index: number;
+  connection_id: string;
+  cable_id: string;
+}
+
 export interface PhysicalEndpointConnectionWriteDataSource {
   previewPhysicalEndpointConnection?(request: CreatePhysicalEndpointConnectionRequest): Promise<PhysicalCompatibilityPreview>;
   previewBulkPhysicalConnections?(request: CreateBulkPhysicalConnectionsRequest): Promise<PhysicalCompatibilityPreview>;
@@ -43,5 +52,5 @@ export interface PhysicalEndpointConnectionWriteDataSource {
   ): Promise<PhysicalEndpointConnectionCreationDocument>;
   deleteExternalPhysicalConnection?(connectionId: string): Promise<void>;
   previewBulkCableLabels?(templateId: string, count: number): Promise<{ labels: string[] }>;
-  createBulkPhysicalConnections?(request: CreateBulkPhysicalConnectionsRequest): Promise<{ created: { connection_id: string; cable_id: string }[] }>;
+  createBulkPhysicalConnections?(request: CreateBulkPhysicalConnectionsRequest): Promise<{ created: BulkPhysicalConnectionItem[] }>;
 }

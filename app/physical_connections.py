@@ -1,7 +1,7 @@
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, or_, select, tuple_
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, aliased, joinedload
 
@@ -300,36 +300,53 @@ class PhysicalConnectionCatalog:
     ) -> list[CreatedEndpointPhysicalConnection] | PhysicalCompatibilityPreview:
         if not 1 <= len(pairs) <= 256:
             raise ValidationError("Bulk pairing requires 1 to 256 pairs")
-        ids = [endpoint.connection_point_id for pair in pairs for endpoint in pair]
-        if len(set(ids)) != len(ids):
-            raise ValidationError("Duplicate ConnectionPoint in bulk pairing")
-        if any(endpoint.member_index not in (None, 1) for pair in pairs for endpoint in pair):
-            raise ValidationError("Bulk pairing supports only member 1")
-        points = list(self.session.scalars(
+        ids = {endpoint.connection_point_id for pair in pairs for endpoint in pair}
+        by_id = {point.id: point for point in self.session.scalars(
             select(ConnectionPoint).where(ConnectionPoint.id.in_(ids))
             .order_by(ConnectionPoint.id).with_for_update()
-        ))
-        by_id = {point.id: point for point in points}
-        if len(by_id) != len(ids):
+        )}
+        if by_id.keys() != ids:
             raise ValidationError("ConnectionPoint does not exist")
-        if any(point.cardinality != 1 for point in points):
-            raise ValidationError("Bulk pairing supports only cardinality=1 ConnectionPoints")
         source_owners = {by_id[source.connection_point_id].physical_object_id for source, _ in pairs}
         target_owners = {by_id[target.connection_point_id].physical_object_id for _, target in pairs}
         if len(source_owners) != 1 or len(target_owners) != 1 or source_owners == target_owners:
             raise ValidationError("Bulk pairing requires two different PhysicalObjects")
+
+        def address(endpoint: ConnectionPointEndpoint) -> tuple[uuid.UUID, int]:
+            point = by_id[endpoint.connection_point_id]
+            index = endpoint.member_index
+            if index is None and point.cardinality == 1:
+                index = 1
+            if index is None or not 1 <= index <= point.cardinality:
+                raise ValidationError(
+                    "Select a member within the ConnectionPoint cardinality",
+                    {"connection_point_id": str(point.id), "member_index": index, "cardinality": point.cardinality},
+                )
+            return point.id, index
+
+        addresses = [(address(source), address(target)) for source, target in pairs]
+        selected = {end for pair in addresses for end in pair}
+        if len(selected) != 2 * len(pairs):
+            raise ValidationError("Duplicate ConnectionPoint member in bulk pairing")
         a = aliased(ConnectionPoint)
         b = aliased(ConnectionPoint)
-        occupied = self.session.scalar(
-            select(Connection.id).join(ConnectionMember)
+        occupied = set()
+        for a_id, a_member, b_id, b_member in self.session.execute(
+            select(a.id, ConnectionMember.point_a_member, b.id, ConnectionMember.point_b_member)
+            .select_from(Connection).join(ConnectionMember)
             .join(a, Connection.point_a_id == a.id).join(b, Connection.point_b_id == b.id)
             .where(a.physical_object_id != b.physical_object_id,
-                   or_(and_(a.id.in_(ids), ConnectionMember.point_a_member == 1),
-                       and_(b.id.in_(ids), ConnectionMember.point_b_member == 1)))
-            .limit(1)
-        )
-        if occupied is not None:
-            raise ValidationError("ConnectionPoint member is already occupied", {"reason": "CONNECTION_POINT_MEMBER_OCCUPIED"})
+                   or_(tuple_(a.id, ConnectionMember.point_a_member).in_(selected),
+                       tuple_(b.id, ConnectionMember.point_b_member).in_(selected)))
+        ):
+            occupied.update(selected.intersection(((a_id, a_member), (b_id, b_member))))
+        if occupied:
+            raise ValidationError("ConnectionPoint member is already occupied", {
+                "reason": "CONNECTION_POINT_MEMBER_OCCUPIED",
+                "members": [{"connection_point_id": str(point_id), "member_index": index}
+                            for point_id, index in sorted(occupied)],
+            })
+
         labels: list[str | None] = [None] * len(pairs)
         catalog = CableLabelCatalog(self.session)
         if template_id is None:
@@ -341,23 +358,24 @@ class PhysicalConnectionCatalog:
                 raise ValidationError("Bulk label preview is stale", {"reason": "BULK_LABEL_PREVIEW_STALE"})
         result = verify_compatibility(
             self.session, [(by_id[a.connection_point_id], by_id[b.connection_point_id]) for a, b in pairs],
-            intent=["bulk", ids, template_id, labels],
+            intent=["bulk", addresses, template_id, labels],
             preview=preview, confirmation=compatibility,
+            require_preview=any(point.cardinality > 1 for point in by_id.values()),
         )
         if preview:
             return result
         repository = CanonicalRepository(self.session)
         created: list[CreatedEndpointPhysicalConnection] = []
-        for (source, target), label in zip(pairs, labels):
+        for ((source_id, source_index), (target_id, target_index)), label in zip(addresses, labels):
             connection, _ = repository.add_connection(
-                source.connection_point_id, target.connection_point_id,
-                cardinality=1, members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
+                source_id, target_id, cardinality=1,
+                members=[ConnectionMemberInput(index=1, point_a_member=source_index, point_b_member=target_index)],
             )
             cable = self._add_cable(connection.id)
             catalog.assign_new_cable(cable, label=label, template_id=None, generate=False)
             created.append(CreatedEndpointPhysicalConnection(
-                source=MaterializedPhysicalEndpoint(source, source.connection_point_id, None),
-                target=MaterializedPhysicalEndpoint(target, target.connection_point_id, None),
+                source=MaterializedPhysicalEndpoint(ConnectionPointEndpoint(source_id, source_index), source_id, None),
+                target=MaterializedPhysicalEndpoint(ConnectionPointEndpoint(target_id, target_index), target_id, None),
                 cable_id=cable.id, connection_id=connection.id,
             ))
         return created

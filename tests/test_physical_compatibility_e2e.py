@@ -411,3 +411,79 @@ def test_workspace_v17_preserves_wide_members_and_rejects_conflicts_before_impor
         assert snapshot() == empty
     assert client.post("/v1/workspace/package", json=package).status_code == 204
     assert snapshot() == package
+
+
+def test_multichannel_bulk_confirmation_binds_addresses_order_subset_and_naming():
+    duplex = catalog_item("port-types", name="Duplex", medium="FIBER", members=["A", "B"],
+                          compatibility_mode="SAME_TYPE")["id"]
+    _, (a,) = typed_points("A", duplex, cardinality=2)
+    _, (b, c) = typed_points("B", duplex, duplex, cardinality=2)
+    url = f"{CREATE}/bulk"
+    first = pair(a, b)
+    second = {"source": {**point_endpoint(a), "member_index": 2},
+              "target": {**point_endpoint(b), "member_index": 2}}
+    body = {"pairs": [first, second]}
+    check = preview(url, body)
+    assert check["verdict"] == "ALLOW"
+    before = snapshot()
+
+    assert client.post(url, json=body).json()["error"]["code"] == "PHYSICAL_COMPATIBILITY_STALE"
+    swapped = deepcopy(body)
+    swapped["pairs"][0]["target"]["member_index"] = 2
+    swapped["pairs"][1]["target"]["member_index"] = 1
+    template = client.post("/v1/cable-label-templates", json={"name": "Bulk", "pattern": "B###", "start_at": 1}).json()["id"]
+    named = {**body, "template_id": template, "expected_generated_labels": ["B001", "B002"]}
+    for changed in (
+        swapped, {"pairs": [second, first]}, {"pairs": [second]}, {"pairs": [pair(a, c), second]}, named,
+    ):
+        assert client.post(url, json=confirmed_payload(check, changed)).json()["error"]["code"] == "PHYSICAL_COMPATIBILITY_STALE"
+    assert snapshot()["canonical"] == before["canonical"]
+
+    named["pairs"] = swapped["pairs"][::-1]
+    named_check = preview(url, named)
+    type_url = f"/v1/port-types/{duplex}"
+    data = client.get(type_url).json()
+    for field in ("id", "cardinality"):
+        del data[field]
+    assert client.put(type_url, json={**data, "compatibility_mode": "UNDEFINED"}).status_code == 200
+    assert client.post(url, json=confirmed_payload(named_check, named)).json()["error"]["code"] == "PHYSICAL_COMPATIBILITY_STALE"
+
+    response = client.post(url, json=confirmed_payload(preview(url, named), named))
+    assert response.status_code == 201, response.text
+    rows = response.json()["created"]
+    assert [(row["source_member_index"], row["target_member_index"]) for row in rows] == [(2, 1), (1, 2)]
+    labels = {cable["id"]: cable["label"] for cable in snapshot()["canonical"]["Cable"]}
+    assert [labels[row["cable_id"]] for row in rows] == ["B001", "B002"]
+
+
+def test_multichannel_bulk_denial_dominates_unknown_and_allow():
+    types = [
+        catalog_item("port-types", name=name, medium=medium, members=["A", "B"],
+                     compatibility_mode=mode)["id"]
+        for name, medium, mode in (("Fiber", "FIBER", "SAME_TYPE"),
+                                   ("Unspecified", "FIBER", "UNDEFINED"),
+                                   ("Copper", "COPPER", "UNDEFINED"))
+    ]
+    _, (a, b, c) = typed_points("A", types[0], types[1], types[0], cardinality=2)
+    _, (d, e, f) = typed_points("B", *types, cardinality=2)
+    url = f"{CREATE}/bulk"
+    body = {"pairs": [pair(a, d), pair(b, e), pair(c, f)]}
+    before = snapshot()
+    check = preview(url, body)
+    assert check["verdict"] == "DENY" and check["token"] is None
+    assert [row["verdict"] for row in check["pairs"]] == ["ALLOW", "UNKNOWN", "DENY"]
+    assert client.post(url, json=body).json()["error"]["code"] == "PHYSICAL_COMPATIBILITY_DENIED"
+    assert snapshot() == before
+
+
+def test_single_channel_allow_bulk_keeps_implicit_member_and_does_not_require_preview():
+    port_type = port("Copper", "COPPER", "SAME_TYPE")
+    _, (a,) = typed_points("A", port_type)
+    _, (b,) = typed_points("B", port_type)
+    ends = pair(a, b)
+    for endpoint in ends.values():
+        endpoint.pop("member_index")
+    response = client.post(f"{CREATE}/bulk", json={"pairs": [ends]})
+    assert response.status_code == 201, response.text
+    (row,) = response.json()["created"]
+    assert row["source_member_index"] == row["target_member_index"] == 1

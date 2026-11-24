@@ -45,11 +45,14 @@ const doc: TopologyProjectionDocument = { schema_version: '1.0', layer: 'L1', de
 const map = { map_ref: ref('SavedMap', 'map'), active_variant_ref: ref('MapPresentationVariant', 'variant'), variants: [], name: 'Map', placements: nodes.map(node => ({ physical_object_ref: ref('PhysicalObject', node.id), positions: { 'L1/PHYSICAL_OBJECT': { x: 0, y: 0 } } })) };
 const renderPage = createMapPageHarness(MapPage);
 
-function setup(previewCompatibility?: PhysicalEndpointConnectionWriteDataSource['previewBulkPhysicalConnections']) {
+function setup(
+  previewCompatibility?: PhysicalEndpointConnectionWriteDataSource['previewBulkPhysicalConnections'],
+  objectDetails = details,
+) {
   const projection = vi.fn().mockResolvedValue(doc);
   const create = vi.fn().mockResolvedValue({ created: [] });
   const preview = vi.fn().mockResolvedValue({ labels: ['B001'] });
-  const loadDetails = vi.fn(async (id: string) => details(id));
+  const loadDetails = vi.fn(async (id: string) => objectDetails(id));
   renderPage({
     dataSource: { loadProjection: projection },
     savedMapDataSource: { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map) } as any,
@@ -71,13 +74,13 @@ const review = () => fireEvent.click(button('Предпросмотр'));
 const confirm = () => fireEvent.click(button('Подтвердить создание'));
 const check = (scope: ReturnType<typeof side>, port: number) => fireEvent.click(scope.getByRole('checkbox', { name: `P${port}` }));
 
-async function start() {
+async function start(lastSource = 'P48', lastTarget = 'P48') {
   await screen.findByTestId('bulk-canvas');
   fireEvent.click(button('source object menu'));
   fireEvent.click(screen.getByRole('menuitem', { name: 'Массовое подключение' }));
   select(screen.getByLabelText('Целевой физический объект'), 'b');
-  await left().findByRole('checkbox', { name: 'P48' });
-  await right().findByRole('checkbox', { name: 'P48' });
+  await left().findByRole('checkbox', { name: lastSource });
+  await right().findByRole('checkbox', { name: lastTarget });
 }
 
 async function selectOne() {
@@ -97,7 +100,7 @@ describe('MapPage bulk cable editor', () => {
     expect(button('Сопоставить')).toBeDisabled();
     expect(screen.getByText(/одинаковое количество/)).toBeVisible();
     fireEvent.click(right().getByRole('button', { name: 'Выбрать все свободные' }));
-    if (reverse) select(right().getByLabelText('Сортировка'), 'descending');
+    if (reverse) select(right().getByLabelText('Порядок окончаний'), 'descending');
     expect(left().getAllByRole('checkbox')[0]).toHaveAccessibleName('P1');
     const firstTarget = reverse ? 48 : 1;
     expect(right().getAllByRole('checkbox')[0]).toHaveAccessibleName(`P${firstTarget}`);
@@ -132,8 +135,8 @@ describe('MapPage bulk cable editor', () => {
     }
     match();
     expect(screen.getByText('Сопоставленные пары (12)')).toBeVisible();
-    select(screen.getByRole('combobox', { name: /Назначение для A .* P4$/ }), 'b8');
-    expect(screen.getByRole('combobox', { name: /Назначение для A .* P8$/ })).toHaveValue('b4');
+    select(screen.getByRole('combobox', { name: /Назначение для A .* P4$/ }), 'b8/1');
+    expect(screen.getByRole('combobox', { name: /Назначение для A .* P8$/ })).toHaveValue('b4/1');
     fireEvent.click(screen.getAllByRole('button', { name: 'Исключить' })[2]);
     review();
 
@@ -270,5 +273,110 @@ describe('MapPage bulk cable editor', () => {
     fireEvent.click(button('Повторить обновление'));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(create).toHaveBeenCalledTimes(1);
+  });
+});
+
+function memberDetails(sourceCapacities: number[], targetCapacities: number[], occupiedTarget?: string) {
+  return (id: string): PhysicalObjectDetailsDocument => ({
+    ...details(id),
+    connection_points: (id === 'a' ? sourceCapacities : targetCapacities).map((cardinality, index) => ({
+      ...points(id)[0],
+      connection_point_ref: ref('ConnectionPoint', `${id}${index + 1}`),
+      panel_context: id === 'a' ? { panel_key: 'main', panel_name: 'Panel', port_name: `P${index + 1}` } : undefined,
+      label: `P${index + 1}`,
+      cardinality,
+      members: Array.from({ length: cardinality }, (_, offset) => ({
+        index: offset + 1, designation: `M${offset + 1}`,
+        occupied: id === 'b' && occupiedTarget === `${index + 1}/${offset + 1}`,
+      })),
+    })),
+  });
+}
+
+const allow = vi.fn(async ({ pairs }: Parameters<NonNullable<PhysicalEndpointConnectionWriteDataSource['previewBulkPhysicalConnections']>>[0]) => ({
+  verdict: 'ALLOW' as const, token: 'reviewed',
+  pairs: pairs.map((_, index) => ({ pair: index + 1, verdict: 'ALLOW' as const, reasons: [] })),
+}));
+
+function range(scope: ReturnType<typeof side>, from: string, to = '', unit = 'channels') {
+  select(scope.getByLabelText('Диапазон'), unit);
+  select(scope.getByLabelText('Начало'), from);
+  select(scope.getByLabelText('Конец'), to);
+  fireEvent.click(scope.getByRole('button', { name: 'Выбрать диапазон' }));
+}
+
+async function submitAllowed() {
+  review();
+  await waitFor(() => expect(button('Проверить совместимость')).toBeEnabled());
+  fireEvent.click(button('Проверить совместимость'));
+  await screen.findByText('Совместимость · ALLOW');
+  confirm();
+}
+
+describe('multichannel bulk pairing', () => {
+  it('selects a group and forms 96 ordered pairs using endpoint range and destination start', async () => {
+    const { create } = setup(allow, memberDetails(Array(48).fill(2), Array(96).fill(1)));
+    await start('P48 · M2', 'P96');
+    const group = left().getByRole('checkbox', { name: 'Выделить каналы P1' });
+    fireEvent.click(left().getByRole('checkbox', { name: 'P1 · M1' }));
+    expect(group).toBePartiallyChecked();
+    fireEvent.click(group);
+    expect(left().getByRole('checkbox', { name: 'P1 · M2' })).toBeChecked();
+    range(left(), 'a1', 'a48', 'points');
+    range(right(), 'b1/1');
+    match();
+    expect(screen.getByRole('region', { name: 'Сопоставленные пары (96)' })).toBeVisible();
+    await submitAllowed();
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
+    const { pairs, compatibility } = create.mock.calls[0][0];
+    expect(compatibility).toEqual({ token: 'reviewed', accept_unknown: false });
+    expect(pairs.map(({ source, target }: any) => [source.connection_point_id, source.member_index, target.connection_point_id]))
+      .toEqual(Array.from({ length: 96 }, (_, index) => [`a${Math.floor(index / 2) + 1}`, index % 2 + 1, `b${index + 1}`]));
+  }, 20000);
+
+  it.each([
+    [[2, 2], [2, 2], false, false, ['a1/1', 'a1/2', 'a2/1', 'a2/2']],
+    [[2, 2], [2, 2], false, true, ['a1/2', 'a1/1', 'a2/2', 'a2/1']],
+    [[2, 2], [2, 2], true, false, ['a2/1', 'a2/2', 'a1/1', 'a1/2']],
+    [[24, 1, 2], Array(27).fill(1), false, false, [
+      ...Array.from({ length: 24 }, (_, index) => `a1/${index + 1}`), 'a2/1', 'a3/1', 'a3/2',
+    ]],
+  ])('keeps endpoint and member order independent (%j to %j, endpoints=%s members=%s)', async (
+    source, target, reversePoints, reverseMembers, expected,
+  ) => {
+    const { create } = setup(allow, memberDetails(source, target));
+    await start('P1 · M1', target[0] === 1 ? 'P1' : 'P1 · M1');
+    if (reversePoints) select(left().getByLabelText('Порядок окончаний'), 'descending');
+    if (reverseMembers) select(left().getByLabelText('Порядок каналов'), 'descending');
+    for (const table of [left(), right()]) fireEvent.click(table.getByRole('button', { name: 'Выбрать все свободные' }));
+    match();
+    await submitAllowed();
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
+    expect(create.mock.calls[0][0].pairs.map(({ source }: any) => `${source.connection_point_id}/${source.member_index}`)).toEqual(expected);
+  });
+
+  it.each(['positions', 'free'])('handles a partially occupied member in %s mode', async mode => {
+    const { create } = setup(allow, memberDetails([2, 1], [2, 2], '1/2'));
+    await start('P1 · M1', 'P1 · M1');
+    if (mode === 'free') select(screen.getByLabelText('Режим сопоставления'), 'free');
+    expect(right().getByRole('checkbox', { name: 'P1 · M2' })).toBeDisabled();
+    expect(right().getByRole('checkbox', { name: 'Выделить каналы P1' })).toBeEnabled();
+    fireEvent.click(left().getByRole('button', { name: 'Выбрать все свободные' }));
+    range(right(), 'b2/2');
+    expect(right().getByRole('status')).toHaveTextContent('недостаточно каналов');
+    range(right(), 'b1/1');
+    match();
+    if (mode === 'positions') {
+      const destination = screen.getByRole('combobox', { name: /Назначение для A .* P1 · M2$/ });
+      expect(destination).toHaveValue('b1/2');
+      expect(screen.getByRole('combobox', { name: /Назначение для A .* P2 · M1$/ })).toHaveValue('b2/1');
+      expect(button('Предпросмотр')).toBeDisabled();
+      expect(within(destination).getByRole('option', { name: /P2 · M1$/ })).toBeDisabled();
+      select(destination, 'b2/2');
+    }
+    await submitAllowed();
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
+    expect(create.mock.calls[0][0].pairs.map(({ target }: any) => `${target.connection_point_id}/${target.member_index}`))
+      .toEqual(mode === 'positions' ? ['b1/1', 'b2/2', 'b2/1'] : ['b1/1', 'b2/1', 'b2/2']);
   });
 });

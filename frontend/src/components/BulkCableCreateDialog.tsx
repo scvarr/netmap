@@ -23,12 +23,25 @@ interface Props {
 }
 
 type Sort = 'ascending' | 'descending';
-type Side = { panel: string | undefined; sort: Sort; selected: string[] };
+type Mode = 'positions' | 'free';
+type Side = { panel: string | undefined; sort: Sort; memberSort: Sort; selected: string[] };
+type Channel = {
+  id: string;
+  point: ConnectionPointDetails;
+  member: number;
+  label: string;
+  occupied: boolean;
+};
 type Pair = { source: string; target: string };
-const emptySide: Side = { panel: undefined, sort: 'ascending', selected: [] };
+const emptySide: Side = { panel: undefined, sort: 'ascending', memberSort: 'ascending', selected: [] };
 const maxBatch = 256;
 const pointId = (point: ConnectionPointDetails) => point.connection_point_ref.entity_id;
-const endpoint = (connection_point_id: string) => ({ kind: 'CONNECTION_POINT' as const, connection_point_id, member_index: 1 as const });
+const channelId = (point: string, index: number) => `${point}/${index}`;
+const endpoint = (channel: Channel) => ({
+  kind: 'CONNECTION_POINT' as const,
+  connection_point_id: pointId(channel.point),
+  member_index: channel.member,
+});
 
 function usePortDetails(details: PhysicalObjectDetailsDataSource, id: string, revision: number) {
   const [result, setResult] = useState<{ id: string; revision: number; document: PhysicalObjectDetailsDocument | null }>();
@@ -59,30 +72,115 @@ function portList(document: PhysicalObjectDetailsDocument | null | undefined, si
   });
   if (!options.length || points.some(point => !group(point))) options.push({ key: '', label: t('physical.unassignedPanel') });
   const panel = options.find(item => item.key === side.panel) ?? options[0];
-  const rows = points.filter(point => group(point) === panel.key).map(point => ({
+  const groups = points.filter(point => group(point) === panel.key).map(point => ({
     point, id: pointId(point), label: displayPointLabel(point, t('physical.port')),
-    available: point.cardinality === 1 && isAvailablePhysicalPort(point),
   })).sort((a, b) => {
     const direction = side.sort === 'ascending' ? 1 : -1;
-    return direction * collator.compare(a.label, b.label) || a.id.localeCompare(b.id);
+    return direction * (collator.compare(a.label, b.label) || a.id.localeCompare(b.id));
+  }).map(group => {
+    const { point, id, label } = group;
+    const members = point.members ?? Array.from({ length: point.cardinality }, (_, offset) => ({
+      index: offset + 1, designation: String(offset + 1),
+      occupied: point.cardinality === 1
+        ? !isAvailablePhysicalPort(point)
+        : point.external_physical_attachments?.some(link => link.local_member_index === offset + 1) ?? false,
+    }));
+    const channels: Channel[] = members.map(member => ({
+      id: channelId(id, member.index), point, member: member.index, occupied: member.occupied,
+      label: point.cardinality === 1 ? label : `${label} · ${member.designation}`,
+    }));
+    return { ...group, channels: side.memberSort === 'descending' ? channels.reverse() : channels };
   });
+  const rows = groups.flatMap(group => group.channels);
+  const byId = new Map(rows.map(row => [row.id, row]));
   const labels = new Map(rows.map(row => [
-    row.id, [document?.physical_object.label, panel.label, row.label].join(' / '),
+    row.id, [document?.physical_object.label, panel.label,
+      row.point.cardinality === 1 && row.point.members?.length
+        ? `${row.label} · ${row.point.members[0].designation}` : row.label,
+    ].join(' / '),
   ]));
-  return { options, panel, rows, labels, selected: rows.filter(row => row.available && side.selected.includes(row.id)) };
+  const selectedIds = new Set(side.selected);
+  return { options, panel, groups, rows, labels, byId, selectedIds };
 }
 
-function PortTable({ title, id, document, side, list, change, retry }: {
+type PortList = ReturnType<typeof portList>;
+
+function RangeSelection({ list, mode, count, select }: {
+  list: PortList;
+  mode: Mode;
+  count?: number;
+  select: (ids: string[]) => void;
+}) {
+  const { t } = useI18n();
+  const [unit, setUnit] = useState<'channels' | 'points'>('channels');
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const entries = unit === 'channels'
+    ? list.rows.map(row => ({ id: row.id, label: row.label, channels: [row] }))
+    : list.groups;
+  const first = entries.findIndex(entry => entry.id === start);
+  const last = entries.findIndex(entry => entry.id === end);
+  const available = (rows: Channel[]) => rows.filter(row => mode === 'positions' || !row.occupied);
+  const fromStart = count !== undefined && unit === 'channels' && !end;
+  const rows = first < 0 ? [] : fromStart
+    ? available(list.rows.slice(first)).slice(0, count)
+    : last < first ? [] : available(entries.slice(first, last + 1).flatMap(entry => entry.channels));
+  const incomplete = fromStart && first >= 0 && count > rows.length;
+  const emptyRange = first >= 0 && last >= first && rows.length === 0;
+  return <div className="map-dialog__actions bulk-create-controls">
+    <label>{t('map.bulk.range')}
+      <select value={unit} onChange={event => {
+        setUnit(event.target.value === 'points' ? 'points' : 'channels');
+        setStart('');
+        setEnd('');
+      }}>
+        <option value="channels">{t('map.bulk.rangeChannels')}</option>
+        <option value="points">{t('map.bulk.rangePoints')}</option>
+      </select>
+    </label>
+    <label>{t('map.bulk.rangeStart')}
+      <select value={start} onChange={event => setStart(event.target.value)}>
+        <option value="">—</option>
+        {entries.map(entry => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
+      </select>
+    </label>
+    <label>{t('map.bulk.rangeEnd')}
+      <select value={end} onChange={event => setEnd(event.target.value)}>
+        <option value="">{count !== undefined && unit === 'channels' ? t('map.bulk.bySourceCount') : '—'}</option>
+        {entries.map(entry => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
+      </select>
+    </label>
+    <button type="button" disabled={!rows.length || incomplete} onClick={() => select(rows.map(row => row.id))}>
+      {t('map.bulk.applyRange')}
+    </button>
+    {(incomplete || emptyRange) && <span role="status">{t('map.bulk.notEnoughChannels')}</span>}
+    {first >= 0 && last >= 0 && last < first && <span role="status">{t('map.bulk.reversedRange')}</span>}
+  </div>;
+}
+
+function PortTable({ title, id, document, side, list, mode, count, change, retry }: {
   title: string;
   id: string;
   document: ReturnType<typeof usePortDetails>;
   side: Side;
-  list: ReturnType<typeof portList>;
+  list: PortList;
+  mode: Mode;
+  count?: number;
   change: (patch: Partial<Side>) => void;
   retry: () => void;
 }) {
   const { t } = useI18n();
   if (!id) return null;
+  const setSelected = (rows: Channel[], checked: boolean) => {
+    const next = new Set(side.selected);
+    for (const row of rows) {
+      if (checked) next.add(row.id);
+      else next.delete(row.id);
+    }
+    change({ selected: [...next] });
+  };
+  const allPositions = mode === 'positions' && list.rows.some(row => row.occupied);
+  const selectedFree = list.rows.filter(row => !row.occupied && list.selectedIds.has(row.id)).length;
   return <section aria-label={title}>
     <h3>{title}{document && ` · ${document.physical_object.label}`}</h3>
     {document === undefined && <p role="status">{t('physical.loading')}</p>}
@@ -97,22 +195,33 @@ function PortTable({ title, id, document, side, list, change, retry }: {
             {list.options.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
           </select>
         </label>
-        <label>{t('endpointWorkspace.sort')}
+        <label>{t('map.bulk.pointOrder')}
           <select value={side.sort} onChange={event => change({ sort: event.target.value as Sort })}>
             <option value="ascending">{t('map.bulk.ascending')}</option>
             <option value="descending">{t('map.bulk.descending')}</option>
           </select>
         </label>
+        {list.groups.some(group => group.point.cardinality > 1) && <label>{t('map.bulk.memberOrder')}
+          <select value={side.memberSort} onChange={event => change({ memberSort: event.target.value as Sort })}>
+            <option value="ascending">{t('map.bulk.ascending')}</option>
+            <option value="descending">{t('map.bulk.descending')}</option>
+          </select>
+        </label>}
       </div>
       {list.rows.length ? <>
+        <RangeSelection key={JSON.stringify([list.panel.key, side.sort, side.memberSort, mode])}
+          list={list} mode={mode} count={count} select={selected => change({ selected })} />
         <div className="map-dialog__actions bulk-create-controls">
-          <button type="button" disabled={!list.rows.some(row => row.available)}
-            onClick={() => change({ selected: list.rows.filter(row => row.available).map(row => row.id) })}>
-            {t('map.bulk.selectFree')}
+          <button type="button" disabled={!allPositions && !list.rows.some(row => !row.occupied)}
+            onClick={() => change({ selected: list.rows.filter(row => allPositions || !row.occupied).map(row => row.id) })}>
+            {t(allPositions ? 'map.bulk.selectPositions' : 'map.bulk.selectFree')}
           </button>
-          <button type="button" disabled={!list.selected.length} onClick={() => change({ selected: [] })}>{t('blueprint.links.clearSelection')}</button>
+          <button type="button" disabled={!side.selected.length} onClick={() => change({ selected: [] })}>{t('blueprint.links.clearSelection')}</button>
         </div>
-        <p>{t('map.bulk.selected', { count: list.selected.length })}</p>
+        <p>{t('map.bulk.selected', { count: selectedFree })}
+          {mode === 'positions' && side.selected.length > selectedFree &&
+            ` · ${t('map.bulk.occupiedPositions', { count: side.selected.length - selectedFree })}`}
+        </p>
         <div className="catalog-table-wrap map-dialog-table bulk-create-ports">
           <table className="catalog-table">
             <thead><tr>
@@ -121,19 +230,32 @@ function PortTable({ title, id, document, side, list, change, retry }: {
               <th scope="col">{t('physical.status')}</th>
               <th scope="col">{t('physical.externalConnection')}</th>
             </tr></thead>
-            <tbody>{list.rows.map(row => <tr key={row.id}>
-              <td><input type="checkbox" aria-label={row.label} disabled={!row.available}
-                checked={row.available && side.selected.includes(row.id)}
-                onChange={event => change({
-                  selected: event.target.checked ? [...side.selected, row.id] : side.selected.filter(id => id !== row.id),
-                })} /></td>
-              <td><RuntimePortLabel point={row.point} label={row.label} /></td>
-              <td>{t(row.point.external_connection_count ? 'physical.connected' : row.available ? 'physical.free' : 'map.bulk.unavailable')}</td>
-              <td>{row.point.external_physical_attachments?.length
-                ? row.point.external_physical_attachments.map((attachment, index) =>
-                  <div key={`${attachment.connection_ref.entity_id}/${index}`}>{attachmentLabel(attachment, t)}</div>)
-                : '—'}</td>
-            </tr>)}</tbody>
+            {list.groups.map(group => {
+              const free = group.channels.filter(row => !row.occupied);
+              const selected = free.filter(row => list.selectedIds.has(row.id)).length;
+              return <tbody key={group.id}>
+                {group.point.cardinality > 1 && <tr>
+                  <td><input type="checkbox" aria-label={t('map.bulk.selectGroup', { name: group.label })}
+                    disabled={!free.length}
+                    checked={free.length > 0 && selected === free.length}
+                    ref={input => { if (input) input.indeterminate = selected > 0 && selected < free.length; }}
+                    onChange={event => setSelected(mode === 'positions' ? group.channels : free, event.target.checked)} /></td>
+                  <th scope="rowgroup" colSpan={3}><RuntimePortLabel point={group.point} label={group.label} /></th>
+                </tr>}
+                {group.channels.map(row => <tr key={row.id}>
+                  <td><input type="checkbox" aria-label={row.label} disabled={row.occupied}
+                    checked={list.selectedIds.has(row.id)}
+                    onChange={event => setSelected([row], event.target.checked)} /></td>
+                  <td><RuntimePortLabel point={row.point} label={row.label} /></td>
+                  <td>{t(row.occupied ? 'physical.connected' : 'physical.free')}</td>
+                  <td>{row.point.external_physical_attachments?.filter(attachment =>
+                    attachment.local_member_index === row.member || row.point.cardinality === 1,
+                  ).map((attachment, index) =>
+                    <div key={`${attachment.connection_ref.entity_id}/${index}`}>{attachmentLabel(attachment, t)}</div>,
+                  )}{!row.occupied && '—'}</td>
+                </tr>)}
+              </tbody>;
+            })}
           </table>
         </div>
       </> : <p role="status">{t('physical.noPoints')}</p>}
@@ -184,6 +306,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
   const [targetVersion, setTargetVersion] = useState(0);
   const [source, setSource] = useState(emptySide);
   const [target, setTarget] = useState(emptySide);
+  const [mode, setMode] = useState<Mode>('positions');
   const [revision, setRevision] = useState(0);
   const [pairs, setPairs] = useState<Pair[]>([]);
   const [stage, setStage] = useState<'select' | 'pairs' | 'preview' | 'refresh-failed'>('select');
@@ -192,6 +315,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
   const [labels, setLabels] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
+  const [occupiedSincePreview, setOccupiedSincePreview] = useState<string[]>([]);
   const [compatibilityReview, setCompatibilityReview] = useState<{
     requestKey: string; preview: PhysicalCompatibilityPreview;
   }>();
@@ -206,6 +330,15 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
   const targetDetails = usePortDetails(details, targetId, revision + targetVersion);
   const left = portList(sourceDetails, source, i18n);
   const right = portList(targetDetails, target, i18n);
+  const sequence = (list: PortList) => list.rows.filter(row =>
+    list.selectedIds.has(row.id) && (mode === 'positions' || !row.occupied),
+  );
+  const sources = sequence(left);
+  const targets = sequence(right);
+  const channelOccupied = (list: PortList, id: string) =>
+    list.byId.get(id)?.occupied || occupiedSincePreview.includes(id);
+  const occupied = (pair: Pair) => channelOccupied(left, pair.source) || channelOccupied(right, pair.target);
+  const hasOccupied = pairs.some(occupied);
   const destinations = nodes.flatMap(node => {
     const id = physicalObjectIdForNode(node);
     return id && id !== sourceId ? [{ id, label: node.label }] : [];
@@ -221,13 +354,14 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
     setSource(current => ({ ...current, selected: [] }));
     setTarget(current => ({ ...current, selected: [] }));
     setConflict(false);
+    setOccupiedSincePreview([]);
     setError(null);
     setCompatibilityReview(undefined);
     setStage('select');
     setRevision(value => value + 1);
   };
   const match = () => {
-    setPairs(left.selected.map((row, index) => ({ source: row.id, target: right.selected[index].id })));
+    setPairs(sources.map((row, index) => ({ source: row.id, target: targets[index].id })));
     setStage('pairs');
   };
   const editPairs = () => {
@@ -237,7 +371,9 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
   };
   const changeTarget = (sourceId: string, targetId: string) => {
     const previous = pairs.find(pair => pair.source === sourceId)?.target;
-    if (previous === undefined) return;
+    const destination = right.byId.get(targetId);
+    if (previous === undefined || !destination || destination.occupied) return;
+    if (right.byId.get(previous)?.occupied && pairs.some(pair => pair.target === targetId)) return;
     setPairs(current => current.map(pair => {
       if (pair.source === sourceId) return { ...pair, target: targetId };
       return pair.target === targetId ? { ...pair, target: previous } : pair;
@@ -275,15 +411,24 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
     try { await refresh(); close(); }
     catch { setStage('refresh-failed'); }
   };
-  const ready = pairs.length > 0 && !conflict && (!templateId || labels.length === pairs.length);
+  const multichannel = pairs.some(pair =>
+    (left.byId.get(pair.source)?.point.cardinality ?? 1) > 1 ||
+    (right.byId.get(pair.target)?.point.cardinality ?? 1) > 1,
+  );
+  const ready = pairs.length > 0 && !hasOccupied && !conflict &&
+    (!multichannel || Boolean(writer.previewBulkPhysicalConnections)) && (!templateId || labels.length === pairs.length);
   const request: CreateBulkPhysicalConnectionsRequest = {
-    pairs: pairs.map(pair => ({ source: endpoint(pair.source), target: endpoint(pair.target) })),
+    pairs: pairs.flatMap(pair => {
+      const from = left.byId.get(pair.source);
+      const to = right.byId.get(pair.target);
+      return from && to ? [{ source: endpoint(from), target: endpoint(to) }] : [];
+    }),
     template_id: templateId || null,
     expected_generated_labels: labels,
   };
   const requestKey = JSON.stringify(request);
   const review = compatibilityReview?.requestKey === requestKey ? compatibilityReview : undefined;
-  const canCreate = ready && review?.preview.verdict !== 'DENY';
+  const canCreate = ready && request.pairs.length === pairs.length && review?.preview.verdict !== 'DENY';
   const { confirm, confirmationDialog } = usePhysicalCompatibilityConfirmation();
   const submit = () => run(async () => {
     if (stage !== 'preview' || !canCreate || !writer.createBulkPhysicalConnections) return;
@@ -314,6 +459,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
         setError(t('map.bulk.compatibilityStale'));
       } else if (reason instanceof BulkPhysicalConnectionError && [400, 404, 409, 422].includes(reason.status)) {
         setConflict(true);
+        setOccupiedSincePreview(reason.members.map(member => channelId(member.connection_point_id, member.member_index)));
         setError(t('map.bulk.conflict'));
       } else {
         setError(t('map.connectFailed'));
@@ -326,8 +472,8 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
 
   const selecting = stage === 'select';
   const pairing = stage === 'pairs';
-  const unequal = left.selected.length !== right.selected.length;
-  const overLimit = left.selected.length > maxBatch || right.selected.length > maxBatch;
+  const unequal = sources.length !== targets.length;
+  const overLimit = sources.length > maxBatch || targets.length > maxBatch;
   return <section className="map-dialog" role="dialog" aria-modal="true" aria-label={t('map.bulk.action')} aria-busy={busy}
     onKeyDown={event => {
       if (event.key !== 'Escape') return;
@@ -345,17 +491,28 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
             <select autoFocus value={targetId} onChange={event => {
               setTargetId(event.target.value);
               setTargetVersion(version => version + 1);
-              setTarget({ ...emptySide, sort: target.sort });
+              setTarget({ ...emptySide, sort: target.sort, memberSort: target.memberSort });
               setPairs([]);
             }}>
               <option value="">{t(destinations.length ? 'connect.selectObject' : 'map.bulk.noTargets')}</option>
               {destinations.map(object => <option key={object.id} value={object.id}>{object.label}</option>)}
             </select>
           </label>
+          <label className="physical-panel-picker">{t('map.bulk.matchMode')}
+            <select value={mode} onChange={event => {
+              setMode(event.target.value === 'free' ? 'free' : 'positions');
+              setSource(current => ({ ...current, selected: [] }));
+              setTarget(current => ({ ...current, selected: [] }));
+            }}>
+              <option value="positions">{t('map.bulk.byPositions')}</option>
+              <option value="free">{t('map.bulk.byFree')}</option>
+            </select>
+          </label>
+          <p>{t(mode === 'positions' ? 'map.bulk.positionsHelp' : 'map.bulk.freeHelp')}</p>
           <div className="endpoint-workspace__columns">
-            <PortTable title={t('map.bulk.source')} id={sourceId} document={sourceDetails} side={source} list={left}
+            <PortTable title={t('map.bulk.source')} id={sourceId} document={sourceDetails} side={source} list={left} mode={mode}
               change={patch => changeSide('source', patch)} retry={reload} />
-            <PortTable title={t('map.bulk.destination')} id={targetId} document={targetDetails} side={target} list={right}
+            <PortTable title={t('map.bulk.destination')} id={targetId} document={targetDetails} side={target} list={right} mode={mode} count={sources.length}
               change={patch => changeSide('target', patch)} retry={reload} />
           </div>
           {unequal && <p role="status">{t('map.bulk.unequal')}</p>}
@@ -364,31 +521,40 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
         {!selecting && <>
           <h3>{t(pairing ? 'map.bulk.pairs' : 'map.bulk.preview', { count: pairs.length })}</h3>
           {pairing && <p>{t('map.bulk.adjust')}</p>}
+          {pairing && hasOccupied && <p role="alert">{t('map.bulk.resolveOccupied')}</p>}
           <div className="catalog-table-wrap map-dialog-table bulk-create-pairs" ref={pairTable} tabIndex={0}
             role="region" aria-label={t('map.bulk.pairs', { count: pairs.length })}>
             <table className="catalog-table">
               <thead><tr>
-                {!pairing && <th scope="col" className="bulk-create-pair-number">{t('map.bulk.detailPair')}</th>}
+                <th scope="col" className="bulk-create-pair-number">{t('map.bulk.detailPair')}</th>
                 <th scope="col">{t('map.bulk.source')}</th>
                 <th scope="col">{t('map.bulk.destination')}</th>
                 <th scope="col">{t(pairing ? 'physical.actions' : 'physical.cable')}</th>
               </tr></thead>
               <tbody>{pairs.map((pair, index) => <tr key={pair.source}>
-                {!pairing && <td>{index + 1}</td>}
-                <td>{left.labels.get(pair.source)}</td>
+                <td>{index + 1}</td>
+                <td>{left.labels.get(pair.source)}
+                  {channelOccupied(left, pair.source) && <div>{t('map.bulk.occupiedChannel')}</div>}
+                </td>
                 <td>{pairing
                   ? <select aria-label={t('map.bulk.destinationFor', { name: left.labels.get(pair.source) ?? '' })}
-                      value={pair.target} onChange={event => changeTarget(pair.source, event.target.value)}>
-                    {right.rows.filter(row => row.available).map(row => <option key={row.id} value={row.id}>
+                      value={pair.target} disabled={channelOccupied(left, pair.source)} onChange={event => changeTarget(pair.source, event.target.value)}>
+                    {right.byId.get(pair.target)?.occupied && <option value={pair.target} disabled>
+                      {right.labels.get(pair.target)} · {t('map.bulk.occupiedChannel')}
+                    </option>}
+                    {right.rows.filter(row => !row.occupied).map(row => <option key={row.id} value={row.id}
+                      disabled={right.byId.get(pair.target)?.occupied && pairs.some(item => item.target === row.id)}>
                       {right.labels.get(row.id)}
                     </option>)}
                   </select>
-                  : right.labels.get(pair.target)}</td>
+                  : <>{right.labels.get(pair.target)}
+                    {channelOccupied(right, pair.target) && <div>{t('map.bulk.occupiedChannel')}</div>}
+                  </>}</td>
                 <td>{pairing
                   ? <button type="button" onClick={() => setPairs(current => current.filter(item => item.source !== pair.source))}>
                     {t('map.bulk.exclude')}
                   </button>
-                  : labels[index] ?? (templateId ? '—' : t('map.bulk.noNames'))}</td>
+                  : labels[index] ?? (templateId ? 'вЂ”' : t('map.bulk.noNames'))}</td>
               </tr>)}</tbody>
             </table>
           </div>
@@ -405,6 +571,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
               </select>
             </label>}
           </div>
+          {multichannel && !writer.previewBulkPhysicalConnections && <p role="alert">{t('map.bulk.previewUnavailable')}</p>}
           {review && <BulkCompatibilitySummary key={requestKey} preview={review.preview} />}
         </>}
         {busy && <p role="status">{t(submitting ? 'connect.connecting' : 'object.loading')}</p>}
@@ -412,11 +579,11 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
         <div className="map-dialog__actions">
           <button type="button" disabled={busy} onClick={close}>{t('map.cancel')}</button>
           {selecting
-            ? <button type="button" disabled={unequal || overLimit || !left.selected.length || busy} onClick={match}>{t('map.bulk.match')}</button>
+            ? <button type="button" disabled={unequal || overLimit || !sources.length || busy} onClick={match}>{t('map.bulk.match')}</button>
             : pairing
               ? <>
                 <button type="button" onClick={() => setStage('select')}>{t('map.bulk.backToPorts')}</button>
-                <button type="button" disabled={!pairs.length} onClick={() => void openPreview()}>{t('map.bulk.review')}</button>
+                <button type="button" disabled={!pairs.length || hasOccupied} onClick={() => void openPreview()}>{t('map.bulk.review')}</button>
               </>
             : conflict
               ? <button type="button" disabled={busy} onClick={reload}>{t('map.retryRefresh')}</button>

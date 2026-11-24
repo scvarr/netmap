@@ -100,14 +100,18 @@ describe('ApiPhysicalEndpointConnectionWriteDataSource', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/topology/physical-connections/connection-a', { method: 'DELETE' });
   });
   it('previews and posts one ordered bulk request without a SavedMap identifier', async () => {
+    const created = [{
+      connection_id: 'connection', cable_id: 'cable',
+      source_connection_point_id: 'a', source_member_index: 2, target_connection_point_id: 'b', target_member_index: 1,
+    }];
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ schema_version: '1.0', labels: ['B001'] })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ schema_version: '1.0', created: [{ connection_id: 'connection', cable_id: 'cable' }] }), { status: 201 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ schema_version: '1.0', created }), { status: 201 }));
     vi.stubGlobal('fetch', fetchMock);
     const api = new ApiPhysicalEndpointConnectionWriteDataSource();
     expect(await api.previewBulkCableLabels('template', 1)).toEqual({ labels: ['B001'] });
-    const request = { pairs: [{ source: { kind: 'CONNECTION_POINT' as const, connection_point_id: 'a', member_index: 1 as const }, target: { kind: 'CONNECTION_POINT' as const, connection_point_id: 'b', member_index: 1 as const } }], template_id: 'template', expected_generated_labels: ['B001'] };
-    expect(await api.createBulkPhysicalConnections(request)).toEqual({ created: [{ connection_id: 'connection', cable_id: 'cable' }] });
+    const request = { pairs: [{ source: { kind: 'CONNECTION_POINT' as const, connection_point_id: 'a', member_index: 2 }, target: { kind: 'CONNECTION_POINT' as const, connection_point_id: 'b', member_index: 1 as const } }], template_id: 'template', expected_generated_labels: ['B001'] };
+    expect(await api.createBulkPhysicalConnections(request)).toEqual({ created });
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/topology/physical-connections/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) });
   });
 });

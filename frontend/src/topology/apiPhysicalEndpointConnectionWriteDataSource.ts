@@ -1,4 +1,5 @@
 import type {
+  BulkPhysicalConnectionItem,
   CreatePhysicalEndpointConnectionRequest,
   CreateBulkPhysicalConnectionsRequest,
   PhysicalEndpointConnectionCreationDocument,
@@ -7,7 +8,11 @@ import type {
 import { requestPhysicalCompatibility } from './physicalCompatibility';
 
 export class BulkPhysicalConnectionError extends Error {
-  constructor(readonly status: number, readonly reason: string | undefined) {
+  constructor(
+    readonly status: number,
+    readonly reason: string | undefined,
+    readonly members: { connection_point_id: string; member_index: number }[] = [],
+  ) {
     super(reason ?? `HTTP ${status} while creating physical connections.`);
   }
 }
@@ -16,9 +21,14 @@ async function readBulkError(response: Response) {
   const body: unknown = await response.json().catch(() => null);
   const error = isObject(body) && isObject(body.error) ? body.error : null;
   const details = error?.details;
+  const members = isObject(details) && Array.isArray(details.members) ? details.members.filter(member =>
+    isObject(member) && typeof member.connection_point_id === 'string' &&
+    Number.isInteger(member.member_index) && Number(member.member_index) > 0,
+  ) : [];
   return new BulkPhysicalConnectionError(
     response.status,
     isObject(details) && typeof details.reason === 'string' ? details.reason : typeof error?.code === 'string' ? error.code : undefined,
+    members,
   );
 }
 
@@ -117,12 +127,18 @@ implements PhysicalEndpointConnectionWriteDataSource {
     return { labels: (body as Record<string, unknown>).labels as string[] };
   }
 
-  async createBulkPhysicalConnections(request: CreateBulkPhysicalConnectionsRequest): Promise<{ created: { connection_id: string; cable_id: string }[] }> {
+  async createBulkPhysicalConnections(request: CreateBulkPhysicalConnectionsRequest): Promise<{ created: BulkPhysicalConnectionItem[] }> {
     const response = await fetch(`${this.endpoint}/bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) });
     if (!response.ok) throw await readBulkError(response);
     const body: unknown = await response.json();
-    if (!isObject(body) || !Array.isArray(body.created) || body.created.length !== request.pairs.length || body.created.some((item: unknown) => !isObject(item) || typeof item.connection_id !== 'string' || typeof item.cable_id !== 'string')) malformed('invalid bulk creation response.');
-    return { created: (body as Record<string, unknown>).created as { connection_id: string; cable_id: string }[] };
+    if (!isObject(body) || !Array.isArray(body.created) || body.created.length !== request.pairs.length ||
+      body.created.some((item: unknown, index: number) => {
+        const { source, target } = request.pairs[index];
+        return !isObject(item) || typeof item.connection_id !== 'string' || typeof item.cable_id !== 'string' ||
+          item.source_connection_point_id !== source.connection_point_id || item.source_member_index !== source.member_index ||
+          item.target_connection_point_id !== target.connection_point_id || item.target_member_index !== target.member_index;
+      })) malformed('invalid bulk creation response.');
+    return { created: (body as { created: BulkPhysicalConnectionItem[] }).created };
   }
 
   async createPhysicalEndpointConnection(

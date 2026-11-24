@@ -1,9 +1,15 @@
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
+import pytest
 
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app.database import SessionLocal
+from app.errors import ValidationError
+from app.physical_connections import PhysicalConnectionCatalog
 from app.main import app
 from app.models import Cable, CableLabelHistory, Connection, ConnectionMember
 from app.repository import CanonicalRepository, ConnectionMemberInput
@@ -110,3 +116,133 @@ def test_internal_connection_does_not_consume_external_capacity():
     created = post_confirmed_physical(client, URL, json=request([source[0]], target))
     assert created.status_code == 201, created.text
     assert counts() == (2, 2, 1, 0)
+
+
+def multichannel_points(name, capacities):
+    owner, _ = create_object_with_point(client, name)
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        point_ids = [repository.add_connection_point(uuid.UUID(owner), size).id for size in capacities]
+    return owner, list(map(str, point_ids))
+
+
+def end(point_id, index):
+    return {**point_endpoint(point_id), "member_index": index}
+
+
+@pytest.mark.parametrize("capacities", [[2] * 48, [24, 1, 2]])
+def test_bulk_creates_independent_lines_in_exact_member_order(capacities):
+    source_owner, source = multichannel_points("source", capacities)
+    target_owner, target = multichannel_points("target", [1] * sum(capacities))
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        peer_id = repository.add_connection_point(uuid.UUID(source_owner), capacities[0]).id
+        internal, _ = repository.add_connection(
+            uuid.UUID(source[0]), peer_id, cardinality=1,
+            members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
+        )
+        internal_id = internal.id
+
+    channels = [end(point, index) for point, size in zip(source, capacities) for index in range(1, size + 1)]
+    body = {"pairs": [
+        {"source": channel, "target": point_endpoint(point)}
+        for channel, point in zip(channels, target)
+    ]}
+    response = post_confirmed_physical(client, URL, json=body)
+    assert response.status_code == 201, response.text
+    rows = response.json()["created"]
+    assert len({row["cable_id"] for row in rows}) == len(channels)
+    with SessionLocal() as session:
+        for row, pair in zip(rows, body["pairs"], strict=True):
+            member = session.scalar(select(ConnectionMember).where(
+                ConnectionMember.connection_id == uuid.UUID(row["connection_id"]),
+            ))
+            connection = session.get(Connection, member.connection_id)
+            assert connection.cardinality == member.index == 1
+            assert (str(connection.point_a_id), member.point_a_member) == (
+                pair["source"]["connection_point_id"], pair["source"]["member_index"],
+            ) == (row["source_connection_point_id"], row["source_member_index"])
+            assert (str(connection.point_b_id), member.point_b_member) == (
+                pair["target"]["connection_point_id"], pair["target"]["member_index"],
+            ) == (row["target_connection_point_id"], row["target_member_index"])
+    first = rows[0]
+    assert client.delete(f"/v1/topology/physical-connections/{first['connection_id']}").status_code == 204
+    objects = {"source_object_id": source_owner, "target_object_id": target_owner}
+    candidates = client.get("/v1/cables/bulk-delete-preview", params=objects).json()["cables"]
+    assert {item["expected"]["cable_id"] for item in candidates} == {row["cable_id"] for row in rows[1:]}
+    assert client.post("/v1/cables/bulk-delete", json={
+        **objects, "cables": [item["expected"] for item in candidates],
+    }).status_code == 204
+    assert counts() == (1, 1, 0, 0)
+    with SessionLocal() as session:
+        assert session.get(Connection, internal_id) is not None
+
+
+def test_bulk_checks_exact_duplicate_missing_and_invalid_indices_before_writing():
+    _, (a,) = multichannel_points("source", [2])
+    _, (b, c) = multichannel_points("target", [2, 1])
+    first = {"source": end(a, 1), "target": end(b, 2)}
+    second = {"source": end(a, 2), "target": point_endpoint(c)}
+    invalid = [
+        {"source": end(a, 1), "target": point_endpoint(c)},
+        {"source": end(a, 2), "target": end(b, 2)},
+        {"source": end(a, 3), "target": point_endpoint(c)},
+        {"source": end(a, 0), "target": point_endpoint(c)},
+        {"source": {"kind": "CONNECTION_POINT", "connection_point_id": a}, "target": point_endpoint(c)},
+    ]
+    for pair in invalid:
+        for suffix in ("", "?preview=true"):
+            assert client.post(URL + suffix, json={"pairs": [first, pair]}).status_code == 422
+    assert counts() == (0, 0, 0, 0)
+    check = client.post(f"{URL}?preview=true", json={"pairs": [first, second]}).json()
+    assert check["verdict"] == "UNKNOWN"
+    assert client.post(URL, json={
+        "pairs": [first, second], "compatibility": {"token": check["token"], "accept_unknown": False},
+    }).json()["error"]["code"] == "PHYSICAL_COMPATIBILITY_CONFIRMATION_REQUIRED"
+
+
+@pytest.mark.parametrize("single", [True, False])
+def test_competing_writes_cannot_claim_same_member_or_leave_a_partial_bulk(single):
+    _, (a,) = multichannel_points("source", [3])
+    _, (b,) = multichannel_points("target", [3])
+    single_url = "/v1/topology/physical-connections"
+    shared = {"source": end(a, 2), "target": end(b, 2)}
+    first = {"pairs": [{"source": end(a, 1), "target": end(b, 1)}, shared]}
+    other = shared if single else {"pairs": [{"source": end(a, 3), "target": end(b, 3)}, shared]}
+    other_url = single_url if single else URL
+    gate = Barrier(2)
+
+    def write(url, body):
+        check = client.post(f"{url}?preview=true", json=body)
+        assert check.status_code == 200, check.text
+        gate.wait(timeout=5)
+        return client.post(url, json=confirmed_payload(check.json(), body))
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        winner, competitor = (workers.submit(write, url, body) for url, body in ((URL, first), (other_url, other)))
+        bulk, other_result = winner.result(timeout=10), competitor.result(timeout=10)
+    assert sorted([bulk.status_code, other_result.status_code]) == [201, 422]
+    rejected = bulk if bulk.status_code == 422 else other_result
+    assert rejected.json()["error"]["details"]["reason"] == "CONNECTION_POINT_MEMBER_OCCUPIED"
+    expected = 1 if single and other_result.status_code == 201 else 2
+    assert counts() == (expected, expected, expected, 0)
+
+
+def test_bulk_rolls_back_after_a_write_error(monkeypatch):
+    _, (a,) = multichannel_points("source", [2])
+    _, (b,) = multichannel_points("target", [2])
+    body = {"pairs": [{"source": end(a, index), "target": end(b, index)} for index in (2, 1)]}
+    add_cable = PhysicalConnectionCatalog._add_cable
+    calls = 0
+
+    def fail_second(catalog, connection_id):
+        nonlocal calls
+        calls += 1
+        cable = add_cable(catalog, connection_id)
+        if calls == 2:
+            raise ValidationError("Injected second Cable write failure")
+        return cable
+
+    monkeypatch.setattr(PhysicalConnectionCatalog, "_add_cable", fail_second)
+    assert post_confirmed_physical(client, URL, json=body).status_code == 422
+    assert calls == 2 and counts() == (0, 0, 0, 0)

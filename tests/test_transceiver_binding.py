@@ -160,7 +160,10 @@ def test_duplex_wiring_preserves_installed_bindings_and_workspace_roundtrip(hard
     connected = created(post_confirmed_physical(client, url, json={"source": point_end(peer), "target": point_end(other)}))
     reconnect = f"/v1/cables/{connected['cable_ref']['entity_id']}/reconnect"
     reconnect_request = {"side": "A", "new_point_id": point_id, "expected": client.get(reconnect).json()["expected"]}
-    pair = {"source": point_end(point_id), "target": point_end(peer)}
+    pair = {
+        "source": {"kind": "CONNECTION_POINT", "connection_point_id": point_id},
+        "target": point_end(peer),
+    }
     snapshot = package()
     for path, body in (
         (f"{url}/bulk", {"pairs": [pair]}), (f"{url}/bulk?preview=true", {"pairs": [pair]}),
@@ -170,10 +173,10 @@ def test_duplex_wiring_preserves_installed_bindings_and_workspace_roundtrip(hard
         assert response.status_code == 422, response.text
     assert package() == snapshot
     _, free_peer = create_object_with_point(client, "Free peer")
-    wired = created(post_confirmed_physical(client, url, json={
+    (wired,) = created(post_confirmed_physical(client, f"{url}/bulk", json={"pairs": [{
         "source": {**point_end(point_id), "member_index": 2}, "target": point_end(free_peer),
-    }))
-    assert wired["source"]["member_index"] == 2
+    }]}))["created"]
+    assert wired["source_member_index"] == 2
     detail = client.get(f"/v1/topology/physical-objects/{object_id}").json()
     endpoint = next(row for row in detail["connection_points"] if row["connection_point_ref"]["entity_id"] == point_id)
     assert endpoint["members"] == [
@@ -214,7 +217,7 @@ def test_duplex_wiring_preserves_installed_bindings_and_workspace_roundtrip(hard
     restored = client.post("/v1/workspace/package", json=snapshot)
     assert restored.status_code == 204, restored.text
     assert package() == snapshot
-    assert client.delete(f"{url}/{wired['connection_ref']['entity_id']}").status_code == 204
+    assert client.delete(f"{url}/{wired['connection_id']}").status_code == 204
     disconnected = package()
     assert disconnected["canonical"]["InterfacePhysicalBinding"] == snapshot["canonical"]["InterfacePhysicalBinding"]
     assert disconnected["authoring"] == snapshot["authoring"]

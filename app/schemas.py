@@ -1260,14 +1260,10 @@ class CreatePhysicalEndpointConnectionRequest(BaseModel):
     compatibility: PhysicalCompatibilityConfirmation | None = None
 
 
-class BulkConnectionPointEndpointRequest(ConnectionPointPhysicalEndpointRequest):
-    member_index: Literal[1] = 1
-
-
 class BulkPhysicalPointPair(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    source: BulkConnectionPointEndpointRequest
-    target: BulkConnectionPointEndpointRequest
+    source: ConnectionPointPhysicalEndpointRequest
+    target: ConnectionPointPhysicalEndpointRequest
 
 
 class CreateBulkPhysicalConnectionsRequest(BaseModel):
@@ -1350,6 +1346,8 @@ class BulkCableLabelPreviewDocument(BaseModel):
 class BulkPhysicalConnectionItem(BaseModel):
     source_connection_point_id: uuid.UUID
     target_connection_point_id: uuid.UUID
+    source_member_index: int = Field(ge=1)
+    target_member_index: int = Field(ge=1)
     connection_id: uuid.UUID
     cable_id: uuid.UUID
 

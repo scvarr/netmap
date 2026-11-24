@@ -295,6 +295,10 @@ Persisted Channel и записи индивидуальной route geometry о
 
 Физический lifecycle определён в [L1_CONNECTIVITY](L1_CONNECTIVITY.md#принципиальные-границы),
 работа с панелями и Cable — в [UX_IA_CONTRACT](UX_IA_CONTRACT.md#физическая-карта-и-кабельные-операции).
+Массовая внешняя коммутация создаёт отдельные Cable и Connection
+cardinality=1 для точных адресов каналов. Порядок панелей, окончаний и каналов
+в диалоге служит только для подготовки пар. После записи карта перечитывает
+canonical projection в текущем контексте представления.
 Границы приёмки зафиксированы в [PROJECT_STATE](PROJECT_STATE.md#пользовательская-приёмка-и-перепроверки).
 
 ## Resolver, evidence и L1/L2/L3 boundaries

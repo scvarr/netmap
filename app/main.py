@@ -1199,11 +1199,19 @@ def create_bulk_physical_connections(
         )
         if isinstance(created, PhysicalCompatibilityPreview):
             return JSONResponse(created.model_dump(mode="json"))
-        return BulkPhysicalConnectionCreationDocument(created=[BulkPhysicalConnectionItem(
-            source_connection_point_id=item.source.connection_point_id,
-            target_connection_point_id=item.target.connection_point_id,
-            connection_id=item.connection_id, cable_id=item.cable_id,
-        ) for item in created])
+        items = []
+        for item in created:
+            source, target = item.source.endpoint, item.target.endpoint
+            assert isinstance(source, ConnectionPointEndpoint) and source.member_index is not None
+            assert isinstance(target, ConnectionPointEndpoint) and target.member_index is not None
+            items.append(BulkPhysicalConnectionItem(
+                source_connection_point_id=source.connection_point_id,
+                target_connection_point_id=target.connection_point_id,
+                source_member_index=source.member_index,
+                target_member_index=target.member_index,
+                connection_id=item.connection_id, cable_id=item.cable_id,
+            ))
+        return BulkPhysicalConnectionCreationDocument(created=items)
 
 
 @app.get("/v1/cables/bulk-delete-preview", response_model=BulkCableDeletePreview)
