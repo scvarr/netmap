@@ -179,8 +179,8 @@ function PortTable({ title, id, document, side, list, mode, count, change, retry
     }
     change({ selected: [...next] });
   };
-  const allPositions = mode === 'positions' && list.rows.some(row => row.occupied);
-  const selectedFree = list.rows.filter(row => !row.occupied && list.selectedIds.has(row.id)).length;
+  const freeRows = list.rows.filter(row => !row.occupied);
+  const selectedFree = freeRows.filter(row => list.selectedIds.has(row.id)).length;
   return <section aria-label={title}>
     <h3>{title}{document && ` · ${document.physical_object.label}`}</h3>
     {document === undefined && <p role="status">{t('physical.loading')}</p>}
@@ -212,10 +212,14 @@ function PortTable({ title, id, document, side, list, mode, count, change, retry
         <RangeSelection key={JSON.stringify([list.panel.key, side.sort, side.memberSort, mode])}
           list={list} mode={mode} count={count} select={selected => change({ selected })} />
         <div className="map-dialog__actions bulk-create-controls">
-          <button type="button" disabled={!allPositions && !list.rows.some(row => !row.occupied)}
-            onClick={() => change({ selected: list.rows.filter(row => allPositions || !row.occupied).map(row => row.id) })}>
-            {t(allPositions ? 'map.bulk.selectPositions' : 'map.bulk.selectFree')}
+          <button type="button" disabled={!freeRows.length}
+            onClick={() => change({ selected: freeRows.map(row => row.id) })}>
+            {t('map.bulk.selectFree')}
           </button>
+          {mode === 'positions' && <button type="button"
+            onClick={() => change({ selected: list.rows.map(row => row.id) })}>
+            {t('map.bulk.selectPositions')}
+          </button>}
           <button type="button" disabled={!side.selected.length} onClick={() => change({ selected: [] })}>{t('blueprint.links.clearSelection')}</button>
         </div>
         <p>{t('map.bulk.selected', { count: selectedFree })}
@@ -239,7 +243,7 @@ function PortTable({ title, id, document, side, list, mode, count, change, retry
                     disabled={!free.length}
                     checked={free.length > 0 && selected === free.length}
                     ref={input => { if (input) input.indeterminate = selected > 0 && selected < free.length; }}
-                    onChange={event => setSelected(mode === 'positions' ? group.channels : free, event.target.checked)} /></td>
+                    onChange={event => setSelected(free, event.target.checked)} /></td>
                   <th scope="rowgroup" colSpan={3}><RuntimePortLabel point={group.point} label={group.label} /></th>
                 </tr>}
                 {group.channels.map(row => <tr key={row.id}>
@@ -554,7 +558,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
                   ? <button type="button" onClick={() => setPairs(current => current.filter(item => item.source !== pair.source))}>
                     {t('map.bulk.exclude')}
                   </button>
-                  : labels[index] ?? (templateId ? 'вЂ”' : t('map.bulk.noNames'))}</td>
+                  : labels[index] ?? (templateId ? '—' : t('map.bulk.noNames'))}</td>
               </tr>)}</tbody>
             </table>
           </div>

@@ -355,6 +355,71 @@ describe('multichannel bulk pairing', () => {
     expect(create.mock.calls[0][0].pairs.map(({ source }: any) => `${source.connection_point_id}/${source.member_index}`)).toEqual(expected);
   });
 
+  it.each(['positions', 'free'])('keeps free group selection separate from position selection in %s mode', async mode => {
+    const { create } = setup(allow, memberDetails([2, 2], [2, 2], '1/2'));
+    await start('P1 · M1', 'P1 · M1');
+    if (mode === 'free') select(screen.getByLabelText('Режим сопоставления'), 'free');
+
+    const target = right();
+    const group = target.getByRole('checkbox', { name: 'Выделить каналы P1' });
+    const free = target.getByRole('checkbox', { name: 'P1 · M1' });
+    const occupied = target.getByRole('checkbox', { name: 'P1 · M2' });
+    expect(occupied).toBeDisabled();
+    expect(group).not.toBeChecked();
+    fireEvent.click(group);
+    expect(group).toBeChecked();
+    expect(group).not.toBePartiallyChecked();
+    expect(free).toBeChecked();
+    expect(occupied).not.toBeChecked();
+    fireEvent.click(group);
+    expect(group).not.toBeChecked();
+    expect(free).not.toBeChecked();
+
+    const secondGroup = target.getByRole('checkbox', { name: 'Выделить каналы P2' });
+    const secondMember = target.getByRole('checkbox', { name: 'P2 · M2' });
+    fireEvent.click(target.getByRole('checkbox', { name: 'P2 · M1' }));
+    expect(secondGroup).toBePartiallyChecked();
+    fireEvent.click(secondGroup);
+    expect(secondGroup).toBeChecked();
+    expect(secondMember).toBeChecked();
+    fireEvent.click(secondGroup);
+    expect(secondGroup).not.toBeChecked();
+    expect(secondGroup).not.toBePartiallyChecked();
+    expect(secondMember).not.toBeChecked();
+
+    const allFree = target.getByRole('button', { name: 'Выбрать все свободные' });
+    const allPositions = target.queryByRole('button', { name: 'Выбрать все позиции' });
+    fireEvent.click(allFree);
+    expect(group).toBeChecked();
+    expect(secondGroup).toBeChecked();
+    expect(occupied).not.toBeChecked();
+    if (mode === 'free') {
+      expect(allPositions).not.toBeInTheDocument();
+      return;
+    }
+
+    expect(allPositions).toBeEnabled();
+    fireEvent.click(allPositions!);
+    expect(occupied).toBeChecked();
+    fireEvent.click(group);
+    expect(group).not.toBeChecked();
+    expect(free).not.toBeChecked();
+    expect(occupied).toBeChecked();
+    fireEvent.click(group);
+    expect(free).toBeChecked();
+    expect(occupied).toBeChecked();
+    fireEvent.click(allFree);
+    expect(occupied).not.toBeChecked();
+
+    fireEvent.click(left().getByRole('button', { name: 'Выбрать все свободные' }));
+    fireEvent.click(allPositions!);
+    match();
+    expect(screen.getByRole('combobox', { name: /Назначение для A .* P1 · M2$/ })).toHaveValue('b1/2');
+    expect(screen.getByRole('combobox', { name: /Назначение для A .* P2 · M1$/ })).toHaveValue('b2/1');
+    expect(button('Предпросмотр')).toBeDisabled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it.each(['positions', 'free'])('handles a partially occupied member in %s mode', async mode => {
     const { create } = setup(allow, memberDetails([2, 1], [2, 2], '1/2'));
     await start('P1 · M1', 'P1 · M1');
