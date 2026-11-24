@@ -8,6 +8,8 @@ export interface CableReconnectSnapshot {
     connection_member_id: string;
     point_a_id: string;
     point_b_id: string;
+    point_a_member: number;
+    point_b_member: number;
     label: string | null;
   };
   object_a_id: string;
@@ -17,8 +19,8 @@ export interface CableReconnectSnapshot {
 
 export interface CableReconnectDataSource {
   preview(cableId: string): Promise<CableReconnectSnapshot>;
-  previewCompatibility?(cableId: string, expected: CableReconnectSnapshot['expected'], side: CableEnd, newPointId: string): Promise<PhysicalCompatibilityPreview>;
-  reconnect(cableId: string, expected: CableReconnectSnapshot['expected'], side: CableEnd, newPointId: string, compatibility?: PhysicalCompatibilityConfirmation): Promise<void>;
+  previewCompatibility(cableId: string, expected: CableReconnectSnapshot['expected'], side: CableEnd, newPointId: string, memberIndex: number): Promise<PhysicalCompatibilityPreview>;
+  reconnect(cableId: string, expected: CableReconnectSnapshot['expected'], side: CableEnd, newPointId: string, memberIndex: number, compatibility: PhysicalCompatibilityConfirmation): Promise<void>;
 }
 
 export class CableReconnectError extends Error {
@@ -40,19 +42,19 @@ export class ApiCableReconnectDataSource implements CableReconnectDataSource {
     return (await this.request(cableId)).json();
   }
 
-  previewCompatibility(cableId: string, expected: CableReconnectSnapshot['expected'], side: CableEnd, newPointId: string) {
+  previewCompatibility(cableId: string, expected: CableReconnectSnapshot['expected'], side: CableEnd, newPointId: string, memberIndex: number) {
     return requestPhysicalCompatibility(
       `${this.endpoint}/${encodeURIComponent(cableId)}/reconnect/compatibility-preview`,
-      { expected, side, new_point_id: newPointId },
+      { expected, side, new_point_id: newPointId, new_member_index: memberIndex },
       async response => new CableReconnectError(response.status),
     );
   }
 
-  async reconnect(cableId: string, expected: CableReconnectSnapshot['expected'], side: CableEnd, newPointId: string, compatibility?: PhysicalCompatibilityConfirmation) {
+  async reconnect(cableId: string, expected: CableReconnectSnapshot['expected'], side: CableEnd, newPointId: string, memberIndex: number, compatibility: PhysicalCompatibilityConfirmation) {
     await this.request(cableId, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ expected, side, new_point_id: newPointId, compatibility }),
+      body: JSON.stringify({ expected, side, new_point_id: newPointId, new_member_index: memberIndex, compatibility }),
     });
   }
 }

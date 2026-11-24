@@ -5,6 +5,8 @@ import { compatibilityMessage, type PhysicalCompatibilityPreview } from '../topo
 import { CableReconnectError, type CableEnd, type CableReconnectDataSource, type CableReconnectSnapshot } from '../topology/apiCableReconnectDataSource';
 import type { ConnectionPointDetails, PhysicalObjectDetailsDataSource, PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
 import { displayPointLabel, sortedConnectionPoints } from './PhysicalObjectDetailsSection';
+import { PhysicalMemberSelect } from './PhysicalMemberSelect';
+import { isAvailablePhysicalPort, physicalMemberLabel, selectedPhysicalMember } from '../topology/physicalPortAvailability';
 
 interface Props {
   cableId: string;
@@ -26,6 +28,7 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
   const [target, setTarget] = useState<PhysicalObjectDetailsDocument>();
   const [panel, setPanel] = useState<string>();
   const [port, setPort] = useState('');
+  const [member, setMember] = useState<number>();
   const [step, setStep] = useState<'edit' | 'checking' | 'review' | 'confirming' | 'writing' | 'refreshing' | 'refresh-failed' | 'conflict'>('edit');
   const [compatibility, setCompatibility] = useState<PhysicalCompatibilityPreview>();
   const { confirm: confirmCompatibility, confirmationDialog } = usePhysicalCompatibilityConfirmation('compatibility.confirmReconnect');
@@ -48,10 +51,10 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
     return options;
   };
 
-  const endpoint = (document: PhysicalObjectDetailsDocument, point: ConnectionPointDetails) => [
+  const endpoint = (document: PhysicalObjectDetailsDocument, point: ConnectionPointDetails, index: number) => [
     document.physical_object.label,
     panels(document).find(item => item.key === panelKey(point))?.label ?? point.panel_context?.panel_name ?? t('physical.unassignedPanel'),
-    displayPointLabel(point, t('physical.port')),
+    physicalMemberLabel(point, displayPointLabel(point, t('physical.port')), index, true),
   ].join(' / ');
 
   useEffect(() => {
@@ -70,7 +73,10 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
           setStep('conflict');
           return;
         }
-        setCurrent({ snapshot, ends: [endpoint(a, pointA), endpoint(b, pointB)] });
+        setCurrent({ snapshot, ends: [
+          endpoint(a, pointA, snapshot.expected.point_a_member),
+          endpoint(b, pointB, snapshot.expected.point_b_member),
+        ] });
       } catch (reason) {
         if (!active) return;
         if (reason instanceof CableReconnectError && reason.status === 409) setStep('conflict');
@@ -101,14 +107,22 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
     }
   };
 
+  const selectPort = (id: string) => {
+    setPort(id);
+    setMember(undefined);
+    setCompatibility(undefined);
+  };
+  const selectObject = (id: string) => {
+    setObjectId(id);
+    setTarget(undefined);
+    setPanel(undefined);
+    selectPort('');
+    setError(undefined);
+  };
   const reloadConnection = () => {
     setCurrent(undefined);
     setSide('A');
-    setObjectId('');
-    setTarget(undefined);
-    setPanel(undefined);
-    setPort('');
-    setError(undefined);
+    selectObject('');
     setStep('edit');
     setRetry(value => value + 1);
   };
@@ -117,41 +131,46 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
   const selectedPanel = panel ?? options[0]?.key;
   const points = sortedConnectionPoints(target?.connection_points.filter(point => panelKey(point) === selectedPanel) ?? []);
   const opposite = side === 'A' ? current?.snapshot.object_b_id : current?.snapshot.object_a_id;
+  const expected = current?.snapshot.expected;
+  const currentPointId = side === 'A' ? expected?.point_a_id : expected?.point_b_id;
+  const currentIndex = side === 'A' ? expected?.point_a_member : expected?.point_b_member;
+  const availability = (point: ConnectionPointDetails) => pointId(point) !== currentPointId ? point : {
+    ...point,
+    external_connection_count: Math.max(1, point.external_connection_count ?? 0),
+    members: point.members?.map(value => value.index === currentIndex ? { ...value, occupied: true } : value),
+  };
   const available = (point: ConnectionPointDetails) =>
-    point.cardinality === 1 && point.external_connection_count === 0 && objectId !== opposite;
+    objectId !== opposite && isAvailablePhysicalPort(availability(point));
   const selected = points.find(point => pointId(point) === port && available(point));
+  const selectedIndex = selected && selectedPhysicalMember(availability(selected), member);
   const busy = step === 'checking' || step === 'confirming' || step === 'writing' || step === 'refreshing';
   const review = async () => {
-    if (!current || !selected) return;
+    if (!current || !selected || selectedIndex === undefined) return;
     setCompatibility(undefined);
-    if (writer.previewCompatibility) {
-      setStep('checking');
-      try {
-        setCompatibility(await writer.previewCompatibility(cableId, current.snapshot.expected, side, pointId(selected)));
-      } catch {
-        setStep('conflict');
-        return;
-      }
+    setStep('checking');
+    try {
+      setCompatibility(await writer.previewCompatibility(cableId, current.snapshot.expected, side, pointId(selected), selectedIndex));
+    } catch {
+      setStep('conflict');
+      return;
     }
     setStep('review');
   };
-  const canReconnect = compatibility?.verdict !== 'DENY';
+  const canReconnect = Boolean(compatibility?.token) && compatibility?.verdict !== 'DENY';
   const confirm = async () => {
-    if (step !== 'review' || !current || !selected || !canReconnect) return;
+    if (step !== 'review' || !current || !selected || selectedIndex === undefined || !compatibility || !canReconnect) return;
     setStep('confirming');
     setError(undefined);
     try {
-      const confirmation = compatibility ? await confirmCompatibility(compatibility) : undefined;
+      const destination = target && endpoint(target, selected, selectedIndex);
+      const end = t(side === 'A' ? 'catalog.endpointA' : 'catalog.endpointB');
+      const confirmation = await confirmCompatibility(compatibility, `${current.snapshot.display_label} · ${end} → ${destination}`);
       if (confirmation === null) {
         setStep('review');
         return;
       }
       setStep('writing');
-      if (confirmation) {
-        await writer.reconnect(cableId, current.snapshot.expected, side, pointId(selected), confirmation);
-      } else {
-        await writer.reconnect(cableId, current.snapshot.expected, side, pointId(selected));
-      }
+      await writer.reconnect(cableId, current.snapshot.expected, side, pointId(selected), selectedIndex, confirmation);
     } catch (reason) {
       if (reason instanceof CableReconnectError && [409, 422].includes(reason.status)) setStep('conflict');
       else {
@@ -164,8 +183,10 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
   };
 
   const endLabels = [t('catalog.endpointA'), t('catalog.endpointB')];
-  const ends = (values: string[]) => <ul>{values.map((value, index) =>
-    <li key={endLabels[index]}><strong>{endLabels[index]}</strong> · <span>{value}</span></li>)}</ul>;
+  const ends = (values: string[], moved?: CableEnd) => <ul>{values.map((value, index) =>
+    <li key={endLabels[index]}><strong>{endLabels[index]}</strong> · <span>{value}</span>
+      {moved === (index === 0 ? 'A' : 'B') && <> · {t('map.reconnect.side')}</>}
+    </li>)}</ul>;
   return <section className="map-dialog" role="dialog" aria-modal="true" aria-label={t('map.reconnect.action')} aria-busy={busy}>
     <div className="map-dialog__surface">
       <h2>{t('map.reconnect.action')}</h2>
@@ -173,7 +194,7 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
       {step === 'refresh-failed' && <p role="alert">{t('map.reconnect.savedRefreshFailed')}</p>}
       {step === 'refreshing' && <p role="status">{t('map.refreshing')}</p>}
       {step === 'checking' && <p role="status">{t('connect.loading')}</p>}
-      {(step === 'edit' || step === 'review' || step === 'writing') && <>
+      {(step === 'edit' || step === 'review' || step === 'confirming' || step === 'writing') && <>
         {error && <p role="alert">{t(error === 'unsupported' ? 'map.reconnect.unsupported' : 'map.reconnect.load')}</p>}
         {!current && !error && <p role="status">{t('connect.loading')}</p>}
         {current && <>
@@ -182,27 +203,25 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
           {ends(current.ends)}
           {step === 'edit' && <>
             <label className="physical-panel-picker">{t('map.reconnect.side')}
-              <select value={side} onChange={event => { setSide(event.target.value === 'B' ? 'B' : 'A'); setPort(''); }}>
+              <select value={side} onChange={event => { setSide(event.target.value === 'B' ? 'B' : 'A'); selectObject(''); }}>
                 <option value="A">{endLabels[0]}</option><option value="B">{endLabels[1]}</option>
               </select>
             </label>
             <label className="physical-panel-picker">{t('connect.targetObject')}
-              <select value={objectId} onChange={event => {
-                setObjectId(event.target.value); setTarget(undefined); setPanel(undefined); setPort(''); setError(undefined);
-              }}>
+              <select value={objectId} onChange={event => selectObject(event.target.value)}>
                 <option value="">{t('connect.selectObject')}</option>
-                {objects.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+                {objects.map(item => <option key={item.id} value={item.id} disabled={item.id === opposite}>{item.label}</option>)}
               </select>
             </label>
             {objectId && !target && !error && <p role="status">{t('physical.loading')}</p>}
             {target && (options.length ? <>
               <label className="physical-panel-picker">{t('physical.panel')}
-                <select value={selectedPanel} onChange={event => { setPanel(event.target.value); setPort(''); }}>
+                <select value={selectedPanel} onChange={event => { setPanel(event.target.value); selectPort(''); }}>
                   {options.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
                 </select>
               </label>
               <label className="physical-panel-picker">{t('physical.port')}
-                <select value={port} onChange={event => setPort(event.target.value)}>
+                <select value={port} onChange={event => selectPort(event.target.value)}>
                   <option value="">{t('connect.selectPort')}</option>
                   {points.map(point => <option key={pointId(point)} value={pointId(point)} disabled={!available(point)}>
                     {displayPointLabel(point, t('physical.port'))}
@@ -210,11 +229,13 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
                   </option>)}
                 </select>
               </label>
+              {selected && <PhysicalMemberSelect point={availability(selected)} label={t('connect.targetMember')}
+                value={member} onChange={value => { setMember(value); setCompatibility(undefined); }} />}
             </> : <p>{t('physical.noPoints')}</p>)}
           </>}
-          {step !== 'edit' && target && selected && <>
+          {step !== 'edit' && target && selected && selectedIndex !== undefined && <>
             <p>{t('map.reconnect.after')}</p>
-            {ends(side === 'A' ? [endpoint(target, selected), current.ends[1]] : [current.ends[0], endpoint(target, selected)])}
+            {ends(side === 'A' ? [endpoint(target, selected, selectedIndex), current.ends[1]] : [current.ends[0], endpoint(target, selected, selectedIndex)], side)}
             {compatibility &&
               <p role={compatibility.verdict === 'ALLOW' ? 'status' : 'alert'}>{compatibilityMessage(compatibility, t)}</p>}
           </>}
@@ -225,9 +246,9 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
         {step === 'edit' && (error === 'load' || error === 'target') && <button type="button" onClick={() => {
           setError(undefined); setRetry(value => value + 1);
         }}>{t('action.retry')}</button>}
-        {step === 'edit' && current && <button type="button" disabled={!selected} onClick={() => void review()}>{t('map.bulk.review')}</button>}
+        {step === 'edit' && current && <button type="button" disabled={selectedIndex === undefined} onClick={() => void review()}>{t('map.bulk.review')}</button>}
         {step === 'review' && <>
-          <button type="button" onClick={() => setStep('edit')}>{t('map.back')}</button>
+          <button type="button" onClick={() => { setCompatibility(undefined); setStep('edit'); }}>{t('map.back')}</button>
           <button type="button" disabled={!canReconnect} onClick={() => void confirm()}>{t('map.reconnect.confirm')}</button>
         </>}
         {step === 'conflict' &&

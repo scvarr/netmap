@@ -560,7 +560,22 @@ class ConfiguredTopologyProjectionResolver:
         else:
             from_point, from_member, to_point, to_member = member.point_b_id, member.point_b_member, member.point_a_id, member.point_a_member
         cable = cables_by_connection.get(member.connection_id)
-        return {"from_connection_point_id": str(from_point), "from_member_index": from_member, "to_connection_point_id": str(to_point), "to_member_index": to_member, "connection_id": str(member.connection_id), "connection_member_id": str(member.connection_member_id), **({"cable_ref": self._ref("Cable", cable.id).model_dump(mode="json"), "cable_display_name": resolved_cable_label(cable)[0]} if cable is not None else {})}
+        endpoint = {
+            "from_connection_point_id": str(from_point), "from_member_index": from_member,
+            "to_connection_point_id": str(to_point), "to_member_index": to_member,
+            "connection_id": str(member.connection_id), "connection_member_id": str(member.connection_member_id),
+        }
+        if cable is not None:
+            endpoint.update(
+                cable_ref=self._ref("Cable", cable.id).model_dump(mode="json"),
+                cable_display_name=resolved_cable_label(cable)[0],
+                cable_can_reconnect=(
+                    member.object_a_id != member.object_b_id
+                    and member.connection_cardinality == 1
+                    and member.member_index == 1
+                ),
+            )
+        return endpoint
 
     def _physical_candidates(
         self, owner: NetworkInterfacePhysicalOwnerRecord

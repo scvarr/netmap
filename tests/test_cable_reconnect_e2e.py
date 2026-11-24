@@ -127,6 +127,69 @@ def test_invalid_or_deleted_topology_leaves_connection_unchanged(cable):
     assert client.post(url, json={"expected": expected, "side": "A", "new_point_id": occupied}).status_code == 409
 
 
+def test_member_reconnect_preserves_addresses_and_requires_exact_preview(cable):
+    cable_id, url, a, b = cable
+    wide = create_object_with_point(client, "Wide")
+    duplex = create_object_with_point(client, "Duplex")
+    neighbor = create_object_with_point(client, "Neighbor")
+    with SessionLocal.begin() as session:
+        session.get(ConnectionPoint, uuid.UUID(wide[1])).cardinality = 24
+        session.get(ConnectionPoint, uuid.UUID(duplex[1])).cardinality = 2
+    occupied = post_confirmed_physical(client, CREATE, json={
+        "source": {**point_endpoint(wide[1]), "member_index": 22}, "target": point_endpoint(neighbor[1]),
+    })
+    assert occupied.status_code == 201, occupied.text
+    neighbor_url = f"/v1/cables/{occupied.json()['cable_ref']['entity_id']}/reconnect"
+    neighbor_expected = preview(neighbor_url)
+    expected = preview(url)
+    history_before = history(cable_id)
+
+    def assert_rejected(payload, status, code=None):
+        response = client.post(url, json=payload)
+        assert response.status_code == status, response.text
+        if code:
+            assert response.json()["error"]["code"] == code
+        assert preview(url) == expected
+
+    payload = {"expected": expected, "side": "A", "new_point_id": wide[1], "new_member_index": 24}
+    assert_rejected({**payload, "new_member_index": None}, 422)
+    assert_rejected({**payload, "new_member_index": 25}, 422)
+    assert_rejected({**payload, "new_member_index": 22}, 409, "CABLE_RECONNECT_OCCUPIED")
+    old_expected = {key: value for key, value in expected.items() if key not in ("point_a_member", "point_b_member")}
+    assert_rejected({**payload, "expected": old_expected}, 409, "CABLE_RECONNECT_STALE")
+    confirmed = reconnect_payload(url, payload)
+    assert_rejected({**confirmed, "new_member_index": 23}, 409, "PHYSICAL_COMPATIBILITY_STALE")
+    assert_rejected({**confirmed, "side": "B"}, 409, "PHYSICAL_COMPATIBILITY_STALE")
+    assert_rejected({**confirmed, "new_point_id": duplex[1], "new_member_index": 1}, 409, "PHYSICAL_COMPATIBILITY_STALE")
+    assert_rejected({**confirmed, "compatibility": {**confirmed["compatibility"], "accept_unknown": False}},
+                    409, "PHYSICAL_COMPATIBILITY_CONFIRMATION_REQUIRED")
+
+    for point, index in [(wide, 24), (wide, 23), (duplex, 2), (a, 1)]:
+        payload = {"expected": expected, "side": "A", "new_point_id": point[1], "new_member_index": index}
+        confirmed = reconnect_payload(url, payload)
+        response = client.post(url, json=confirmed)
+        assert response.status_code == 204, response.text
+        before = expected
+        expected = {**expected, "point_a_id": point[1], "point_a_member": index}
+        assert preview(url) == expected
+        assert_rejected({**payload, "expected": expected}, 422)
+        assert_rejected({**payload, "expected": before}, 409, "CABLE_RECONNECT_STALE")
+        assert preview(neighbor_url) == neighbor_expected
+        assert history(cable_id) == history_before
+    assert point_details(*b)["external_connection_count"] == 1
+
+
+def test_simplex_reconnect_accepts_implicit_current_and_destination_indices(cable):
+    _, url, _, _ = cable
+    _, point = create_object_with_point(client, "Destination")
+    expected = preview(url)
+    legacy = {key: value for key, value in expected.items() if key not in ("point_a_member", "point_b_member")}
+    payload = reconnect_payload(url, {"expected": legacy, "side": "B", "new_point_id": point})
+    response = client.post(url, json=payload)
+    assert response.status_code == 204, response.text
+    assert preview(url) == {**expected, "point_b_id": point}
+
+
 def test_failed_transaction_rolls_back_endpoint_update(cable, monkeypatch):
     cable_id, url, a, _ = cable
     owner, destination = create_object_with_point(client, "destination")
@@ -168,27 +231,34 @@ def test_simultaneous_reconnect_rejects_competitor_then_stale_preview(cable):
 
 
 @pytest.mark.parametrize("first_writer", ["create", "reconnect"])
-def test_reconnect_and_create_serialize_on_new_point(cable, first_writer):
+@pytest.mark.parametrize("bulk", [False, True])
+def test_reconnect_and_create_serialize_on_new_member(cable, first_writer, bulk):
     cable_id, url, a, _ = cable
     _, destination = create_object_with_point(client, "destination")
     _, peer = create_object_with_point(client, "peer")
-    payload = {"expected": preview(url), "side": "A", "new_point_id": destination}
+    with SessionLocal.begin() as session:
+        session.get(ConnectionPoint, uuid.UUID(destination)).cardinality = 2
+    payload = {"expected": preview(url), "side": "A", "new_point_id": destination, "new_member_index": 2}
     payload = reconnect_payload(url, payload)
-    create_request = {"source": point_endpoint(destination), "target": point_endpoint(peer)}
-    create_confirmation = confirmed_payload(client.post(f"{CREATE}?preview=true", json=create_request).json(), {})
+    pair = {"source": {**point_endpoint(destination), "member_index": 2}, "target": point_endpoint(peer)}
+    create_url, create_request = (f"{CREATE}/bulk", {"pairs": [pair]}) if bulk else (CREATE, pair)
+    create_confirmation = confirmed_payload(client.post(f"{create_url}?preview=true", json=create_request).json(), {})
     with ThreadPoolExecutor(max_workers=1) as worker:
         with SessionLocal.begin() as session:
             catalog = PhysicalConnectionCatalog(session)
             if first_writer == "create":
-                catalog.create_endpoint_link(ConnectionPointEndpoint(uuid.UUID(destination)),
-                                             ConnectionPointEndpoint(uuid.UUID(peer)),
-                                             compatibility=PhysicalCompatibilityConfirmation.model_validate(create_confirmation["compatibility"]))
+                ends = (ConnectionPointEndpoint(uuid.UUID(destination), 2), ConnectionPointEndpoint(uuid.UUID(peer)))
+                confirmation = PhysicalCompatibilityConfirmation.model_validate(create_confirmation["compatibility"])
+                if bulk:
+                    catalog.create_bulk_point_links([ends], template_id=None, expected_generated_labels=[], compatibility=confirmation)
+                else:
+                    catalog.create_endpoint_link(*ends, compatibility=confirmation)
                 competing = worker.submit(client.post, url, json=payload).result(timeout=5)
                 assert competing.status_code == 409
                 assert competing.json()["error"]["code"] == "CABLE_RECONNECT_CONFLICT"
             else:
                 catalog.reconnect_cable(uuid.UUID(cable_id), CableReconnectRequest.model_validate(payload))
-                competing = worker.submit(client.post, CREATE, json={**create_request, **create_confirmation})
+                competing = worker.submit(client.post, create_url, json={**create_request, **create_confirmation})
         if first_writer == "create":
             rejected = client.post(url, json=payload)
             assert rejected.status_code == 409
@@ -198,4 +268,19 @@ def test_reconnect_and_create_serialize_on_new_point(cable, first_writer):
             rejected = competing.result(timeout=5)
             assert rejected.status_code == 422, rejected.text
             assert rejected.json()["error"]["details"]["reason"] == "CONNECTION_POINT_MEMBER_OCCUPIED"
-            assert preview(url)["point_a_id"] == destination
+            assert preview(url) == {**payload["expected"], "point_a_id": destination, "point_a_member": 2}
+
+
+def test_reconnect_conflicts_with_uncommitted_disconnect_without_losing_cable(cable):
+    _, url, _, _ = cable
+    _, destination = create_object_with_point(client, "Destination")
+    expected = preview(url)
+    payload = reconnect_payload(url, {"expected": expected, "side": "A", "new_point_id": destination})
+    with SessionLocal() as session:
+        PhysicalConnectionCatalog(session).delete_external_connection(uuid.UUID(expected["connection_id"]))
+        response = client.post(url, json=payload)
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "CABLE_RECONNECT_CONFLICT"
+        session.rollback()
+    assert preview(url) == expected
+    assert client.post(url, json=payload).status_code == 204

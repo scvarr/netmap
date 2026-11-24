@@ -308,6 +308,7 @@ function MapPageContent({
   const [wiring, setWiring] = useState<WiringState>({ status: "idle" });
   const [showAllVirtualChannels, setShowAllVirtualChannels] = useState(false);
   const [reconnectCableId, setReconnectCableId] = useState<string | null>(null);
+  const [reconnectRevision, setReconnectRevision] = useState(0);
   useLayoutEffect(() => setReconnectCableId(null), [traceScope]);
   const [bulkSourceId, setBulkSourceId] = useState<string | null>(null);
   useLayoutEffect(() => setBulkSourceId(null), [traceScope]);
@@ -1508,13 +1509,9 @@ function MapPageContent({
     [],
   );
   const contextCableId = contextAnchor?.kind === "cable" ? contextAnchor.id : undefined;
-  const contextCableCanReconnect = contextCableId && document?.edges.some(edge => (
-    edge.attributes.endpoint_pairs?.some(pair => pair.cable_ref?.entity_id === contextCableId &&
-      document.nodes.find(node => node.id === edge.from_node_id)?.attributes.connection_points
-        ?.some(point => point.connection_point_id === pair.from_connection_point_id && point.cardinality === 1) &&
-      document.nodes.find(node => node.id === edge.to_node_id)?.attributes.connection_points
-        ?.some(point => point.connection_point_id === pair.to_connection_point_id && point.cardinality === 1))
-  ));
+  const contextCableCanReconnect = contextCableId && document?.edges.some(edge =>
+    edge.attributes.endpoint_pairs?.some(pair =>
+      pair.cable_ref?.entity_id === contextCableId && pair.cable_can_reconnect === true));
   const contextBusy = wiring.status !== "idle" || Boolean(reconnectCableId) || Boolean(bulkSourceId) || Boolean(bulkDeleteSourceId) || Boolean(insertion) || Boolean(mapDeletion) || Boolean(mapOperation);
   const refreshBulkCableDelete = async () => {
     if (!activeMap || !savedMapDataSource || !mapId || currentTraceScope.current !== traceScope) return;
@@ -1860,7 +1857,7 @@ function MapPageContent({
             ));
             if (currentTraceScope.current !== traceScope) throw new Error('Map changed');
             setSceneDocument({ sceneKey: presentationSceneKey, document: next });
-            setSelection(null);
+            setReconnectRevision(revision => revision + 1);
             clearTrace();
           }}
           close={() => { if (currentTraceScope.current === traceScope) setReconnectCableId(null); }} />}
@@ -2102,6 +2099,7 @@ function MapPageContent({
             : undefined
         }
         physicalObjectDetailsDataSource={physicalObjectDetailsDataSource}
+        reconnectRevision={reconnectRevision}
         catalogInventoryDataSource={catalogInventoryDataSource}
         mapOperation={mapOperation?.mapId === mapId ? mapOperation : null}
         onRetryMapRefresh={retryMapRefresh}

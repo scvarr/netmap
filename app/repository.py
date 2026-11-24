@@ -125,6 +125,8 @@ class PhysicalConnectionMemberRecord:
     point_b_member: int
     object_a_id: uuid.UUID
     object_b_id: uuid.UUID
+    connection_cardinality: int
+    member_index: int
 
 
 @dataclass(frozen=True)
@@ -1361,6 +1363,8 @@ class CanonicalRepository:
                     point_b_member=member.point_b_member,
                     object_a_id=a_point.physical_object_id,
                     object_b_id=b_point.physical_object_id,
+                    connection_cardinality=connection.cardinality,
+                    member_index=member.index,
                 )
             )
         return tuple(records)

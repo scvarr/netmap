@@ -92,6 +92,12 @@ Canonical assignment блокирует hierarchy `FOR UPDATE`, затем Physi
 PortType читает черновики, кандидатов и все ревизии одним SQL-запросом
 после получения lock. Смена стадии публикации сохраняет ссылку атомарно.
 
+Reconnect блокирует Cable, её Connection, уникальные исходные и новое
+ConnectionPoint в порядке UUID, затем ConnectionMember, с `NOWAIT`.
+Под блокировками проверяются ожидаемые адреса, внешняя занятость member и
+совместимость. Одна транзакция меняет point ID и member index выбранной
+стороны. Внутренняя continuity сохраняется и не расходует внешнюю ёмкость.
+
 ## SavedMap, варианты и spatial isolation
 
 **CURRENT.** SavedMap — presentation scope над общей canonical topology

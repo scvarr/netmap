@@ -18,7 +18,7 @@ const object = (id: string, connection_points: ConnectionPointDetails[], panels?
   schema_version: '1.0', physical_object: { source_ref: ref('PhysicalObject', id), label: id },
   connection_points, panels, owned_interface_count: 0, gaps: [], warnings: [],
 });
-const expected = { connection_id: 'link', connection_member_id: 'wire', point_a_id: 'a1', point_b_id: 'b1', label: 'Cable 12' };
+const expected = { connection_id: 'link', connection_member_id: 'wire', point_a_id: 'a1', point_b_id: 'b1', point_a_member: 1, point_b_member: 1, label: 'Cable 12' };
 const docs = {
   A: object('A', [point('a1', 'front'), point('a2', 'front')], [panel('front', 1, 'FRONT')]),
   B: object('B', [point('b1')]),
@@ -29,8 +29,12 @@ const docs = {
 const select = (name: string, value: string) => fireEvent.change(screen.getByLabelText(name), { target: { value } });
 const click = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
 
-async function open(documents = docs, previewCompatibility?: CableReconnectDataSource['previewCompatibility']) {
-  const preview = vi.fn().mockResolvedValue({ expected, object_a_id: 'A', object_b_id: 'B', display_label: 'Cable 12' });
+const allow = { verdict: 'ALLOW', token: 'allow-token', pairs: [] } as const;
+const agreement = { token: 'allow-token', accept_unknown: false };
+
+async function open(documents = docs, previewCompatibility: CableReconnectDataSource['previewCompatibility'] =
+  vi.fn().mockResolvedValue(allow), current = expected) {
+  const preview = vi.fn().mockResolvedValue({ expected: current, object_a_id: 'A', object_b_id: 'B', display_label: 'Cable 12' });
   const reconnect = vi.fn().mockResolvedValue(undefined);
   const refresh = vi.fn().mockResolvedValue(undefined);
   const close = vi.fn();
@@ -38,7 +42,7 @@ async function open(documents = docs, previewCompatibility?: CableReconnectDataS
   render(<CableReconnectDialog cableId="cable" objects={Object.keys(documents).map(id => ({ id, label: id }))}
     details={{ loadPhysicalObjectDetails: loadDetails }}
     writer={{ preview, previewCompatibility, reconnect }} refresh={refresh} close={close} />);
-  await screen.findByText('B / Без панели / b1');
+  await screen.findByText('B / Без панели / b1 · 1');
   return { preview, loadDetails, reconnect, refresh, close };
 }
 
@@ -56,7 +60,7 @@ it.each(['DENY', 'UNKNOWN'] as const)('gates reconnect confirmation for %s', asy
   click('Предпросмотр');
   const warning = await screen.findByRole('alert');
   const submit = screen.getByRole('button', { name: 'Подтвердить переподключение' });
-  expect(check).toHaveBeenCalledExactlyOnceWith('cable', expected, 'B', 'c1');
+  expect(check).toHaveBeenCalledExactlyOnceWith('cable', expected, 'B', 'c1', 1);
   if (verdict === 'DENY') expect(submit).toBeDisabled();
   expect(reconnect).not.toHaveBeenCalled();
   if (verdict === 'DENY') {
@@ -68,7 +72,7 @@ it.each(['DENY', 'UNKNOWN'] as const)('gates reconnect confirmation for %s', asy
     await screen.findByRole('dialog', { name: 'Подтверждение физической совместимости' });
     expect(reconnect).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Подтвердить и переподключить' }));
-    await waitFor(() => expect(reconnect).toHaveBeenCalledExactlyOnceWith('cable', expected, 'B', 'c1', {
+    await waitFor(() => expect(reconnect).toHaveBeenCalledExactlyOnceWith('cable', expected, 'B', 'c1', 1, {
       token: 'preview-token', accept_unknown: true,
     }));
   }
@@ -76,10 +80,9 @@ it.each(['DENY', 'UNKNOWN'] as const)('gates reconnect confirmation for %s', asy
 
 it('chooses the endpoint, object, panel key and free point and reviews both connections', async () => {
   const { reconnect, close } = await open();
-  expect(screen.getByText('A / Patch · Спереди / a1')).toBeVisible();
+  expect(screen.getByText('A / Patch · Спереди / a1 · 1')).toBeVisible();
   select('Переносимое окончание', 'B');
-  select('Целевой физический объект', 'A');
-  expect(await screen.findByRole('option', { name: 'a2 · Недоступен' })).toBeDisabled();
+  expect(screen.getByRole('option', { name: 'A' })).toBeDisabled();
   select('Целевой физический объект', 'C');
   await screen.findByRole('option', { name: 'Patch · Сзади · #3' });
   select('Панель', 'rear');
@@ -87,14 +90,14 @@ it('chooses the endpoint, object, panel key and free point and reviews both conn
   expect(screen.getByRole('option', { name: 'wide · Недоступен' })).toBeDisabled();
   select('Порт', 'c1');
   click('Предпросмотр');
-  expect(screen.getByRole('heading', { name: 'Cable 12' })).toBeVisible();
-  expect(screen.getAllByText('A / Patch · Спереди / a1')).toHaveLength(2);
-  expect(screen.getByText('B / Без панели / b1')).toBeVisible();
-  expect(screen.getByText('C / Patch · Сзади · #2 / c1')).toBeVisible();
+  expect(await screen.findByRole('heading', { name: 'Cable 12' })).toBeVisible();
+  expect(screen.getAllByText('A / Patch · Спереди / a1 · 1')).toHaveLength(2);
+  expect(screen.getByText('B / Без панели / b1 · 1')).toBeVisible();
+  expect(screen.getByText('C / Patch · Сзади · #2 / c1 · 1')).toBeVisible();
   expect(reconnect).not.toHaveBeenCalled();
   click('Подтвердить переподключение');
   await waitFor(() => expect(close).toHaveBeenCalledOnce());
-  expect(reconnect).toHaveBeenCalledExactlyOnceWith('cable', expected, 'B', 'c1');
+  expect(reconnect).toHaveBeenCalledExactlyOnceWith('cable', expected, 'B', 'c1', 1, agreement);
 });
 
 it('sorts shuffled ports by visible name within each physical panel and keeps busy options', async () => {
@@ -118,12 +121,47 @@ it('sorts shuffled ports by visible name within each physical panel and keeps bu
   expect(options()).toHaveLength(48);
 });
 
+it('requires an explicit free member and previews both exact addresses on the same point', async () => {
+  const wide = {
+    ...point('a1', 'front', 1, 2),
+    members: [{ index: 1, designation: 'TX', occupied: true }, { index: 2, designation: 'RX', occupied: false }],
+  };
+  const check = vi.fn().mockResolvedValue(allow);
+  const { reconnect } = await open({
+    ...docs, A: object('A', [wide, point('a2', 'front', 2, 2)], docs.A.panels),
+  }, check);
+  select('Целевой физический объект', 'A');
+  expect(await screen.findByRole('option', { name: 'a1' })).toBeEnabled();
+  expect(screen.getByRole('option', { name: 'a2 · Подключён' })).toBeDisabled();
+  select('Порт', 'a1');
+  const review = () => screen.getByRole('button', { name: 'Предпросмотр' });
+  expect(review()).toBeDisabled();
+  expect(screen.getByRole('option', { name: 'TX · Подключён' })).toBeDisabled();
+  expect(screen.getByRole('option', { name: 'RX' })).toBeEnabled();
+  select('Канал назначения', '2');
+  fireEvent.click(review());
+  expect(await screen.findByText('A / Patch · Спереди / a1 · RX')).toBeVisible();
+  expect(screen.getByText('A / Patch · Спереди / a1 · TX')).toBeVisible();
+  expect(screen.getAllByText('B / Без панели / b1 · 1')).toHaveLength(2);
+  click('Назад');
+  select('Порт', '');
+  select('Порт', 'a1');
+  expect(review()).toBeDisabled();
+  select('Канал назначения', '2');
+  fireEvent.click(review());
+  expect(await screen.findByText('A / Patch · Спереди / a1 · RX')).toBeVisible();
+  click('Подтвердить переподключение');
+  await waitFor(() => expect(reconnect).toHaveBeenCalledExactlyOnceWith('cable', expected, 'A', 'a1', 2, agreement));
+  expect(check).toHaveBeenCalledTimes(2);
+});
+
 async function reviewUnassignedPoint() {
   select('Целевой физический объект', 'C');
   await screen.findByRole('option', { name: 'Без панели' });
   select('Панель', '');
   select('Порт', 'c2');
   click('Предпросмотр');
+  await screen.findByRole('button', { name: 'Подтвердить переподключение' });
 }
 
 it('rereads canonical endpoints after 409 and requires a new choice and preview', async () => {
@@ -136,8 +174,8 @@ it('rereads canonical endpoints after 409 and requires a new choice and preview'
   preview.mockResolvedValueOnce({ expected: next, object_a_id: 'A', object_b_id: 'B', display_label: 'Cable 12' });
   loadDetails.mockImplementation(async id => id === 'B' ? object('B', [point('b2')]) : docs[id as keyof typeof docs]);
   click('Обновить подключение');
-  expect(await screen.findByText('B / Без панели / b2')).toBeVisible();
-  expect(screen.queryByText('B / Без панели / b1')).not.toBeInTheDocument();
+  expect(await screen.findByText('B / Без панели / b2 · 1')).toBeVisible();
+  expect(screen.queryByText('B / Без панели / b1 · 1')).not.toBeInTheDocument();
   expect(preview.mock.calls).toEqual([['cable'], ['cable']]);
   expect(loadDetails.mock.calls).toEqual([['A'], ['B'], ['C'], ['A'], ['B']]);
   expect(screen.getByLabelText('Целевой физический объект')).toHaveValue('');
@@ -149,17 +187,17 @@ it('rereads canonical endpoints after 409 and requires a new choice and preview'
 
   await reviewUnassignedPoint();
   expect(loadDetails).toHaveBeenLastCalledWith('C');
-  expect(screen.getAllByText('B / Без панели / b2')).toHaveLength(2);
+  expect(screen.getAllByText('B / Без панели / b2 · 1')).toHaveLength(2);
   click('Подтвердить переподключение');
   await waitFor(() => expect(close).toHaveBeenCalledOnce());
-  expect(reconnect).toHaveBeenNthCalledWith(2, 'cable', next, 'A', 'c2');
+  expect(reconnect).toHaveBeenNthCalledWith(2, 'cable', next, 'A', 'c2', 1, agreement);
 });
 
 it('only retries L1 projection after a successful write', async () => {
   const { preview, loadDetails, reconnect, refresh, close } = await open();
   refresh.mockRejectedValueOnce(new Error('projection unavailable'));
   await reviewUnassignedPoint();
-  expect(screen.getByText('C / Без панели / c2')).toBeVisible();
+  expect(screen.getByText('C / Без панели / c2 · 1')).toBeVisible();
   click('Подтвердить переподключение');
   expect(await screen.findByRole('alert')).toHaveTextContent('Кабель переподключён');
   expect(refresh).toHaveBeenCalledOnce();

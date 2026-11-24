@@ -1320,11 +1320,18 @@ class CableReconnectExpectation(BaseModel):
     connection_member_id: uuid.UUID
     point_a_id: uuid.UUID
     point_b_id: uuid.UUID
+    point_a_member: int | None = Field(default=None, ge=1)
+    point_b_member: int | None = Field(default=None, ge=1)
     label: str | None = Field(max_length=255)
 
 
+class CableReconnectExactExpectation(CableReconnectExpectation):
+    point_a_member: int = Field(ge=1)
+    point_b_member: int = Field(ge=1)
+
+
 class CableReconnectSnapshot(BaseModel):
-    expected: CableReconnectExpectation
+    expected: CableReconnectExactExpectation
     object_a_id: uuid.UUID
     object_b_id: uuid.UUID
     display_label: str
@@ -1335,6 +1342,7 @@ class CableReconnectRequest(BaseModel):
     expected: CableReconnectExpectation
     side: Literal["A", "B"]
     new_point_id: uuid.UUID
+    new_member_index: int | None = Field(default=None, ge=1)
     compatibility: PhysicalCompatibilityConfirmation | None = None
 
 

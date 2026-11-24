@@ -16,7 +16,7 @@ from app.physical_compatibility import point_member_designations, verify_compati
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from app.schemas import (
     BulkCableDeleteCandidate, BulkCableDeleteExpectation, BulkCableDeleteMember,
-    CableReconnectExpectation, CableReconnectRequest, CableReconnectSnapshot,
+    CableReconnectExactExpectation, CableReconnectRequest, CableReconnectSnapshot,
     PhysicalCompatibilityConfirmation, PhysicalCompatibilityPreview,
 )
 
@@ -396,7 +396,7 @@ class PhysicalConnectionCatalog:
 
     def _reconnect_snapshot(
         self, cable_id: uuid.UUID, new_point_id: uuid.UUID | None = None,
-    ) -> tuple[CableReconnectSnapshot, Connection, dict[uuid.UUID, ConnectionPoint]]:
+    ) -> tuple[CableReconnectSnapshot, Connection, ConnectionMember, dict[uuid.UUID, ConnectionPoint]]:
         def read(statement):
             # NOWAIT also covers disconnect, which starts by locking Connection.
             return statement.with_for_update(nowait=True) if new_point_id is not None else statement
@@ -425,39 +425,59 @@ class PhysicalConnectionCatalog:
             raise NetMapError("CABLE_RECONNECT_STALE", "Cable endpoints no longer exist")
         if (
             a.physical_object_id == b.physical_object_id
-            or a.cardinality != 1 or b.cardinality != 1
             or len(members) != 1
-            or (members[0].index, members[0].point_a_member, members[0].point_b_member) != (1, 1, 1)
+            or members[0].index != 1
+            or not 1 <= members[0].point_a_member <= a.cardinality
+            or not 1 <= members[0].point_b_member <= b.cardinality
         ):
-            raise ValidationError("Reconnect requires an external cardinality=1 Cable with mapping 1 to 1")
+            raise ValidationError("Reconnect requires one valid external Cable member mapping")
+        member = members[0]
         snapshot = CableReconnectSnapshot(
-            expected=CableReconnectExpectation(
-                connection_id=connection.id, connection_member_id=members[0].id,
+            expected=CableReconnectExactExpectation(
+                connection_id=connection.id, connection_member_id=member.id,
                 point_a_id=a.id, point_b_id=b.id, label=cable.label,
+                point_a_member=member.point_a_member, point_b_member=member.point_b_member,
             ),
             object_a_id=a.physical_object_id, object_b_id=b.physical_object_id,
             display_label=resolved_cable_label(cable)[0],
         )
-        return snapshot, connection, points
+        return snapshot, connection, member, points
 
     def preview_cable_reconnect(self, cable_id: uuid.UUID) -> CableReconnectSnapshot:
-        snapshot, _, _ = self._reconnect_snapshot(cable_id)
+        snapshot, _, _, _ = self._reconnect_snapshot(cable_id)
         return snapshot
 
     def reconnect_cable(
         self, cable_id: uuid.UUID, request: CableReconnectRequest, *, preview: bool = False,
     ) -> PhysicalCompatibilityPreview | None:
         try:
-            snapshot, connection, points = self._reconnect_snapshot(cable_id, request.new_point_id)
-            if snapshot.expected != request.expected:
-                raise NetMapError("CABLE_RECONNECT_STALE", "Cable or its Connection changed after preview")
+            snapshot, connection, member, points = self._reconnect_snapshot(cable_id, request.new_point_id)
             new_point = points.get(request.new_point_id)
+            if new_point is None:
+                raise ValidationError("The new ConnectionPoint must exist")
+            require_preview = any(point.cardinality > 1 for point in points.values())
+            expected = request.expected.model_dump(exclude_none=False)
+            if not require_preview:
+                for field in ("point_a_member", "point_b_member"):
+                    if expected[field] is None:
+                        expected[field] = 1
+            if snapshot.expected.model_dump() != expected:
+                raise NetMapError("CABLE_RECONNECT_STALE", "Cable or its Connection changed after preview")
             other_owner = snapshot.object_b_id if request.side == "A" else snapshot.object_a_id
-            if new_point is None or new_point.cardinality != 1:
-                raise ValidationError("The new ConnectionPoint must exist and have cardinality=1")
+            new_index = request.new_member_index
+            if new_index is None and new_point.cardinality == 1:
+                new_index = 1
+            if new_index is None or not 1 <= new_index <= new_point.cardinality:
+                raise ValidationError("Select a member within the ConnectionPoint cardinality")
             if new_point.physical_object_id == other_owner:
                 raise ValidationError("A cable requires endpoints on two different PhysicalObjects")
-            if self._has_external_member_connection(new_point, 1):
+            old_address = (
+                (connection.point_a_id, member.point_a_member) if request.side == "A"
+                else (connection.point_b_id, member.point_b_member)
+            )
+            if (new_point.id, new_index) == old_address:
+                raise ValidationError("The new address must differ from the current address")
+            if self._has_external_member_connection(new_point, new_index):
                 raise NetMapError("CABLE_RECONNECT_OCCUPIED", "ConnectionPoint member is already occupied")
             pair = (
                 new_point if request.side == "A" else points[connection.point_a_id],
@@ -465,15 +485,19 @@ class PhysicalConnectionCatalog:
             )
             result = verify_compatibility(
                 self.session, [pair],
-                intent=["reconnect", cable_id, request.expected.model_dump(mode="json"), request.side, new_point.id],
+                intent=["reconnect", cable_id, snapshot.expected.model_dump(mode="json"),
+                        request.side, new_point.id, new_index],
                 preview=preview, confirmation=request.compatibility,
+                require_preview=require_preview,
             )
             if preview:
                 return result
             if request.side == "A":
                 connection.point_a_id = new_point.id
+                member.point_a_member = new_index
             else:
                 connection.point_b_id = new_point.id
+                member.point_b_member = new_index
             self.session.flush()
         except OperationalError as error:
             if getattr(error.orig, "sqlstate", None) in ("55P03", "40P01", "40001"):

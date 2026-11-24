@@ -30,6 +30,7 @@ interface QuickInspectorProps {
   onSelectContinuation?: (continuation: L1OffMapContinuation) => void;
   onClose: () => void;
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
+  reconnectRevision?: number;
   catalogInventoryDataSource?: CatalogInventoryDataSource;
   onAddContinuationToMap?: (id: string) => Promise<void>;
   mapOperation?: {
@@ -146,6 +147,7 @@ export function QuickInspector(props: QuickInspectorProps) {
     id,
     cableId,
     isL1,
+    props.reconnectRevision,
     cable,
     props.physicalObjectDetailsDataSource,
     props.catalogInventoryDataSource,

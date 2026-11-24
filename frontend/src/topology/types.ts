@@ -20,7 +20,7 @@ export interface BlueprintPresentation {
       external_attachment: { x: number; y: number; side: 'LEFT' | 'RIGHT' | 'TOP' | 'BOTTOM' };
       connection_point_id: string; network_interface_id?: string | null }>;
 }
-export interface PhysicalEndpointPair { from_connection_point_id: string; from_member_index: number; to_connection_point_id: string; to_member_index: number; connection_id: string; connection_member_id: string; cable_ref?: ProjectionSourceRef; cable_display_name?: string; }
+export interface PhysicalEndpointPair { from_connection_point_id: string; from_member_index: number; to_connection_point_id: string; to_member_index: number; connection_id: string; connection_member_id: string; cable_ref?: ProjectionSourceRef; cable_display_name?: string; cable_can_reconnect?: boolean; }
 export interface PhysicalInternalL1Link extends PhysicalEndpointPair { source_refs: ProjectionSourceRef[]; }
 export interface ConnectionPointPresentation { connection_point_id: string; display_name: string; cardinality: number; external_connection_count: number; members?: PhysicalPointMember[]; }
 export interface L1OffMapContinuation {

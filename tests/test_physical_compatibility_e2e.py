@@ -223,6 +223,28 @@ def test_reconnect_checks_the_matching_end_and_rechecks_changed_data_under_locks
     assert client.get(url).json()["expected"] == {**expected, "point_b_id": destination}
 
 
+def test_member_reconnect_requires_preview_even_when_allowed():
+    optic = catalog_item("port-types", name="Optic", medium="FIBER", members=["Alpha", "Beta"],
+                         compatibility_mode="SAME_TYPE")["id"]
+    _, (a,) = typed_points("A", optic, cardinality=2)
+    _, (b,) = typed_points("B", optic, cardinality=2)
+    _, (c,) = typed_points("C", optic, cardinality=2)
+    payload = pair(a, b)
+    created = client.post(CREATE, json=confirmed_payload(preview(CREATE, payload), payload))
+    assert created.status_code == 201, created.text
+    url = f"/v1/cables/{created.json()['cable_ref']['entity_id']}/reconnect"
+    expected = client.get(url).json()["expected"]
+    move = {"side": "B", "expected": expected, "new_point_id": c, "new_member_index": 2}
+    check = preview(url, move)
+    assert check["verdict"] == "ALLOW"
+    rejected = client.post(url, json=move)
+    assert rejected.status_code == 409 and rejected.json()["error"]["code"] == "PHYSICAL_COMPATIBILITY_STALE"
+    assert client.get(url).json()["expected"] == expected
+    written = client.post(url, json=confirmed_payload(check, move))
+    assert written.status_code == 204, written.text
+    assert client.get(url).json()["expected"] == {**expected, "point_b_id": c, "point_b_member": 2}
+
+
 def test_matrix_is_symmetric_and_preview_tracks_rules_not_names():
     import copy
 
@@ -316,7 +338,6 @@ def test_member_wiring_preview_exact_pair_projection_and_disconnect():
         created.append(reply.json())
     assert [(item["source"]["member_index"], item["target"]["member_index"]) for item in created] == [(2, 1), (1, 2)]
     assert client.post(CREATE, json=confirmed_payload(check, first)).json()["error"]["details"]["reason"] == "CONNECTION_POINT_MEMBER_OCCUPIED"
-    assert client.get(f"/v1/cables/{created[0]['cable_ref']['entity_id']}/reconnect").status_code == 422
 
     preview_rows = client.get("/v1/cables/bulk-delete-preview", params={
         "source_object_id": target_id, "target_object_id": source_id,
@@ -340,6 +361,7 @@ def test_member_wiring_preview_exact_pair_projection_and_disconnect():
             {"index": 2, "designation": "Orange", "occupied": True},
         ]
         endpoint_pairs = [pair for edge in projection["edges"] for pair in edge["attributes"]["endpoint_pairs"]]
+        assert all(pair["cable_can_reconnect"] for pair in endpoint_pairs)
         assert {pair["cable_ref"]["entity_id"] for pair in endpoint_pairs} == {
             item["cable_ref"]["entity_id"] for item in created
         }

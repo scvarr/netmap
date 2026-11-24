@@ -214,6 +214,7 @@ def test_cable_backed_direct_connection_projects_between_physical_objects():
     assert len(projected["nodes"]) == 2
     pair = projected["edges"][0]["attributes"]["endpoint_pairs"][0]
     assert pair["cable_ref"] == {"ref_type": "CANONICAL_FACT", "entity_type": "Cable", "entity_id": cable_id}
+    assert pair["cable_can_reconnect"] is True
 
 
 def test_same_object_cable_has_one_selectable_projection_edge_with_exact_endpoints():
@@ -236,6 +237,7 @@ def test_same_object_cable_has_one_selectable_projection_edge_with_exact_endpoin
     assert edge["from_node_id"] == edge["to_node_id"] == node["id"]
     pair, = edge["attributes"]["endpoint_pairs"]
     assert pair["cable_ref"] == {"ref_type": "CANONICAL_FACT", "entity_type": "Cable", "entity_id": cable_id}
+    assert pair["cable_can_reconnect"] is False
     assert {pair["from_connection_point_id"], pair["to_connection_point_id"]} == {str(front.id), str(rear.id)}
 
 def test_installed_board_projection_uses_pinned_geometry_and_canonical_endpoints(hardware):

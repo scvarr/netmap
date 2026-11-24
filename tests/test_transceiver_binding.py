@@ -177,10 +177,22 @@ def test_duplex_wiring_preserves_installed_bindings_and_workspace_roundtrip(hard
         "source": {**point_end(point_id), "member_index": 2}, "target": point_end(free_peer),
     }]}))["created"]
     assert wired["source_member_index"] == 2
+    before = package()
+    moved = post_confirmed_physical(client, reconnect, json={**reconnect_request, "new_member_index": 1})
+    assert moved.status_code == 204, moved.text
+    after = package()
+    expected = reconnect_request["expected"]
+    for row in before["canonical"]["Connection"]:
+        if row["id"] == expected["connection_id"]:
+            row["point_a_id"] = point_id
+    for row in before["canonical"]["ConnectionMember"]:
+        if row["id"] == expected["connection_member_id"]:
+            row["point_a_member"] = 1
+    assert after == before
     detail = client.get(f"/v1/topology/physical-objects/{object_id}").json()
     endpoint = next(row for row in detail["connection_points"] if row["connection_point_ref"]["entity_id"] == point_id)
     assert endpoint["members"] == [
-        {"index": 1, "designation": "Alpha", "occupied": False},
+        {"index": 1, "designation": "Alpha", "occupied": True},
         {"index": 2, "designation": "Beta", "occupied": True},
     ]
     snapshot = package()
@@ -217,6 +229,7 @@ def test_duplex_wiring_preserves_installed_bindings_and_workspace_roundtrip(hard
     restored = client.post("/v1/workspace/package", json=snapshot)
     assert restored.status_code == 204, restored.text
     assert package() == snapshot
+    assert client.get(reconnect).json()["expected"] == {**expected, "point_a_id": point_id, "point_a_member": 1}
     assert client.delete(f"{url}/{wired['connection_id']}").status_code == 204
     disconnected = package()
     assert disconnected["canonical"]["InterfacePhysicalBinding"] == snapshot["canonical"]["InterfacePhysicalBinding"]
