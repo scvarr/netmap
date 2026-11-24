@@ -15,6 +15,18 @@ const renderDetails = (value: PhysicalObjectDetailsDocument, props = {}) => rend
 const deferred = <T,>() => { let resolve!: (value: T) => void; return { promise: new Promise<T>((next) => { resolve = next; }), resolve }; };
 
 describe('PhysicalObjectDetailsSection ports', () => {
+  it('shows the shared interface and requires member selection for Duplex wiring', async () => {
+    const binding = { interface_ref: ref('NetworkInterface', 'ni'), label: 'Eth1', evidence_refs: [] };
+    renderDetails(document([point('Optic', 'optic', { cardinality: 2, direct_interface_bindings: [binding, binding] })]), {
+      deviceDetailsDataSource: { loadDeviceDetails: vi.fn() },
+      writeDataSource: { createPhysicalEndpointConnection: vi.fn() },
+    });
+    const row = (await screen.findByRole('rowheader', { name: 'Optic' })).closest('tr')!;
+    expect(within(row).getByText('Eth1')).toBeVisible();
+    expect(within(row).getByText(/Выбор каналов пока недоступен/)).toBeVisible();
+    expect(within(row).queryByRole('button', { name: 'Подключить порт' })).toBeNull();
+  });
+
   it('refreshes derived port names while keeping canonical aliases in technical details', async () => {
     const a = point('Renamed A', 'a', { canonical_label: '2-1', internal_physical_counterparts: [{ connection_point_ref: ref('ConnectionPoint', 'b'), label: 'Renamed B', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }] });
     const b = point('Renamed B', 'b', { canonical_label: '3-1', internal_physical_counterparts: [{ connection_point_ref: ref('ConnectionPoint', 'a'), label: 'Renamed A', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }] });

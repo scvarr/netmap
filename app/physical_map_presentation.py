@@ -33,7 +33,13 @@ def _installed_elements(configuration, bindings):
                 "connection_point_id": point_id,
                 "network_interface_id": bindings.get(point_id) if socket_key else endpoint["network_interface_id"],
                 "panel_local_position": position or {"x": endpoint["x"], "y": endpoint["y"]},
-                **({"marker": "TRANSCEIVER"} if socket_key else {}),
+                **({
+                    "marker": "TRANSCEIVER",
+                    "installation_id": installation["id"],
+                    "definition_id": endpoint["definition_id"],
+                    "cardinality": endpoint["cardinality"],
+                    "members": endpoint["members"],
+                } if socket_key else {}),
             })
 
     def add_socket(place, key, installation, position, *, use_endpoint_position=False):
@@ -101,8 +107,8 @@ def physical_map_presentations(session, object_ids):
         select(InterfacePhysicalBinding.point_id, InterfacePhysicalBinding.interface_id)
         .join(HardwareInterfaceAssociation,
               HardwareInterfaceAssociation.interface_id == InterfacePhysicalBinding.interface_id)
-        .where(HardwareInterfaceAssociation.configuration_id.in_(config_ids),
-               InterfacePhysicalBinding.point_member == 1)
+        .where(HardwareInterfaceAssociation.configuration_id.in_(config_ids))
+        .distinct()
     )}
     documents = HardwareCatalog(session).configuration_documents([config for config, _ in configurations])
     result = {}

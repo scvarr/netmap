@@ -11,6 +11,7 @@ const sfpMount = { mount_kind: 'MODULE_PORT' as const, module_port_type_id: 'SFP
 const occupied: HardwareConfiguration = { ...free, panels: [{ panel_key: 'back', display_name: 'Back', width: 600, height: 200 }], bays: [{ ...free.bays[0], installation: {
   layout: { panel_key: 'back', x: .1, y: .1, width: .3, height: .2 }, fill_color: '#123456', id: 'stable-installation-id', name: module.name, module_template_id: 'template', module_revision_id: 'revision', orientation: 'HORIZONTAL', endpoints: [{
     key: 'endpoint', port_type_id: 'test-type', kind: 'NETWORK_PORT', installation_id: 'stable-installation-id', panel_key: 'back', panel_display_name: 'Back', bay_key: 'bay-key', bay_display_name: 'PCIe1',
+    definition_id: 'definition', cardinality: 1, members: ['1'],
     local_display_name: 'feth1', contextual_display_name: 'Back / PCIe1 / feth1', connection_point_id: 'point', network_interface_id: 'interface', x: .2, y: .2,
   }],
 } }] };
@@ -27,27 +28,29 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-it('installs only a compatible single-member transceiver and replaces the diamond with its square', async () => {
+it.each([['single', ['1']], ['duplex', ['Alpha', 'Beta']]] as const)(
+  'installs a compatible %s transceiver and replaces the diamond with one square', async (typeId, members) => {
   vi.stubGlobal('fetch', vi.fn(async (url: string) => Response.json(url.endsWith('/port-types') ? [
-    { id: 'single', cardinality: 1 }, { id: 'duplex', cardinality: 2 },
+    { id: typeId, cardinality: members.length, medium: 'FIBER', color: '#336699' },
+    { id: 'unsupported', cardinality: 2, medium: 'COPPER' },
   ] : [])));
   const data = source();
-  const endpoint = { key: 'optic', display_name: 'Termination', kind: 'CONNECTION_POINT' as const, port_type_id: 'single' };
+  const endpoint = { key: 'optic', display_name: 'Termination', kind: 'CONNECTION_POINT' as const, port_type_id: typeId };
   data.saveLayout = vi.fn();
   const available = { ...module, ...sfpMount, name: 'Optic', endpoints: [endpoint] };
   vi.mocked(data.listModules).mockResolvedValue({ modules: [
-    available, { ...available, name: 'Duplex', template_id: 'duplex', endpoints: [{ ...endpoint, port_type_id: 'duplex' }] },
+    available, { ...available, name: 'Unsupported', template_id: 'unsupported', endpoints: [{ ...endpoint, port_type_id: 'unsupported' }] },
   ] });
   const socket = { ...free.bays[0], ...sfpMount, network_interface_id: 'interface' };
   const installation = occupied.bays[0].installation!;
   vi.mocked(data.loadConfiguration).mockResolvedValue({ ...free, bays: [socket] });
   vi.mocked(data.installModule).mockResolvedValue({ ...free, bays: [{ ...socket, installation: {
     ...installation, orientation: 'VERTICAL', name: available.name,
-    endpoints: [{ ...installation.endpoints[0], ...endpoint, network_interface_id: null }],
+    endpoints: [{ ...installation.endpoints[0], ...endpoint, network_interface_id: null, cardinality: members.length, members: [...members] }],
   } }] });
   show(data);
   expect(await screen.findByRole('option', { name: 'Optic' })).toBeInTheDocument();
-  expect(screen.queryByRole('option', { name: 'Duplex' })).toBeNull();
+  expect(screen.queryByRole('option', { name: 'Unsupported' })).toBeNull();
   expect(document.querySelectorAll('polygon[data-module-port-marker]')).toHaveLength(1);
   expect(screen.queryByText('Ориентация')).toBeNull();
   await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Выберите совместимый трансивер' }), available.template_id);
@@ -59,6 +62,9 @@ it('installs only a compatible single-member transceiver and replaces the diamon
   expect(document.querySelectorAll('polygon[data-module-port-marker]')).toHaveLength(0);
   expect(document.querySelector('[data-installation-id]')).toBeNull();
   expectTransceiverOutline(document, 'point', 120, 40);
+  expect(document.querySelector('rect[data-endpoint-id="point"]')).toHaveAttribute('fill', '#336699');
+  await userEvent.click(screen.getByText('Порты', { selector: 'summary' }));
+  expect(screen.getByText(`Физические каналы (${members.length}) · ${members.join(', ')}`)).toBeVisible();
   expect(screen.getByText(/Извлечение и замена физического трансивера/)).toBeInTheDocument();
   expect(screen.queryByText('Вертикальная')).toBeNull();
   expect(screen.getByText(/Аппаратный интерфейс/)).toBeInTheDocument();
@@ -260,7 +266,8 @@ it.each(['HORIZONTAL', 'VERTICAL'] as const)('centers the contour on the install
   board.module_places![0].installation_id = 'optic';
   config.nested_installations = [{
     ...board, id: 'optic', name: 'Transceiver', parent_installation_id: board.id, module_places: [],
-    endpoints: [{ ...board.endpoints[0], kind: 'CONNECTION_POINT', connection_point_id: 'optic-point', network_interface_id: null }],
+    endpoints: [{ ...board.endpoints[0], kind: 'CONNECTION_POINT', connection_point_id: 'optic-point', network_interface_id: null,
+      cardinality: 2, members: ['Alpha', 'Beta'] }],
   }];
   vi.mocked(data.loadConfiguration).mockResolvedValue(config);
   show(data);

@@ -42,9 +42,10 @@ def module(name, mount, places=(), has_endpoint=False):
     return response.json()
 
 
-def physical_transceiver(mount, *, medium="FIBER"):
+def physical_transceiver(mount, *, medium="FIBER", members=("1",)):
     port = created(client.post("/v1/port-types", json={
-        "name": "Lab termination", "medium": medium, "members": ["1"], "compatibility_mode": "SAME_TYPE",
+        "name": f"Lab termination ({medium}, {len(members)})", "medium": medium, "members": list(members),
+        "compatibility_mode": "SAME_TYPE",
         "color": "#336699",
     }))
     return {"name": "Physical transceiver", **mount, "transceiver": {"fiber_type": "SM"} if medium == "FIBER" else {}, "geometry": initial_geometry(["optical"]),

@@ -242,10 +242,22 @@ def test_installed_board_projection_uses_pinned_geometry_and_canonical_endpoints
     from tests.test_module_layout_editing import request as layout_request
     from tests.test_module_reconciliation import package
     from tests.test_nested_module_installations import created, install, physical_transceiver
-    from tests.test_hardware_configuration import create_object
+    from tests.test_hardware_configuration import base_payload, create_base, create_object
 
-    base, card, _, _, sfp = hardware
-    optic = created(client.post("/v1/library/module-templates", json=physical_transceiver(sfp)))
+    _, card, direct, _, sfp = hardware
+    payload = base_payload()
+    front = payload["panels"][0]
+    front["face"] = "FRONT"
+    rear = {**front, "panel_key": str(uuid.uuid4()), "display_name": "Rear", "panel_number": 2,
+            "face": "REAR", "y": front["height"]}
+    payload["panels"].append(rear)
+    payload["bays"] = [{**direct, "panel_key": front["panel_key"]}, {
+        "mount_kind": "MODULE_BAY", "module_bay_type_id": card["module_bay_type_id"],
+        "bay_key": "board", "display_name": "Board",
+        "panel_key": rear["panel_key"], "kind": "LOGICAL",
+    }]
+    base, _ = create_base(payload)
+    optic = created(client.post("/v1/library/module-templates", json=physical_transceiver(sfp, members=("Alpha", "Beta"))))
 
     def presentation(object_id):
         response = client.post("/v1/topology/projection", json=projection_query([object_id]))
@@ -282,10 +294,15 @@ def test_installed_board_projection_uses_pinned_geometry_and_canonical_endpoints
         assert "module_sockets" not in installed
         slots = {item["connection_point_id"]: item for item in installed["slots"]}
         assert len(slots) == len(installed["slots"]) == 4
-        for point, mount in ((direct_point, direct), (nested_point, place)):
+        faces = {panel["panel_key"]: panel["face"] for panel in installed["panels"]}
+        for point, mount, face in ((direct_point, direct, "FRONT"), (nested_point, place, "REAR")):
             transceiver = slots[point["connection_point_id"]]
             assert (transceiver["kind"], transceiver["marker"]) == ("CONNECTION_POINT", "TRANSCEIVER")
             assert transceiver["network_interface_id"] == mount["network_interface_id"]
+            assert faces[transceiver["panel_key"]] == face
+            assert (transceiver["cardinality"], transceiver["members"]) == (2, ["Alpha", "Beta"])
+            for field in ("definition_id", "installation_id"):
+                assert transceiver[field] == point[field]
         assert slots[nested_point["connection_point_id"]]["panel_local_position"] == socket["panel_local_position"]
         assert installed_snapshot == package()
 

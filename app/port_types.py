@@ -24,6 +24,10 @@ StructuralLabel = Annotated[str, StringConstraints(strip_whitespace=True, min_le
 DatabaseSession = Annotated[Session, Depends(get_session)]
 
 
+def supports_transceiver_termination(medium: str, cardinality: int) -> bool:
+    return cardinality == 1 or (medium == "FIBER" and cardinality == 2)
+
+
 class CatalogInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

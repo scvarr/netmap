@@ -255,6 +255,19 @@ it('resolves current archived types for base and module glyphs while preserving 
   fetchMock.mockRestore();
 });
 
+it('shows one Duplex marker per termination on its own face', () => {
+  const blueprint = projection.attributes.blueprint_presentation;
+  const slots = blueprint.slots.map(slot => ({ ...slot, marker: 'TRANSCEIVER', cardinality: 2, members: ['Alpha', 'Beta'] }));
+  const projected = { ...projection, attributes: { ...projection.attributes, blueprint_presentation: { ...blueprint, slots } } };
+  render(<DeviceNode {...({ data: { projection: projected }, selected: false } as any)} />);
+  for (const panel of blueprint.panels) {
+    const face = screen.getByTestId(`blueprint-panel-${panel.panel_key}`);
+    const markers = face.querySelectorAll('.blueprint-map-node__port--transceiver');
+    expect(markers).toHaveLength(1);
+    expect(markers[0]).toHaveAttribute('title', expect.stringContaining('Alpha, Beta'));
+  }
+});
+
 it('keeps port hover and focus passive while preserving mouse, keyboard and context actions', () => {
   const click = vi.fn(), context = vi.fn(), resize = vi.fn();
   render(<DeviceNode {...({ data: { compositionDisplayWidth: -91, projection, onPhysicalPortClick: click, onPhysicalPortContextMenu: context, onBlueprintDisplayResize: resize }, selected: false, width: 1 } as any)} />);

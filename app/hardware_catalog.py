@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.port_types import validate_port_type_assignments
+from app.port_types import supports_transceiver_termination, validate_port_type_assignments
 from app.module_port_types import (
     MOUNT_FIELDS, base_assignments, module_assignments, mount_identity, row_mount,
     validate_module_authoring, validate_mount_types, validate_nested_installation,
@@ -490,9 +490,10 @@ class HardwareCatalog:
         if mount_identity(row_mount(revision)) != mount_identity(place):
             raise ModelError("Вид и тип модуля должны точно совпадать с посадочным местом",
                              {"reason": "MODULE_MOUNT_MISMATCH"})
-        definitions = list(self.session.scalars(select(ModuleEndpointDefinition).where(
+        definitions = self.session.execute(select(ModuleEndpointDefinition, PortType)
+            .join(PortType, PortType.id == ModuleEndpointDefinition.port_type_id).where(
             ModuleEndpointDefinition.module_revision_id == revision.id
-        ).order_by(ModuleEndpointDefinition.order_index)))
+        ).order_by(ModuleEndpointDefinition.order_index)).all()
         transceiver_interface = None
         if revision.mount_kind == "MODULE_PORT" and definitions:
             key = declared_interfaces([place], place_key="bay_key").get(query.bay_key)
@@ -502,9 +503,10 @@ class HardwareCatalog:
             if association is None:
                 raise ModelError("Для гнезда требуется аппаратный интерфейс",
                                  {"reason": "TRANSCEIVER_BINDING_REQUIRED"})
-            if (len(definitions) != 1 or definitions[0].kind != "CONNECTION_POINT"
-                    or self.session.get(PortType, definitions[0].port_type_id).cardinality != 1):
-                raise ModelError("Трансивер должен иметь одно физическое окончание с одним каналом",
+            definition, port_type = definitions[0]
+            if (len(definitions) != 1 or definition.kind != "CONNECTION_POINT"
+                    or not supports_transceiver_termination(port_type.medium, port_type.cardinality)):
+                raise ModelError("Поддерживается одно одноканальное или двухканальное оптическое окончание",
                                  {"reason": "UNSUPPORTED_TRANSCEIVER_TERMINATION"})
             transceiver_interface = self.session.scalar(select(NetworkInterface.id).where(
                 NetworkInterface.id == association.interface_id).with_for_update())
@@ -521,8 +523,8 @@ class HardwareCatalog:
         self.session.flush()
         self._materialize_hardware_interfaces(config, installation.id, revision.module_places, place_key="key")
         repository = CanonicalRepository(self.session)
-        for definition in definitions:
-            capacity = self.session.get(PortType, definition.port_type_id).cardinality
+        for definition, port_type in definitions:
+            capacity = port_type.cardinality
             point = repository.add_connection_point(object_id, cardinality=capacity)
             self._metadata(connection_point_id=point.id, key=DISPLAY_ALIAS_KEY, value=definition.display_name)
             interface_id = None
@@ -533,7 +535,8 @@ class HardwareCatalog:
                 self._metadata(network_interface_id=interface.id, key=DISPLAY_ALIAS_KEY, value=definition.display_name)
                 interface_id = interface.id
             elif transceiver_interface is not None:
-                repository.add_interface_physical_binding(transceiver_interface, point.id, point_member=1)
+                for member in range(1, capacity + 1):
+                    repository.add_interface_physical_binding(transceiver_interface, point.id, point_member=member)
             self.session.add(ModuleEndpointMapping(installation_id=installation.id, definition_id=definition.id, connection_point_id=point.id, network_interface_id=interface_id))
         self.session.flush()
         return self.configuration_document(object_id)
@@ -581,13 +584,15 @@ class HardwareCatalog:
             .join(ModuleTemplate, ModuleTemplate.id == ModuleTemplateRevision.template_id)
             .where(ModuleTemplateRevision.id.in_({i.module_revision_id for i in all_installations})))}
         endpoints = defaultdict(list)
-        for mapping, definition in self.session.execute(
-            select(ModuleEndpointMapping, ModuleEndpointDefinition)
+        for mapping, definition, cardinality, members in self.session.execute(
+            select(ModuleEndpointMapping, ModuleEndpointDefinition, ConnectionPoint.cardinality, PortType.members)
             .join(ModuleEndpointDefinition, ModuleEndpointDefinition.id == ModuleEndpointMapping.definition_id)
+            .join(ConnectionPoint, ConnectionPoint.id == ModuleEndpointMapping.connection_point_id)
+            .join(PortType, PortType.id == ModuleEndpointDefinition.port_type_id)
             .where(ModuleEndpointMapping.installation_id.in_([i.id for i in all_installations]))
             .order_by(ModuleEndpointDefinition.order_index)
         ):
-            endpoints[mapping.installation_id].append((mapping, definition))
+            endpoints[mapping.installation_id].append((mapping, definition, cardinality, members))
         panels = defaultdict(list)
         for panel in self.session.scalars(select(PresentationPanel).where(
             PresentationPanel.base_revision_id.in_(version_ids))):
@@ -635,10 +640,11 @@ class HardwareCatalog:
             turns = (parent_turns + (installation.orientation == "VERTICAL")) % 4
             endpoints = []
             place_path = (place["display_name"], *parent_path)
-            for mapping, definition in endpoints_by_installation.get(installation.id, []):
+            for mapping, definition, cardinality, members in endpoints_by_installation.get(installation.id, []):
                 position = revision.geometry["endpoints"][definition.definition_key]
                 point_position = compose_layout(global_layout, turns, {**position, "width": 0, "height": 0})
                 endpoints.append({"key": definition.definition_key, "kind": definition.kind,
+                                  "definition_id": str(definition.id), "cardinality": cardinality, "members": members,
                                   "port_type_id": str(definition.port_type_id),
                                   **endpoint_context(mapping, definition, installation, place["panel_key"],
                                                      panel_by_key[place["panel_key"]]["display_name"], place_path),

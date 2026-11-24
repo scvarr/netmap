@@ -130,7 +130,8 @@ export interface ModuleInstallation {
   fill_color: string;
   orientation: 'HORIZONTAL' | 'VERTICAL';
   endpoints: Array<Omit<ModuleEndpoint, 'display_name'> & {
-    installation_id: string; panel_key: string; panel_display_name: string;
+    installation_id: string; definition_id: string; cardinality: number; members: string[];
+    panel_key: string; panel_display_name: string;
     bay_key: string; bay_display_name: string;
     local_display_name: string; contextual_display_name: string;
     connection_point_id: string; network_interface_id: string | null; x: number; y: number;

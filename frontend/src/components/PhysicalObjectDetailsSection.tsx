@@ -212,7 +212,7 @@ const statusLabel = (point: ConnectionPointDetails, t: ReturnType<typeof useI18n
 };
 
 const interfaceLabel = (point: ConnectionPointDetails): string => (
-  (point.direct_interface_bindings ?? []).map((binding) => binding.label).join(', ') || '—'
+  [...new Map((point.direct_interface_bindings ?? []).map(binding => [binding.interface_ref.entity_id, binding.label])).values()].join(', ') || '—'
 );
 
 const canConnect = (point: ConnectionPointDetails): boolean => (
@@ -243,12 +243,16 @@ const DisconnectPhysicalConnection = ({ point, writeDataSource, onDisconnected }
   return <><button type="button" className="port-icon-action port-icon-action--danger" aria-label={t('physical.disconnect')} title={t('physical.disconnect')} disabled={pending} onClick={() => void disconnect()}>×</button>{error && <p className="port-action-error" role="alert">{error}</p>}</>;
 };
 
-const PortActions = ({ point, topologyNodes, physicalDetailsDataSource, deviceDetailsDataSource, writeDataSource, onConnected, cableLabelDataSource }: PortActionProps) => <>
-  {canConnect(point) && deviceDetailsDataSource && writeDataSource && (
-    <ConnectPhysicalEndpoint sourcePoint={point} topologyNodes={topologyNodes} physicalDetailsDataSource={physicalDetailsDataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={onConnected} cableLabelDataSource={cableLabelDataSource} />
-  )}
-  <DisconnectPhysicalConnection point={point} writeDataSource={writeDataSource} onDisconnected={onConnected} />
-</>;
+const PortActions = ({ point, topologyNodes, physicalDetailsDataSource, deviceDetailsDataSource, writeDataSource, onConnected, cableLabelDataSource }: PortActionProps) => {
+  const { t } = useI18n();
+  return <>
+    {point.cardinality > 1 && writeDataSource && <small>{t('physical.memberWiringUnavailable')}</small>}
+    {canConnect(point) && deviceDetailsDataSource && writeDataSource && (
+      <ConnectPhysicalEndpoint sourcePoint={point} topologyNodes={topologyNodes} physicalDetailsDataSource={physicalDetailsDataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={onConnected} cableLabelDataSource={cableLabelDataSource} />
+    )}
+    <DisconnectPhysicalConnection point={point} writeDataSource={writeDataSource} onDisconnected={onConnected} />
+  </>;
+};
 
 const PortRow = ({
   point,

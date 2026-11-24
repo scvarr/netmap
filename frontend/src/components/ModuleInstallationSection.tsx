@@ -74,8 +74,8 @@ function projectInstallationPosition(position: { x: number; y: number }, saved: 
   };
 }
 
-function SocketMarker({ cx, cy, r, name, installation, placeKey }: {
-  cx: number; cy: number; r: number; name: string; installation?: ModuleInstallation; placeKey?: string;
+function SocketMarker({ cx, cy, r, name, installation, placeKey, color }: {
+  cx: number; cy: number; r: number; name: string; installation?: ModuleInstallation; placeKey?: string; color?: string;
 }) {
   const endpoint = installation?.endpoints[0];
   if (!endpoint) {
@@ -91,7 +91,7 @@ function SocketMarker({ cx, cy, r, name, installation, placeKey }: {
       fill="none" stroke="#94a3b8" strokeWidth={1} vectorEffect="non-scaling-stroke" />
     <EndpointMarker kind="NETWORK_PORT" label={endpoint.contextual_display_name}
       data-endpoint-id={endpoint.connection_point_id} data-module-place-key={placeKey}
-      cx={cx} cy={cy} r={r} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+      cx={cx} cy={cy} r={r} fill={color} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />
   </g>;
 }
 
@@ -192,7 +192,8 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
     const compatible = bay.mount_kind === 'MODULE_PORT' ? matches.filter(({ endpoints }) =>
       endpoints.length === 0 || (bay.network_interface_id && endpoints.length === 1
         && endpoints[0].kind === 'CONNECTION_POINT'
-        && portTypes?.some(type => type.id === endpoints[0].port_type_id && type.cardinality === 1))) : matches;
+        && portTypes?.some(type => type.id === endpoints[0].port_type_id
+          && (type.cardinality === 1 || (type.medium === 'FIBER' && type.cardinality === 2))))) : matches;
     const physicalTransceiver = bay.mount_kind === 'MODULE_PORT'
       && installation?.endpoints.some(endpoint => endpoint.kind === 'CONNECTION_POINT');
     const hasPhysicalChild = installation?.module_places?.some(place =>
@@ -211,7 +212,11 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
         {installation.name}
         {installation.endpoints.length > 0 && <details key={installation.id}>
           <summary>{t('hardware.ports')}</summary>
-          <ul>{installation.endpoints.map(endpoint => <li key={endpoint.connection_point_id} data-connection-point-id={endpoint.connection_point_id}>{endpoint.contextual_display_name}</li>)}</ul>
+          <ul>{installation.endpoints.map(endpoint => <li key={endpoint.connection_point_id} data-connection-point-id={endpoint.connection_point_id}>
+            {endpoint.contextual_display_name}
+            {physicalTransceiver && endpoint.members?.length > 0 &&
+              <div>{t('transceiver.members', { count: endpoint.cardinality })} · {endpoint.members.join(', ')}</div>}
+          </li>)}</ul>
         </details>}
         {children.length > 0 && <details key={installation.id + ':places'}
           onToggle={event => {
@@ -286,6 +291,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
           const position = i?.endpoints[0] ?? (b.kind !== 'LOGICAL' ? modulePortPosition(b) :
             l && modulePortPosition(l));
           return position && <SocketMarker key={b.bay_key} name={b.display_name} installation={i ?? undefined}
+            color={portTypes?.find(type => type.id === i?.endpoints[0]?.port_type_id)?.color}
             cx={position.x * panel.width} cy={position.y * panel.height} r={4 / scale} />;
         }
         const begin = (e: React.PointerEvent<SVGElement>, resize: boolean) => {
@@ -305,8 +311,9 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
             {i.module_places?.filter(place => place.mount_kind === 'MODULE_PORT').map(place => {
               // The configuration projects the pinned place through the installed orientation.
               const position = projectInstallationPosition(modulePortPosition(place.global_position), i.layout, l);
+              const transceiver = nested.get(place.installation_id ?? '');
               return <SocketMarker key={place.bay_key} name={place.display_name} placeKey={place.bay_key}
-                installation={nested.get(place.installation_id ?? '')}
+                installation={transceiver} color={portTypes?.find(type => type.id === transceiver?.endpoints[0]?.port_type_id)?.color}
                 cx={position.x * panel.width} cy={position.y * panel.height} r={4 / scale} />;
             })}
             {i.endpoints.map(e => {

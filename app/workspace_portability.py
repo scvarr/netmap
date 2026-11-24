@@ -19,7 +19,7 @@ from sqlalchemy.sql.sqltypes import JSON
 
 from app.database import Base
 from app import models
-from app.port_types import MountTypeInput, PortTypeInput
+from app.port_types import MountTypeInput, PortTypeInput, supports_transceiver_termination
 from app.module_port_types import MOUNT_CATALOGS, MOUNT_FIELDS, mount_identity, result_mounts
 from app.schemas import ModuleBayRequest, ModuleMount, AutomaticLocationLayout
 from app.hardware_interfaces import declared_interfaces
@@ -461,7 +461,8 @@ def _validate_hardware_configuration(rows):
     definitions = {r["id"]: r for r in rows["built_in_endpoint_definitions"]}
     module_definitions = {r["id"]: r for r in rows["module_endpoint_definitions"]}
     points = {r["id"]: r for r in rows["connection_points"]}
-    capacities = {row["id"]: len(row["members"]) for row in rows["port_types"]}
+    port_types = {row["id"]: row for row in rows["port_types"]}
+    capacities = {identifier: len(row["members"]) for identifier, row in port_types.items()}
     owners = {(r["interface_id"], r["physical_object_id"]) for r in rows["network_interface_physical_owners"]}
     if len({interface_id for interface_id, _ in owners}) != len(rows["network_interface_physical_owners"]):
         raise PackageError("Network interface has multiple physical owners")
@@ -525,10 +526,11 @@ def _validate_hardware_configuration(rows):
             raise PackageError("Installation has no compatible place in its owning revision")
         endings = endpoints_by_revision[revision_id]
         if revisions[revision_id]["mount_kind"] == "MODULE_PORT" and endings:
+            port_type_id = endings[0]["port_type_id"]
             if (len(endings) != 1 or endings[0]["kind"] != "CONNECTION_POINT"
-                    or capacities[endings[0]["port_type_id"]] != 1
+                    or not supports_transceiver_termination(port_types[port_type_id]["medium"], capacities[port_type_id])
                     or place.get("hardware_interface_key") is None):
-                raise PackageError("Physical transceiver requires a declared interface and one single-member ending")
+                raise PackageError("Physical transceiver requires a declared interface and one supported termination")
             if parent_id is not None and (parent["parent_installation_id"] is not None
                     or revisions[parent["module_revision_id"]]["mount_kind"] != "MODULE_BAY"):
                 raise PackageError("Physical transceiver must be mounted in the base or a root board")
@@ -603,13 +605,16 @@ def _validate_hardware_configuration(rows):
         interface_id = association["interface_id"]
         place = (config_id, association["parent_installation_id"], association["bay_key"])
         point_id = physical_points.get(place)
-        expected_bindings = [(point_id, 1)] if point_id is not None else []
+        members = range(1, points[point_id]["cardinality"] + 1) if point_id is not None else ()
+        expected_bindings = [(point_id, member) for member in members]
         if (expected.pop(place, None) != association["hardware_interface_key"]
                 or configs[config_id]["physical_object_id"] != object_id
                 or (interface_id, object_id) not in owners
                 or interface_id in seen_interfaces
-                or bindings_by_interface[interface_id] != expected_bindings
-                or (point_id is not None and bindings_by_point[point_id] != [(interface_id, 1)])):
+                or sorted(bindings_by_interface[interface_id]) != expected_bindings
+                or (point_id is not None and sorted(bindings_by_point[point_id]) != [
+                    (interface_id, member) for member in members
+                ])):
             raise PackageError("Invalid or duplicate hardware interface association")
         seen_interfaces.add(interface_id)
     if expected:

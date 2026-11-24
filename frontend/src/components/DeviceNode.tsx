@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { useI18n } from '../i18n';
 import { useRuntimePortTypes } from './RuntimePortTypes';
 import { Handle, NodeResizeControl, Position, type NodeProps } from '@xyflow/react';
 import type { Node } from '@xyflow/react';
@@ -14,6 +15,7 @@ import { BLUEPRINT_PORT_SIZE, BLUEPRINT_PORT_STROKE, OBJECT_NAME_ZONE_WIDTH, OBJ
 type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
 
 export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>) {
+  const { t } = useI18n();
   const resizeStart = useRef<{ frameWidth: number; displayWidth: number } | null>(null);
   const portTypes = useRuntimePortTypes();
   const { projection } = data;
@@ -84,10 +86,15 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
               const traced = tracedPorts.has(id) || Boolean(data.traceHighlightedConnectionPointIds?.has(id));
               const { fill, outline } = physicalPortPaint(portType?.color, occupied, traced, state);
               const transceiver = slot.marker === 'TRANSCEIVER';
+              const tooltip = [slot.display_name, portType?.name ?? slot.kind];
+              if (slot.members && slot.cardinality) {
+                tooltip.push(`${t('transceiver.members', { count: slot.cardinality })} · ${slot.members.join(', ')}`);
+                if (slot.cardinality > 1) tooltip.push(t('physical.memberWiringUnavailable'));
+              }
               const style = { '--port-size': `${BLUEPRINT_PORT_SIZE}px`, '--port-stroke': `${BLUEPRINT_PORT_STROKE}px`,
                 backgroundColor: transceiver && !occupied ? 'transparent' : fill, borderColor: outline, left: `${slot.panel_local_position.x * 100}%`, top: `${slot.panel_local_position.y * 100}%` };
               return <span key={id} className={`blueprint-map-node__port blueprint-map-node__port--${transceiver ? 'transceiver' : slot.kind.toLowerCase()}${traced ? ' blueprint-map-node__port--trace-highlighted' : ''}${data.wiringContinuationConnectionPointIds?.has(id) ? ' blueprint-map-node__port--wiring-continuation' : ''}${state ? ` blueprint-map-node__port--wiring-${state}` : ''}`}
-                style={style} data-connection-point-id={id} title={`${slot.display_name} · ${portType?.name ?? slot.kind}`} {...portProps(id, slot.display_name)}>
+                style={style} data-connection-point-id={id} title={tooltip.join(' · ')} {...portProps(id, slot.display_name)}>
                 <span className="blueprint-map-node__port-label">{slot.display_name}</span>
               </span>;
             })}
