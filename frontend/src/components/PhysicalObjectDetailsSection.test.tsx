@@ -63,6 +63,74 @@ describe('PhysicalObjectDetailsSection ports', () => {
     confirm.mockRestore();
   });
 
+  it('shows every historical direct mapping and only allows the independent Cable to be disconnected', async () => {
+    const legacy = {
+      kind: 'DIRECT_CONNECTION',
+      connection_ref: ref('Connection', 'historical'),
+      remote_physical_object_label: 'Remote',
+      remote_connection_point_label: 'Wide',
+    };
+    const source = point('Local', 'local', {
+      cardinality: 3,
+      members: ['Alpha', 'Beta', 'Gamma'].map((designation, i) => ({ index: i + 1, designation, occupied: true })),
+      external_physical_attachments: [
+        { ...legacy, local_member_index: 1, remote_member_index: 2, remote_member_designation: 'Two',
+          evidence_refs: [ref('ConnectionMember', 'first')] },
+        { ...legacy, local_member_index: 2, remote_member_index: 1, remote_member_designation: 'One',
+          evidence_refs: [ref('ConnectionMember', 'second')] },
+        { kind: 'CABLE', connection_ref: ref('Connection', 'independent'), cable_label: 'CAB-3',
+          local_member_index: 3, remote_member_index: 1, remote_member_designation: 'Core',
+          remote_physical_object_label: 'Peer', remote_connection_point_label: 'Simplex', evidence_refs: [] },
+      ],
+    });
+    const disconnect = vi.fn().mockResolvedValue(undefined);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    try {
+      renderDetails(document([source]), {
+        writeDataSource: { createPhysicalEndpointConnection: vi.fn(), deleteExternalPhysicalConnection: disconnect },
+      });
+      expect(await screen.findByText('Local · Alpha ↔ Прямое соединение · Remote / Wide · Two')).toBeVisible();
+      expect(screen.getByText('Local · Beta ↔ Прямое соединение · Remote / Wide · One')).toBeVisible();
+      expect(screen.getByText('Отключение соединения с несколькими парами каналов недоступно.')).toBeVisible();
+      const action = screen.getByRole('button', { name: /^Разорвать физическое подключение/ });
+      expect(action).toHaveAccessibleName(/Local · Gamma.*CAB-3.*Simplex · Core/);
+      await userEvent.click(action);
+      expect(disconnect).toHaveBeenCalledExactlyOnceWith('independent');
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+
+  it('shows the remote Duplex member from the Simplex side and confirms that exact pair', async () => {
+    const source = point('Simplex', 'simplex', {
+      members: [{ index: 1, designation: 'Core', occupied: true }],
+      panel_context: { panel_key: 'rear', panel_name: 'Rear', port_name: 'Simplex' },
+      external_physical_attachments: [{
+        kind: 'CABLE', connection_ref: ref('Connection', 'external'), cable_label: 'CAB-2',
+        local_member_index: 1, remote_member_index: 2, remote_member_designation: 'Beta',
+        remote_physical_object_label: 'Peer', remote_panel_name: 'Front',
+        remote_connection_point_label: 'Duplex', evidence_refs: [ref('ConnectionMember', 'two')],
+      }],
+    });
+    const exactPair = 'Rear / Simplex · Core ↔ CAB-2 · Peer / Front / Duplex · Beta';
+    const disconnect = vi.fn().mockResolvedValue(undefined);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    try {
+      renderDetails(document([source]), {
+        writeDataSource: { createPhysicalEndpointConnection: vi.fn(), deleteExternalPhysicalConnection: disconnect },
+      });
+      expect(await screen.findByText(exactPair)).toBeVisible();
+      const action = screen.getByRole('button', { name: `Разорвать физическое подключение · ${exactPair}` });
+      await userEvent.click(action);
+      expect(confirm).toHaveBeenLastCalledWith(`Разорвать физическое подключение «${exactPair}»?`);
+      expect(disconnect).not.toHaveBeenCalled();
+      await userEvent.click(action);
+      expect(disconnect).toHaveBeenCalledExactlyOnceWith('external');
+    } finally {
+      confirm.mockRestore();
+    }
+  });
+
   it('refreshes derived port names while keeping canonical aliases in technical details', async () => {
     const a = point('Renamed A', 'a', { canonical_label: '2-1', internal_physical_counterparts: [{ connection_point_ref: ref('ConnectionPoint', 'b'), label: 'Renamed B', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }] });
     const b = point('Renamed B', 'b', { canonical_label: '3-1', internal_physical_counterparts: [{ connection_point_ref: ref('ConnectionPoint', 'a'), label: 'Renamed A', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }] });
@@ -84,7 +152,7 @@ describe('PhysicalObjectDetailsSection ports', () => {
     expect(await screen.findByRole('rowheader', { name: first })).toBeInTheDocument();
     expect(screen.getByRole('rowheader', { name: second })).toBeInTheDocument();
     expect(within(screen.getByRole('rowheader', { name: first }).closest('tr')!).getAllByText(first)).toHaveLength(2);
-    expect(screen.getByText('Прямое соединение · Other object / Front / Slot 1 / feth1')).toBeInTheDocument();
+    expect(screen.getByText(`${second} ↔ Прямое соединение · Other object / Front / Slot 1 / feth1`)).toBeInTheDocument();
     expect(screen.getByRole('rowheader', { name: 'MGMT' })).toBeInTheDocument();
   });
   it('renders active ports in natural display-label ordering with factual status, neighbour, cable, interface and icon actions', async () => {
@@ -94,11 +162,11 @@ describe('PhysicalObjectDetailsSection ports', () => {
     await screen.findByRole('rowheader', { name: 'A01' });
     expect(screen.getAllByRole('row').slice(1).map((row) => within(row).getByRole('rowheader').textContent)).toEqual(['A01', 'A02', 'A10']);
     expect(screen.getByText('Свободен')).toBeInTheDocument();
-    expect(screen.getByText('CAB-1 · SW2 / Front-1 / Eth2')).toBeInTheDocument();
-    expect(screen.getByText('Прямое соединение · PP1 / B01')).toBeInTheDocument();
+    expect(screen.getByText('A10 ↔ CAB-1 · SW2 / Front-1 / Eth2')).toBeInTheDocument();
+    expect(screen.getByText('A02 ↔ Прямое соединение · PP1 / B01')).toBeInTheDocument();
     expect(screen.getByText('Eth1')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Подключить порт' })).toHaveAttribute('title', 'Подключить порт');
-    expect(screen.getAllByRole('button', { name: 'Разорвать физическое подключение' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /^Разорвать физическое подключение/ })).toHaveLength(2);
     expect(screen.queryByText('Технические данные')).not.toBeInTheDocument();
   });
 
@@ -164,7 +232,7 @@ describe('PhysicalObjectDetailsSection ports', () => {
     const load = vi.fn().mockResolvedValueOnce(occupied).mockRejectedValueOnce(new Error('refresh failed')).mockResolvedValueOnce(refreshed);
     const deleteExternalPhysicalConnection = vi.fn().mockResolvedValue(undefined);
     renderDetails(occupied, { dataSource: { loadPhysicalObjectDetails: load }, writeDataSource: { createPhysicalEndpointConnection: vi.fn(), deleteExternalPhysicalConnection } });
-    await userEvent.click(await screen.findByRole('button', { name: 'Разорвать физическое подключение' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Разорвать физическое подключение/ }));
     expect(deleteExternalPhysicalConnection).toHaveBeenCalledWith('external');
     expect(await screen.findByText('Не удалось загрузить физический объект.')).toBeInTheDocument();
     expect(screen.queryByText(/refresh failed/)).not.toBeInTheDocument();
