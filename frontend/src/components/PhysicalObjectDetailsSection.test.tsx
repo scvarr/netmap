@@ -15,16 +15,52 @@ const renderDetails = (value: PhysicalObjectDetailsDocument, props = {}) => rend
 const deferred = <T,>() => { let resolve!: (value: T) => void; return { promise: new Promise<T>((next) => { resolve = next; }), resolve }; };
 
 describe('PhysicalObjectDetailsSection ports', () => {
-  it('shows the shared interface and requires member selection for Duplex wiring', async () => {
+  it('connects the explicitly selected free member and disconnects the selected attachment', async () => {
+    const user = userEvent.setup();
+    const create = vi.fn().mockResolvedValue({});
+    const preview = vi.fn().mockResolvedValue({ verdict: 'ALLOW', token: 'preview' });
+    const disconnect = vi.fn().mockResolvedValue(undefined);
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const onConnected = vi.fn();
     const binding = { interface_ref: ref('NetworkInterface', 'ni'), label: 'Eth1', evidence_refs: [] };
-    renderDetails(document([point('Optic', 'optic', { cardinality: 2, direct_interface_bindings: [binding, binding] })]), {
+    const source = point('Optic', 'optic', {
+      cardinality: 2, direct_interface_bindings: [binding, binding],
+      members: [{ index: 1, designation: 'Alpha', occupied: true }, { index: 2, designation: 'Beta', occupied: false }],
+      external_physical_attachments: [{ kind: 'CABLE', local_member_index: 1, connection_ref: ref('Connection', 'alpha-link'), evidence_refs: [], cable_label: 'Alpha Cable' }],
+    });
+    const peer = { ...node('peer'), attributes: { connection_points: [
+      { connection_point_id: 'simplex', display_name: 'Simplex', cardinality: 1, external_connection_count: 0 },
+    ] } };
+    renderDetails(document([source]), {
+      topologyNodes: [peer],
+      dataSource: { loadPhysicalObjectDetails: vi.fn((id: string) => Promise.resolve(
+        id === 'peer' ? document([point('Simplex', 'simplex')]) : document([source]),
+      )) },
       deviceDetailsDataSource: { loadDeviceDetails: vi.fn() },
-      writeDataSource: { createPhysicalEndpointConnection: vi.fn() },
+      writeDataSource: { createPhysicalEndpointConnection: create, previewPhysicalEndpointConnection: preview, deleteExternalPhysicalConnection: disconnect },
+      onConnected,
     });
     const row = (await screen.findByRole('rowheader', { name: 'Optic' })).closest('tr')!;
     expect(within(row).getByText('Eth1')).toBeVisible();
-    expect(within(row).getByText(/Выбор каналов пока недоступен/)).toBeVisible();
-    expect(within(row).queryByRole('button', { name: 'Подключить порт' })).toBeNull();
+    await user.click(within(row).getByRole('button', { name: 'Подключить порт' }));
+    await user.selectOptions(screen.getByLabelText('Целевой физический объект'), 'peer');
+    await screen.findByRole('option', { name: 'Simplex' });
+    await user.selectOptions(screen.getByLabelText('Свободный физический порт'), 'simplex');
+    expect(screen.getByRole('option', { name: /Alpha/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Подключить' })).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText('Канал источника'), '2');
+    expect(screen.getByText('Optic · Beta ↔ peer / Simplex · 1')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Подключить' }));
+    const request = expect.objectContaining({
+      source: { kind: 'CONNECTION_POINT', connection_point_id: 'optic', member_index: 2 },
+      target: { kind: 'CONNECTION_POINT', connection_point_id: 'simplex', member_index: 1 },
+    });
+    expect(preview).toHaveBeenCalledWith(request);
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ ...preview.mock.calls[0][0], compatibility: { token: 'preview', accept_unknown: false } }));
+    await user.click(await screen.findByRole('button', { name: /Разорвать.*Alpha Cable/ }));
+    expect(disconnect).toHaveBeenCalledWith('alpha-link');
+    expect(onConnected).toHaveBeenCalledTimes(2);
+    confirm.mockRestore();
   });
 
   it('refreshes derived port names while keeping canonical aliases in technical details', async () => {

@@ -12,7 +12,7 @@ from app.models import (
     Cable, CableLabelTemplate, Connection, ConnectionMember,
     ConnectionPoint, HardwareInterfaceAssociation, NetworkInterface, NetworkInterfacePhysicalOwner,
 )
-from app.physical_compatibility import verify_compatibility
+from app.physical_compatibility import point_member_designations, verify_compatibility
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from app.schemas import (
     BulkCableDeleteCandidate, BulkCableDeleteExpectation, BulkCableDeleteMember,
@@ -39,7 +39,7 @@ class NetworkInterfaceEndpoint:
 @dataclass(frozen=True)
 class ConnectionPointEndpoint:
     connection_point_id: uuid.UUID
-    member_index: int = 1
+    member_index: int | None = None
 
 
 PhysicalEndpoint = NetworkInterfaceEndpoint | ConnectionPointEndpoint
@@ -202,19 +202,24 @@ class PhysicalConnectionCatalog:
                 "ConnectionPoint does not exist",
                 {"connection_point_ids": [str(value) for value in missing_point_ids]},
             )
-        unsupported_points = [
-            point.id for point in locked_points if point.cardinality != 1
-        ]
-        if unsupported_points:
-            raise ValidationError(
-                "W.6 supports only cardinality=1 ConnectionPoints",
-                {"connection_point_ids": [str(value) for value in unsupported_points]},
-            )
-        requested_members = {
-            endpoint.connection_point_id: endpoint.member_index
-            for endpoint in (source, target)
-            if isinstance(endpoint, ConnectionPointEndpoint)
-        }
+        multichannel = any(point.cardinality > 1 for point in locked_points)
+        if multichannel and interface_ids:
+            raise ValidationError("Multichannel wiring requires two existing ConnectionPoints")
+
+        requested_members = {}
+        for endpoint in (source, target):
+            if not isinstance(endpoint, ConnectionPointEndpoint):
+                continue
+            point = points_by_id[endpoint.connection_point_id]
+            index = endpoint.member_index
+            if index is None and point.cardinality == 1:
+                index = 1
+            if index is None or not 1 <= index <= point.cardinality:
+                raise ValidationError(
+                    "Select a member within the ConnectionPoint cardinality",
+                    {"connection_point_id": str(point.id), "member_index": index, "cardinality": point.cardinality},
+                )
+            requested_members[point.id] = index
         occupied_points = [
             point.id for point in locked_points
             if self._has_external_member_connection(
@@ -238,8 +243,6 @@ class PhysicalConnectionCatalog:
             points_by_id[end.connection_point_id] if isinstance(end, ConnectionPointEndpoint) else None
             for end in (source, target)
         ]
-        if any(member != 1 for member in requested_members.values()):
-            raise ValidationError("Physical connections support only member 1")
         generated = None
         if generate_cable_label:
             if cable_label_template_id is None:
@@ -250,7 +253,7 @@ class PhysicalConnectionCatalog:
             intent=["create", self._endpoint_description(source), self._endpoint_description(target),
                     endpoint_owners, cable_label, cable_label_template_id, generate_cable_label,
                     generated],
-            preview=preview, confirmation=compatibility,
+            preview=preview, confirmation=compatibility, require_preview=multichannel,
         )
         if preview:
             return result
@@ -259,7 +262,11 @@ class PhysicalConnectionCatalog:
         target_materialized = self._materialize_endpoint(target, repository, owners)
 
         member = [
-            ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)
+            ConnectionMemberInput(
+                index=1,
+                point_a_member=requested_members.get(source_materialized.connection_point_id, 1),
+                point_b_member=requested_members.get(target_materialized.connection_point_id, 1),
+            )
         ]
         connection, _ = repository.add_connection(
             source_materialized.connection_point_id,
@@ -296,7 +303,7 @@ class PhysicalConnectionCatalog:
         ids = [endpoint.connection_point_id for pair in pairs for endpoint in pair]
         if len(set(ids)) != len(ids):
             raise ValidationError("Duplicate ConnectionPoint in bulk pairing")
-        if any(endpoint.member_index != 1 for pair in pairs for endpoint in pair):
+        if any(endpoint.member_index not in (None, 1) for pair in pairs for endpoint in pair):
             raise ValidationError("Bulk pairing supports only member 1")
         points = list(self.session.scalars(
             select(ConnectionPoint).where(ConnectionPoint.id.in_(ids))
@@ -512,10 +519,12 @@ class PhysicalConnectionCatalog:
     ) -> list[BulkCableDeleteCandidate]:
         a, b, query = self._cables_between_objects(source_id, target_id)
         rows = self.session.execute(query.options(joinedload(Connection.members))).unique().all()
-        names = EndpointNames(self.session).connection_points({
+        point_ids = {
             point_id for _, connection, _ in rows
             for point_id in (connection.point_a_id, connection.point_b_id)
-        })
+        }
+        names = EndpointNames(self.session).connection_points(point_ids)
+        designations = point_member_designations(self.session, point_ids)
 
         def point_label(point_id: uuid.UUID) -> str:
             return names[point_id].value if point_id in names else f"ConnectionPoint {point_id}"
@@ -528,8 +537,15 @@ class PhysicalConnectionCatalog:
             source, target = connection.point_a_id, connection.point_b_id
             if not source_is_a:
                 source, target = target, source
+            expected = self._cable_delete_expectation(cable, connection)
+            a_designations = [designations.get(connection.point_a_id, {}).get(
+                member.point_a_member, str(member.point_a_member)) for member in expected.members]
+            b_designations = [designations.get(connection.point_b_id, {}).get(
+                member.point_b_member, str(member.point_b_member)) for member in expected.members]
             result.append(BulkCableDeleteCandidate(
-                expected=self._cable_delete_expectation(cable, connection),
+                expected=expected,
+                source_member_designations=a_designations if source_is_a else b_designations,
+                target_member_designations=b_designations if source_is_a else a_designations,
                 display_label=resolved_cable_label(cable)[0],
                 source_point_label=point_label(source),
                 target_point_label=point_label(target),
@@ -620,7 +636,7 @@ class PhysicalConnectionCatalog:
         return {
             "kind": "CONNECTION_POINT",
             "connection_point_id": str(endpoint.connection_point_id),
-            "member_index": endpoint.member_index,
+            "member_index": endpoint.member_index or 1,
         }
 
     def _has_external_member_connection(
@@ -673,11 +689,6 @@ class PhysicalConnectionCatalog:
         owners: dict[uuid.UUID, object],
     ) -> MaterializedPhysicalEndpoint:
         if isinstance(endpoint, ConnectionPointEndpoint):
-            if endpoint.member_index != 1:
-                raise ValidationError(
-                    "W.6 supports only ConnectionPoint member 1",
-                    {"member_index": endpoint.member_index},
-                )
             return MaterializedPhysicalEndpoint(
                 endpoint=endpoint,
                 connection_point_id=endpoint.connection_point_id,

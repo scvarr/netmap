@@ -21,7 +21,7 @@ const candidates = [1, 2].map(i => ({
     label: ['Z', 'A'][i - 1], members: [{ id: `member-${i}`, index: 1, point_a_member: 1, point_b_member: 1 }],
   },
   display_label: ['Z', 'A'][i - 1], source_point_label: `port ${i}`, target_point_label: `peer ${i}`,
-  source_is_point_a: true,
+  source_is_point_a: true, source_member_designations: [`A${i}`], target_member_designations: [`B${i}`],
 }));
 const click = (name: string, role = 'button') => fireEvent.click(screen.getByRole(role, { name }));
 const pair = { source_object_id: 'a', target_object_id: 'b' };
@@ -51,7 +51,7 @@ it('keeps selection by Cable ID through sorting and confirms only the previewed 
   expect(screen.getAllByRole('checkbox').every(box => (box as HTMLInputElement).checked)).toBe(true);
   click('Снять выбор');
   expect(screen.getAllByRole('checkbox').some(box => (box as HTMLInputElement).checked)).toBe(false);
-  click('Z · port 1 ↔ peer 1', 'checkbox');
+  click('Z · port 1 · A1 ↔ peer 1 · B1', 'checkbox');
   click('Кабель');
   expect(screen.getAllByRole('checkbox')[1]).toBeChecked();
   click('Проверить выбранные');
@@ -59,6 +59,8 @@ it('keeps selection by Cable ID through sorting and confirms only the previewed 
   expect(within(dialog).getByRole('status')).toHaveTextContent('кабели (1) и их физические соединения (1)');
   expect(screen.getAllByRole('row')).toHaveLength(2);
   expect(screen.getByRole('cell', { name: 'Z' })).toBeVisible();
+  expect(screen.getByRole('cell', { name: 'port 1 · A1' })).toBeVisible();
+  expect(screen.getByRole('cell', { name: 'peer 1 · B1' })).toBeVisible();
   expect(remove).not.toHaveBeenCalled();
   let acknowledge!: () => void;
   remove.mockReturnValueOnce(new Promise<void>(resolve => { acknowledge = resolve; }));

@@ -25,4 +25,6 @@ export interface CableDeleteCandidate {
   source_point_label: string;
   target_point_label: string;
   source_is_point_a: boolean;
+  source_member_designations?: string[];
+  target_member_designations?: string[];
 }

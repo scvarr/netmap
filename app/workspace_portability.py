@@ -260,7 +260,7 @@ def validate_package(package: object) -> dict:
                         continue
                     if row[column.key] not in values_by_column[(fk.column.table.name, fk.column.key)]:
                         raise PackageError(f"{name}.{column.key} refers to a missing entity")
-    _validate_cable_connections(result)
+    _validate_physical_connections(result)
     panel_memberships = {(row["base_revision_id"], row["panel_key"]) for row in result["presentation_panels"]}
     if any((row["base_revision_id"], row["panel_key"]) not in panel_memberships for row in result["built_in_endpoint_definitions"]):
         raise PackageError("BuiltInEndpointDefinition.panel_key refers to a panel in another version")
@@ -621,12 +621,28 @@ def _validate_hardware_configuration(rows):
         raise PackageError("Configuration is missing a hardware interface association")
 
 
-def _validate_cable_connections(rows):
+def _validate_physical_connections(rows):
     connections = {row["id"]: row for row in rows["connections"]}
     points = {row["id"]: row for row in rows["connection_points"]}
     members_by_connection = defaultdict(list)
     for member in rows["connection_members"]:
         members_by_connection[member["connection_id"]].append(member)
+    occupied = set()
+    for connection in connections.values():
+        point_a = points[connection["point_a_id"]]
+        point_b = points[connection["point_b_id"]]
+        external = point_a["physical_object_id"] != point_b["physical_object_id"]
+        for member in members_by_connection[connection["id"]]:
+            if member["index"] < 1:
+                raise PackageError("ConnectionMember index must be positive")
+            for point, index in ((point_a, member["point_a_member"]), (point_b, member["point_b_member"])):
+                if not 1 <= index <= point["cardinality"]:
+                    raise PackageError("ConnectionMember is outside its endpoint cardinality")
+                if external:
+                    address = (point["id"], index)
+                    if address in occupied:
+                        raise PackageError("EXTERNAL_MEMBER_OCCUPANCY: an endpoint member is already occupied")
+                    occupied.add(address)
     for cable in rows["cables"]:
         connection = connections[cable["connection_id"]]
         members = members_by_connection[connection["id"]]
@@ -636,9 +652,8 @@ def _validate_cable_connections(rows):
                 or point_a["physical_object_id"] == point_b["physical_object_id"]):
             raise PackageError("Cable requires one external ConnectionMember")
         member = members[0]
-        if (member["index"] != 1 or not 1 <= member["point_a_member"] <= point_a["cardinality"]
-                or not 1 <= member["point_b_member"] <= point_b["cardinality"]):
-            raise PackageError("Cable ConnectionMember is outside its endpoint cardinality")
+        if member["index"] != 1:
+            raise PackageError("Cable ConnectionMember index must be 1")
 
 
 def _tables_in_dependency_order():

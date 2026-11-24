@@ -1,3 +1,4 @@
+import { physicalMemberLabel } from '../topology/physicalPortAvailability';
 import { useRuntimePortTypes } from './RuntimePortTypes';
 import {
   BaseEdge,
@@ -590,16 +591,19 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
       const cached = labels.get(edge);
       if (cached) return cached;
       const pair = edge.data?.endpointPair;
-      const endpoint = (nodeId: string, pointId: string | undefined) => {
+      const endpoint = (nodeId: string, pointId: string | undefined, memberIndex?: number) => {
         const projection = nodeById.get(nodeId)?.data.projection;
         if (!projection || !pointId) return '';
-        const point = projection.attributes.blueprint_presentation?.slots.find(slot => slot.connection_point_id === pointId)
-          ?? projection.attributes.connection_points?.find(candidate => candidate.connection_point_id === pointId);
-        return point ? `${displayNodeLabelForLocale(projection, locale)} / ${point.display_name}` : '';
+        const point = projection.attributes.connection_points?.find(candidate => candidate.connection_point_id === pointId);
+        const slot = projection.attributes.blueprint_presentation?.slots.find(candidate => candidate.connection_point_id === pointId);
+        const name = slot?.display_name ?? point?.display_name;
+        if (!name) return '';
+        const label = point ? physicalMemberLabel(point, name, memberIndex) : name;
+        return `${displayNodeLabelForLocale(projection, locale)} / ${label}`;
       };
       const label = {
         name: edge.data!.cableNode!.label,
-        endpoints: [endpoint(edge.source, pair?.from_connection_point_id), endpoint(edge.target, pair?.to_connection_point_id)].filter(Boolean).join(' → '),
+        endpoints: [endpoint(edge.source, pair?.from_connection_point_id, pair?.from_member_index), endpoint(edge.target, pair?.to_connection_point_id, pair?.to_member_index)].filter(Boolean).join(' → '),
       };
       labels.set(edge, label);
       return label;

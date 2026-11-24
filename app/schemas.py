@@ -613,7 +613,16 @@ class InternalPhysicalCounterpartDetails(BaseModel):
     evidence_refs: list[ProjectionSourceRef]
 
 
+class PhysicalPointMemberDetails(BaseModel):
+    index: int
+    designation: str
+    occupied: bool
+
+
 class ExternalPhysicalAttachmentDetails(BaseModel):
+    local_member_index: int
+    remote_member_index: int
+    remote_member_designation: str
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["DIRECT_CONNECTION", "CABLE"]
@@ -649,6 +658,7 @@ class ConnectionPointDetails(BaseModel):
     cardinality: int = Field(ge=1)
     incident_connection_count: int = Field(ge=0)
     external_connection_count: int = Field(ge=0)
+    members: list[PhysicalPointMemberDetails]
     direct_interface_binding_count: int = Field(ge=0)
     ordering_key: str = Field(min_length=1)
     blueprint_slot: BlueprintSlotMetadata | None = None
@@ -1230,7 +1240,7 @@ class ConnectionPointPhysicalEndpointRequest(BaseModel):
 
     kind: Literal["CONNECTION_POINT"]
     connection_point_id: uuid.UUID
-    member_index: Literal[1] = 1
+    member_index: int | None = Field(default=None, ge=1, strict=True)
 
 
 PhysicalEndpointRequest = Annotated[
@@ -1250,10 +1260,14 @@ class CreatePhysicalEndpointConnectionRequest(BaseModel):
     compatibility: PhysicalCompatibilityConfirmation | None = None
 
 
+class BulkConnectionPointEndpointRequest(ConnectionPointPhysicalEndpointRequest):
+    member_index: Literal[1] = 1
+
+
 class BulkPhysicalPointPair(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    source: ConnectionPointPhysicalEndpointRequest
-    target: ConnectionPointPhysicalEndpointRequest
+    source: BulkConnectionPointEndpointRequest
+    target: BulkConnectionPointEndpointRequest
 
 
 class CreateBulkPhysicalConnectionsRequest(BaseModel):
@@ -1289,6 +1303,8 @@ class BulkCableDeleteCandidate(BaseModel):
     source_point_label: str
     target_point_label: str
     source_is_point_a: bool
+    source_member_designations: list[str]
+    target_member_designations: list[str]
 
 
 class BulkCableDeletePreview(BaseModel):
@@ -1404,7 +1420,7 @@ class PhysicalEndpointMaterialization(BaseModel):
     endpoint_ref: ProjectionSourceRef
     connection_point_ref: ProjectionSourceRef
     interface_binding_ref: ProjectionSourceRef | None = None
-    member_index: Literal[1] = 1
+    member_index: int = Field(ge=1)
 
 
 class PhysicalEndpointConnectionCreationDocument(BaseModel):

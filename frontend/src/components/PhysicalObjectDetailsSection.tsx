@@ -1,3 +1,4 @@
+import { isAvailablePhysicalPort, physicalMemberLabel } from '../topology/physicalPortAvailability';
 import { RuntimePortTypes, RuntimePortLabel } from './RuntimePortTypes';
 import { useEffect, useRef, useState } from 'react';
 import type {
@@ -184,6 +185,7 @@ export const PhysicalObjectClassEditor = ({
 };
 
 interface PortRowProps {
+  sourceObjectId?: string;
   point: ConnectionPointDetails;
   topologyNodes: TopologyProjectionNode[];
   physicalDetailsDataSource: PhysicalObjectDetailsDataSource;
@@ -216,19 +218,24 @@ const interfaceLabel = (point: ConnectionPointDetails): string => (
 );
 
 const canConnect = (point: ConnectionPointDetails): boolean => (
-  point.cardinality === 1 && !(point.external_physical_attachments ?? []).length
+  point.cardinality === 1 ? !(point.external_physical_attachments ?? []).length : isAvailablePhysicalPort(point)
 );
 
 interface PortActionProps extends Omit<PortRowProps, 'point'> { point: ConnectionPointDetails; }
 
-const DisconnectPhysicalConnection = ({ point, writeDataSource, onDisconnected }: Pick<PortActionProps, 'point' | 'writeDataSource'> & { onDisconnected: () => void }) => {
+const DisconnectPhysicalConnection = ({ point, attachment, writeDataSource, onDisconnected }: Pick<PortActionProps, 'point' | 'writeDataSource'> & {
+  attachment: NonNullable<ConnectionPointDetails['external_physical_attachments']>[number];
+  onDisconnected: () => void;
+}) => {
   const { t } = useI18n();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const attachment = point.cardinality === 1 ? point.external_physical_attachments?.[0] : undefined;
-  if (!attachment || !writeDataSource?.deleteExternalPhysicalConnection) return null;
+  if (!writeDataSource?.deleteExternalPhysicalConnection) return null;
+  const localLabel = physicalMemberLabel(point, displayPointLabel(point, t('physical.point', { id: '' }).trim()), attachment.local_member_index);
+  const name = point.cardinality > 1 ? `${localLabel} ↔ ${attachmentLabel(attachment, t)}` : localLabel;
+  const actionLabel = point.cardinality > 1 ? `${t('physical.disconnect')} · ${name}` : t('physical.disconnect');
   const disconnect = async () => {
-    if (pending || !window.confirm(t('physical.disconnectConfirm', { name: displayPointLabel(point, t('physical.point', { id: '' }).trim()) }))) return;
+    if (pending || !window.confirm(t('physical.disconnectConfirm', { name }))) return;
     setPending(true);
     setError(null);
     try {
@@ -240,22 +247,25 @@ const DisconnectPhysicalConnection = ({ point, writeDataSource, onDisconnected }
       setPending(false);
     }
   };
-  return <><button type="button" className="port-icon-action port-icon-action--danger" aria-label={t('physical.disconnect')} title={t('physical.disconnect')} disabled={pending} onClick={() => void disconnect()}>×</button>{error && <p className="port-action-error" role="alert">{error}</p>}</>;
+  return <><button type="button" className="port-icon-action port-icon-action--danger" aria-label={actionLabel} title={actionLabel} disabled={pending} onClick={() => void disconnect()}>×</button>{error && <p className="port-action-error" role="alert">{error}</p>}</>;
 };
 
-const PortActions = ({ point, topologyNodes, physicalDetailsDataSource, deviceDetailsDataSource, writeDataSource, onConnected, cableLabelDataSource }: PortActionProps) => {
-  const { t } = useI18n();
+const PortActions = ({ point, sourceObjectId, topologyNodes, physicalDetailsDataSource, deviceDetailsDataSource, writeDataSource, onConnected, cableLabelDataSource }: PortActionProps) => {
+  const attachments = [...new Map(point.external_physical_attachments?.map(
+    attachment => [attachment.connection_ref.entity_id, attachment],
+  )).values()];
   return <>
-    {point.cardinality > 1 && writeDataSource && <small>{t('physical.memberWiringUnavailable')}</small>}
     {canConnect(point) && deviceDetailsDataSource && writeDataSource && (
-      <ConnectPhysicalEndpoint sourcePoint={point} topologyNodes={topologyNodes} physicalDetailsDataSource={physicalDetailsDataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={onConnected} cableLabelDataSource={cableLabelDataSource} />
+      <ConnectPhysicalEndpoint sourcePoint={point} sourceObjectId={sourceObjectId} topologyNodes={topologyNodes} physicalDetailsDataSource={physicalDetailsDataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={onConnected} cableLabelDataSource={cableLabelDataSource} />
     )}
-    <DisconnectPhysicalConnection point={point} writeDataSource={writeDataSource} onDisconnected={onConnected} />
+    {attachments.map(attachment => <DisconnectPhysicalConnection key={attachment.connection_ref.entity_id}
+      point={point} attachment={attachment} writeDataSource={writeDataSource} onDisconnected={onConnected} />)}
   </>;
 };
 
 const PortRow = ({
   point,
+  sourceObjectId,
   topologyNodes,
   physicalDetailsDataSource,
   deviceDetailsDataSource,
@@ -268,7 +278,8 @@ const PortRow = ({
     <td>{statusLabel(point, t)}</td>
     <td>{point.external_physical_attachments?.length ? point.external_physical_attachments.map((attachment, index) => (
       <div key={attachment.evidence_refs.find((ref) => ref.entity_type === 'ConnectionMember')?.entity_id ?? index}>
-        {attachmentLabel(attachment, t)}
+        {point.cardinality > 1 && <>{physicalMemberLabel(point, displayPointLabel(point, point.label), attachment.local_member_index)} ↔ </>}
+        {attachmentLabel(attachment, t)}{point.cardinality > 1 && attachment.remote_member_designation && ` · ${attachment.remote_member_designation}`}
       </div>
     )) : '—'}</td>
     <td>{point.internal_physical_counterparts?.length ? point.internal_physical_counterparts.map((peer, index) => (
@@ -277,7 +288,7 @@ const PortRow = ({
       </div>
     )) : '—'}</td>
     <td>{interfaceLabel(point)}</td>
-    <td><PortActions point={point} topologyNodes={topologyNodes} physicalDetailsDataSource={physicalDetailsDataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={onConnected} cableLabelDataSource={cableLabelDataSource} /></td>
+    <td><PortActions point={point} sourceObjectId={sourceObjectId} topologyNodes={topologyNodes} physicalDetailsDataSource={physicalDetailsDataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={onConnected} cableLabelDataSource={cableLabelDataSource} /></td>
   </tr>;
 };
 
@@ -427,7 +438,7 @@ function PhysicalObjectDetailsContent({
                   <th scope="col">{t('physical.actions')}</th>
                 </tr></thead>
                 <tbody>{sortedPoints.map((point) => (
-                  <PortRow key={point.connection_point_ref.entity_id} point={point} topologyNodes={topologyNodes}
+                  <PortRow key={point.connection_point_ref.entity_id} point={point} sourceObjectId={physicalObjectId ?? undefined} topologyNodes={topologyNodes}
                     physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource}
                     writeDataSource={writeDataSource} cableLabelDataSource={cableLabelDataSource}
                     onConnected={() => { if (document === undefined) setRetryKey((key) => key + 1); onConnected(); }} />

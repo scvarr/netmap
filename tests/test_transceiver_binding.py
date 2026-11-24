@@ -144,7 +144,7 @@ def test_install_validation_and_concurrency(hardware):
     assert len(package()["canonical"]["InterfacePhysicalBinding"]) == len(before["canonical"]["InterfacePhysicalBinding"]) + 2
 
 
-def test_duplex_workspace_roundtrip_and_legacy_wiring_refusals(hardware):
+def test_duplex_wiring_preserves_installed_bindings_and_workspace_roundtrip(hardware):
     from tests.l1_builders import create_object_with_point, post_confirmed_physical
 
     object_id, board, direct = create_installation(hardware)
@@ -163,13 +163,24 @@ def test_duplex_workspace_roundtrip_and_legacy_wiring_refusals(hardware):
     pair = {"source": point_end(point_id), "target": point_end(peer)}
     snapshot = package()
     for path, body in (
-        (url, pair), (f"{url}?preview=true", pair),
         (f"{url}/bulk", {"pairs": [pair]}), (f"{url}/bulk?preview=true", {"pairs": [pair]}),
         (reconnect, reconnect_request), (f"{reconnect}/compatibility-preview", reconnect_request),
     ):
         response = client.post(path, json=body)
         assert response.status_code == 422, response.text
     assert package() == snapshot
+    _, free_peer = create_object_with_point(client, "Free peer")
+    wired = created(post_confirmed_physical(client, url, json={
+        "source": {**point_end(point_id), "member_index": 2}, "target": point_end(free_peer),
+    }))
+    assert wired["source"]["member_index"] == 2
+    detail = client.get(f"/v1/topology/physical-objects/{object_id}").json()
+    endpoint = next(row for row in detail["connection_points"] if row["connection_point_ref"]["entity_id"] == point_id)
+    assert endpoint["members"] == [
+        {"index": 1, "designation": "Alpha", "occupied": False},
+        {"index": 2, "designation": "Beta", "occupied": True},
+    ]
+    snapshot = package()
     assert snapshot["format_version"] == 17
     assert client.delete("/v1/workspace/dataset").status_code == 204
     empty = package()
@@ -203,6 +214,10 @@ def test_duplex_workspace_roundtrip_and_legacy_wiring_refusals(hardware):
     restored = client.post("/v1/workspace/package", json=snapshot)
     assert restored.status_code == 204, restored.text
     assert package() == snapshot
+    assert client.delete(f"{url}/{wired['connection_ref']['entity_id']}").status_code == 204
+    disconnected = package()
+    assert disconnected["canonical"]["InterfacePhysicalBinding"] == snapshot["canonical"]["InterfacePhysicalBinding"]
+    assert disconnected["authoring"] == snapshot["authoring"]
 
 
 def test_failed_second_member_rolls_back_duplex_installation(hardware, monkeypatch):

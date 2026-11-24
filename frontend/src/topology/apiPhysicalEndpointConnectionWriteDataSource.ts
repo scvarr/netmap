@@ -57,8 +57,11 @@ const validateEndpoint = (value: unknown, path: string): void => {
     value.kind === 'NETWORK_INTERFACE' ? 'NetworkInterface' : 'ConnectionPoint',
   );
   validateRef(value.connection_point_ref, `${path}.connection_point_ref`, 'ConnectionPoint');
-  if (value.member_index !== 1) malformed(`${path}.member_index must be 1.`);
+  if (!Number.isInteger(value.member_index) || Number(value.member_index) < 1) {
+    malformed(`${path}.member_index must be a positive integer.`);
+  }
   if (value.kind === 'NETWORK_INTERFACE') {
+    if (value.member_index !== 1) malformed(`${path}.member_index must be 1 for a NetworkInterface.`);
     validateRef(value.interface_binding_ref, `${path}.interface_binding_ref`, 'InterfacePhysicalBinding');
   } else if (value.interface_binding_ref !== undefined) {
     malformed(`${path}.interface_binding_ref is not valid for a ConnectionPoint endpoint.`);

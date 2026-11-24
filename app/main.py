@@ -1145,7 +1145,7 @@ def create_physical_endpoint_connection(
                 if value.binding_id is not None
                 else None
             ),
-            member_index=1,
+            member_index=(original.member_index or 1) if isinstance(original, ConnectionPointEndpoint) else 1,
         )
 
     with session.begin():

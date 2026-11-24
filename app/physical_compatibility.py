@@ -53,17 +53,18 @@ def _locked_types(session: Session, model, ids):
     )}
 
 
-def _port_provenance(session: Session, points: dict[uuid.UUID, m.ConnectionPoint]):
+def _port_provenance(session: Session, points: dict[uuid.UUID, m.ConnectionPoint], *, lock: bool):
     if not points:
         return {}
     # Existing point locks exclude new FK references. Lock configuration rows
     # before reading mappings to serialize with base/module reconciliation.
-    owners = {point.physical_object_id for point in points.values()}
-    list(session.execute(
-        select(m.ObjectConfiguration.id).where(m.ObjectConfiguration.physical_object_id.in_(owners))
-        .order_by(m.ObjectConfiguration.id).with_for_update(read=True, nowait=True)
-    ))
-    built_in = session.execute(
+    if lock:
+        owners = {point.physical_object_id for point in points.values()}
+        list(session.execute(
+            select(m.ObjectConfiguration.id).where(m.ObjectConfiguration.physical_object_id.in_(owners))
+            .order_by(m.ObjectConfiguration.id).with_for_update(read=True, nowait=True)
+        ))
+    built_in = (
         select(m.BuiltInEndpointMapping.connection_point_id, m.ObjectConfiguration.physical_object_id,
                m.BuiltInEndpointMapping.id, m.BuiltInEndpointDefinition.id,
                m.BuiltInEndpointDefinition.port_type_id, m.BuiltInEndpointDefinition.cardinality)
@@ -71,9 +72,8 @@ def _port_provenance(session: Session, points: dict[uuid.UUID, m.ConnectionPoint
         .join(m.ObjectConfiguration, m.ObjectConfiguration.id == m.BuiltInEndpointMapping.configuration_id)
         .where(m.BuiltInEndpointMapping.connection_point_id.in_(points),
                m.ObjectConfiguration.base_revision_id == m.BuiltInEndpointDefinition.base_revision_id)
-        .with_for_update(read=True, nowait=True, of=m.BuiltInEndpointMapping)
     )
-    module = session.execute(
+    module = (
         select(m.ModuleEndpointMapping.connection_point_id, m.ObjectConfiguration.physical_object_id,
                m.ModuleEndpointMapping.id, m.ModuleEndpointDefinition.id, m.ModuleEndpointDefinition.port_type_id)
         .join(m.ModuleEndpointDefinition, m.ModuleEndpointDefinition.id == m.ModuleEndpointMapping.definition_id)
@@ -81,24 +81,44 @@ def _port_provenance(session: Session, points: dict[uuid.UUID, m.ConnectionPoint
         .join(m.ObjectConfiguration, m.ObjectConfiguration.id == m.ModuleInstallation.configuration_id)
         .where(m.ModuleEndpointMapping.connection_point_id.in_(points),
                m.ModuleInstallation.module_revision_id == m.ModuleEndpointDefinition.module_revision_id)
-        .with_for_update(read=True, nowait=True, of=(m.ModuleEndpointMapping, m.ModuleInstallation))
     )
+    if lock:
+        built_in = built_in.with_for_update(read=True, nowait=True, of=m.BuiltInEndpointMapping)
+        module = module.with_for_update(read=True, nowait=True, of=(m.ModuleEndpointMapping, m.ModuleInstallation))
     candidates = {}
-    for point_id, owner_id, mapping_id, definition_id, type_id, *capacity in [*built_in, *module]:
+    for point_id, owner_id, mapping_id, definition_id, type_id, *capacity in [*session.execute(built_in), *session.execute(module)]:
         point = points[point_id]
         if point.physical_object_id == owner_id and (not capacity or capacity[0] == point.cardinality):
             candidates.setdefault(point_id, []).append((mapping_id, definition_id, type_id))
     return {point_id: rows[0] for point_id, rows in candidates.items() if len(rows) == 1}
 
 
+def point_member_designations(session: Session, point_ids: set[uuid.UUID]) -> dict[uuid.UUID, dict[int, str]]:
+    if not point_ids:
+        return {}
+    points = {point.id: point for point in session.scalars(
+        select(m.ConnectionPoint).where(m.ConnectionPoint.id.in_(point_ids))
+    )}
+    provenance = _port_provenance(session, points, lock=False)
+    ports = {port.id: port for port in session.scalars(
+        select(m.PortType).where(m.PortType.id.in_({row[2] for row in provenance.values()}))
+    )}
+    return {
+        point_id: dict(enumerate(ports[type_id].members, 1))
+        for point_id, (_, _, type_id) in provenance.items()
+        if type_id in ports and ports[type_id].cardinality == points[point_id].cardinality
+    }
+
+
 def verify_compatibility(
     session: Session,
     pairs: list[tuple[m.ConnectionPoint | None, m.ConnectionPoint | None]],
     *, intent: object, preview: bool, confirmation: PhysicalCompatibilityConfirmation | None,
+    require_preview: bool = False,
 ) -> PhysicalCompatibilityPreview:
     try:
         points = {point.id: point for pair in pairs for point in pair if point is not None}
-        provenance = _port_provenance(session, points)
+        provenance = _port_provenance(session, points, lock=True)
         ports = _locked_types(session, m.PortType, {row[2] for row in provenance.values()})
         marked_pairs = set(session.execute(
             select(m.PortTypeCompatibility.port_type_a_id, m.PortTypeCompatibility.port_type_b_id)
@@ -148,4 +168,6 @@ def verify_compatibility(
         raise NetMapError("PHYSICAL_COMPATIBILITY_STALE", "Physical data or operation changed. Run a new preview.", details)
     if verdict == "UNKNOWN" and (confirmation is None or not confirmation.accept_unknown):
         raise NetMapError("PHYSICAL_COMPATIBILITY_CONFIRMATION_REQUIRED", "Preview and explicitly confirm unknown physical compatibility", details)
+    if require_preview and confirmation is None:
+        raise NetMapError("PHYSICAL_COMPATIBILITY_STALE", "Run a preview for the selected endpoint members.", details)
     return result

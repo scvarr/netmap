@@ -4,7 +4,7 @@ import type { PhysicalCompatibilityConfirmation, PhysicalCompatibilityPreview } 
 
 export type PhysicalEndpointRequest =
   | { kind: 'NETWORK_INTERFACE'; network_interface_id: string }
-  | { kind: 'CONNECTION_POINT'; connection_point_id: string; member_index: 1 };
+  | { kind: 'CONNECTION_POINT'; connection_point_id: string; member_index: number };
 
 export interface CreatePhysicalEndpointConnectionRequest extends CableNamingInput {
   source: PhysicalEndpointRequest;
@@ -17,7 +17,7 @@ export interface PhysicalEndpointMaterialization {
   endpoint_ref: ProjectionSourceRef;
   connection_point_ref: ProjectionSourceRef;
   interface_binding_ref?: ProjectionSourceRef;
-  member_index: 1;
+  member_index: number;
 }
 
 export interface PhysicalEndpointConnectionCreationDocument {

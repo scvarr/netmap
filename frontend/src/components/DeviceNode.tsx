@@ -89,7 +89,6 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
               const tooltip = [slot.display_name, portType?.name ?? slot.kind];
               if (slot.members && slot.cardinality) {
                 tooltip.push(`${t('transceiver.members', { count: slot.cardinality })} · ${slot.members.join(', ')}`);
-                if (slot.cardinality > 1) tooltip.push(t('physical.memberWiringUnavailable'));
               }
               const style = { '--port-size': `${BLUEPRINT_PORT_SIZE}px`, '--port-stroke': `${BLUEPRINT_PORT_STROKE}px`,
                 backgroundColor: transceiver && !occupied ? 'transparent' : fill, borderColor: outline, left: `${slot.panel_local_position.x * 100}%`, top: `${slot.panel_local_position.y * 100}%` };

@@ -335,7 +335,10 @@ API-first core независим от React state. User/ACL semantics прин�
 snapshots; development-stage authoring/runtime compatibility не является целью.
 Workspace JSON v17 включает типы физических окончаний, симметричную
 матрицу PortType, линии и характеристики закреплённых ревизий трансиверов.
-Формат сохраняет ассоциации аппаратных NetworkInterface с местами.
+Формат сохраняет ассоциации аппаратных NetworkInterface с местами, UUID
+физических линий и точные `ConnectionMember` mappings. Импорт до записи
+отклоняет индексы за пределами cardinality и повторную внешнюю занятость пары
+`ConnectionPoint.id` и member index. Внутренняя continuity может использовать тот же канал. Исторические данные автоматически не исправляются.
 Импорт принимает пакеты v17. Справочники ModulePortType и ModuleBayType, вид посадочного
 места и UUID-ссылки сохраняются в ревизиях, черновиках, кандидатах и результатах review.
 Исторические snapshots внутри пакета сохраняют

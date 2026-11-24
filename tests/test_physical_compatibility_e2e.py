@@ -1,4 +1,6 @@
 import uuid
+from copy import deepcopy
+from threading import Barrier
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -18,18 +20,18 @@ from tests.test_workspace_portability import client, isolated_workspace, snapsho
 pytestmark = pytest.mark.no_database
 
 
-def typed_points(name, *types):
+def typed_points(name, *types, cardinality=1, internal_links=()):
     template = client.post("/v1/library/base-templates", json={
         "name": name, "body": {"kind": "RECTANGLE", "width": 100, "height": 40},
         "panels": [{"panel_key": "panel", "panel_number": 1, "display_name": "Panel",
                     "x": 0, "y": 0, "width": 100, "height": 40}],
         "slots": [
             {"key": f"p{index}", "display_name": f"P{index}", "kind": "CONNECTION_POINT",
-             "port_type_id": type_id, "panel_key": "panel",
+             "port_type_id": type_id, "panel_key": "panel", "cardinality": cardinality,
              "rendered_position": {"x": index / (len(types) + 1), "y": 0.5}}
             for index, type_id in enumerate(types, 1)
         ],
-        "internal_links": [],
+        "internal_links": list(internal_links),
     })
     assert template.status_code == 201, template.text
     obj = client.post("/v1/topology/physical-objects", json={
@@ -277,3 +279,135 @@ def test_matrix_is_symmetric_and_preview_tracks_rules_not_names():
     update(second, compatibility_mode="MATRIX")
     assert client.put(f"{matrix}/{second}/{first}", json={"allowed": False}).status_code == 204
     assert preview(CREATE, left)["verdict"] == preview(CREATE, right)["verdict"] == "DENY"
+
+
+def member_pair(a, index_a, b, index_b):
+    return {
+        "source": {**point_endpoint(a), "member_index": index_a},
+        "target": {**point_endpoint(b), "member_index": index_b},
+    }
+
+
+def test_member_wiring_preview_exact_pair_projection_and_disconnect():
+    duplex = catalog_item("port-types", name="Duplex", medium="FIBER",
+                          members=["Blue", "Orange"], compatibility_mode="SAME_TYPE")["id"]
+    source_id, (a, rear) = typed_points("Panel", duplex, duplex, cardinality=2, internal_links=[{
+        "from_slot_key": "p1", "to_slot_key": "p2",
+        "member_mappings": [{"from_member_index": 2, "to_member_index": 1}],
+    }])
+    target_id, (b,) = typed_points("Switch", duplex, cardinality=2)
+    first = member_pair(a, 2, b, 1)
+    second = member_pair(a, 1, b, 2)
+    for invalid in (0, 3, None):
+        assert client.post(f"{CREATE}?preview=true", json=member_pair(a, invalid, b, 1)).status_code == 422
+    assert client.post(f"{CREATE}?preview=true", json=member_pair(a, 1, rear, 2)).status_code == 422
+    initial = snapshot()["canonical"]
+    check = preview(CREATE, first)
+    assert check["verdict"] == "ALLOW"
+    assert client.post(CREATE, json=first).status_code == 409
+    assert client.post(CREATE, json=confirmed_payload(check, second)).json()["error"]["code"] == "PHYSICAL_COMPATIBILITY_STALE"
+    stale = client.post(CREATE, json=confirmed_payload(check, {**first, "cable_label": "Changed"}))
+    assert stale.json()["error"]["code"] == "PHYSICAL_COMPATIBILITY_STALE"
+
+    created = []
+    for payload in (first, second):
+        reply = client.post(CREATE, json=confirmed_payload(preview(CREATE, payload), payload))
+        assert reply.status_code == 201, reply.text
+        created.append(reply.json())
+    assert [(item["source"]["member_index"], item["target"]["member_index"]) for item in created] == [(2, 1), (1, 2)]
+    assert client.post(CREATE, json=confirmed_payload(check, first)).json()["error"]["details"]["reason"] == "CONNECTION_POINT_MEMBER_OCCUPIED"
+    assert client.get(f"/v1/cables/{created[0]['cable_ref']['entity_id']}/reconnect").status_code == 422
+
+    preview_rows = client.get("/v1/cables/bulk-delete-preview", params={
+        "source_object_id": target_id, "target_object_id": source_id,
+    }).json()["cables"]
+    assert {(tuple(row["source_member_designations"]), tuple(row["target_member_designations"]))
+            for row in preview_rows} == {(('Blue',), ('Orange',)), (('Orange',), ('Blue',))}
+
+    def project():
+        response = client.post("/v1/topology/projection", json={
+            "layer": "L1", "detail_level": "PHYSICAL_OBJECT",
+            "scope": {"include_location_subtrees": [], "include_entities": []},
+        })
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    for projection in (project(), project()):
+        marker = next(point for node in projection["nodes"] for point in node["attributes"]["connection_points"]
+                      if point["connection_point_id"] == a)
+        assert marker["members"] == [
+            {"index": 1, "designation": "Blue", "occupied": True},
+            {"index": 2, "designation": "Orange", "occupied": True},
+        ]
+        endpoint_pairs = [pair for edge in projection["edges"] for pair in edge["attributes"]["endpoint_pairs"]]
+        assert {pair["cable_ref"]["entity_id"] for pair in endpoint_pairs} == {
+            item["cable_ref"]["entity_id"] for item in created
+        }
+
+    connection_id = created[0]["connection_ref"]["entity_id"]
+    assert client.delete(f"{CREATE}/{connection_id}").status_code == 204
+    detail = client.get(f"/v1/topology/physical-objects/{source_id}").json()
+    ending = next(point for point in detail["connection_points"] if point["connection_point_ref"]["entity_id"] == a)
+    assert [member["occupied"] for member in ending["members"]] == [True, False]
+    assert ending["external_physical_attachments"][0]["connection_ref"] == created[1]["connection_ref"]
+    assert ending["internal_physical_counterparts"][0]["connection_point_ref"]["entity_id"] == rear
+    final = snapshot()["canonical"]
+    for entity in ("ConnectionPoint", "NetworkInterface", "InterfacePhysicalBinding"):
+        assert final[entity] == initial[entity]
+    assert len(final["Cable"]) == 1
+    assert len(final["Connection"]) == len(initial["Connection"]) + 1
+    assert len(final["ConnectionMember"]) == len(initial["ConnectionMember"]) + 1
+
+
+def test_members_serialize_competing_writes_with_independent_remaining_capacity():
+    duplex = catalog_item("port-types", name="Duplex", medium="FIBER", members=["A", "B"])["id"]
+    simplex = port("Simplex", "FIBER")
+    _, (a,) = typed_points("A", duplex, cardinality=2)
+    _, (b, c, d) = typed_points("B", simplex, simplex, simplex)
+    attempts = [member_pair(a, 1, b, 1), member_pair(a, 1, c, 1), member_pair(a, 2, d, 1)]
+    check = preview(CREATE, attempts[0])
+    assert check["verdict"] == "UNKNOWN"
+    rejected = client.post(CREATE, json={**attempts[0], "compatibility": {"token": check["token"], "accept_unknown": False}})
+    assert rejected.json()["error"]["code"] == "PHYSICAL_COMPATIBILITY_CONFIRMATION_REQUIRED"
+    requests = [confirmed_payload(preview(CREATE, body), body) for body in attempts]
+    barrier = Barrier(len(requests))
+
+    def write(body):
+        barrier.wait(timeout=5)
+        return client.post(CREATE, json=body)
+
+    with ThreadPoolExecutor(max_workers=len(requests)) as pool:
+        results = list(pool.map(write, requests))
+    assert sorted(response.status_code for response in results[:2]) == [201, 422]
+    assert results[2].status_code == 201, results[2].text
+    assert len(snapshot()["canonical"]["Cable"]) == 2
+
+
+def test_workspace_v17_preserves_wide_members_and_rejects_conflicts_before_import():
+    wide = catalog_item("port-types", name="ODF", medium="FIBER",
+                        members=[f"F{index:02}" for index in range(1, 25)])["id"]
+    copper = port("RJ45", "COPPER")
+    simplex = port("Simplex", "FIBER")
+    _, (a,) = typed_points("ODF", wide, cardinality=24)
+    _, (b, c, d) = typed_points("Peer", simplex, simplex, copper)
+    denied = member_pair(a, 24, d, 1)
+    assert preview(CREATE, denied)["verdict"] == "DENY"
+    assert client.post(CREATE, json=denied).json()["error"]["code"] == "PHYSICAL_COMPATIBILITY_DENIED"
+    for index, target in ((24, b), (23, c)):
+        payload = member_pair(a, index, target, 1)
+        response = client.post(CREATE, json=confirmed_payload(preview(CREATE, payload), payload))
+        assert response.status_code == 201, response.text
+
+    package = snapshot()
+    assert package["format_version"] == 17
+    assert client.delete("/v1/workspace/dataset").status_code == 204
+    empty = snapshot()
+    for invalid_index, reason in ((25, "outside"), (24, "EXTERNAL_MEMBER_OCCUPANCY")):
+        malformed = deepcopy(package)
+        member = next(row for row in malformed["canonical"]["ConnectionMember"] if row["point_a_member"] == 23)
+        member["point_a_member"] = invalid_index
+        response = client.post("/v1/workspace/package", json=malformed)
+        assert response.status_code == 422 and reason in response.text
+        assert snapshot() == empty
+    assert client.post("/v1/workspace/package", json=package).status_code == 204
+    assert snapshot() == package

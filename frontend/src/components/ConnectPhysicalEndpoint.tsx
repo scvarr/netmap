@@ -15,7 +15,8 @@ import type {
 } from "../topology/physicalObjectDetailsTypes";
 import { displayNodeLabel, numericAttribute } from "../topology/presentation";
 import type { TopologyProjectionNode } from "../topology/types";
-import { isAvailablePhysicalPort } from "../topology/physicalPortAvailability";
+import { PhysicalMemberSelect } from "./PhysicalMemberSelect";
+import { isAvailablePhysicalPort, physicalMemberLabel, selectedPhysicalMember } from "../topology/physicalPortAvailability";
 import { useI18n } from "../i18n";
 import { usePhysicalCompatibilityConfirmation } from './PhysicalCompatibilityDialog';
 import { PhysicalCompatibilityError } from '../topology/physicalCompatibility';
@@ -24,6 +25,7 @@ import type { CableLabelDataSource, CableNamingInput } from '../topology/cableLa
 
 interface ConnectPhysicalEndpointProps {
   sourcePoint: ConnectionPointDetails;
+  sourceObjectId?: string;
   topologyNodes: TopologyProjectionNode[];
   physicalDetailsDataSource: PhysicalObjectDetailsDataSource;
   deviceDetailsDataSource: DeviceDetailsDataSource;
@@ -70,6 +72,7 @@ const projectedFreePort = (node: TopologyProjectionNode, sourceId: string) =>
 
 export function ConnectPhysicalEndpoint({
   sourcePoint,
+  sourceObjectId,
   topologyNodes,
   physicalDetailsDataSource,
   deviceDetailsDataSource,
@@ -82,6 +85,8 @@ export function ConnectPhysicalEndpoint({
   const [mode, setMode] = useState<Mode>("PORT");
   const [targetObjectId, setTargetObjectId] = useState("");
   const [targetEntityId, setTargetEntityId] = useState("");
+  const [sourceMember, setSourceMember] = useState<number>();
+  const [targetMember, setTargetMember] = useState<number>();
   const [query, setQuery] = useState("");
   const [targetState, setTargetState] = useState<TargetState>({ kind: "idle" });
   const [retry, setRetry] = useState(0);
@@ -92,6 +97,8 @@ export function ConnectPhysicalEndpoint({
   const [cableNaming, setCableNaming] = useState<CableNamingInput>({ cable_label: null, cable_label_template_id: null, generate_cable_label: false });
   const reset = () => {
     setOpen(false);
+    setSourceMember(undefined);
+    setTargetMember(undefined);
     setMode("PORT");
     setTargetObjectId("");
     setTargetEntityId("");
@@ -108,7 +115,7 @@ export function ConnectPhysicalEndpoint({
             const id = objectId(node);
             if (
               node.kind !== "PHYSICAL_OBJECT" ||
-              !id ||
+              !id || id === sourceObjectId ||
               node.attributes.class === "cable"
             )
               return [];
@@ -130,7 +137,7 @@ export function ConnectPhysicalEndpoint({
           ),
         (item) => item.label,
       ),
-    [mode, query, sourcePoint.connection_point_ref.entity_id, topologyNodes],
+    [mode, query, sourceObjectId, sourcePoint.connection_point_ref.entity_id, topologyNodes],
   );
   const selectedObjectIsVisible =
     !targetObjectId || candidates.some((item) => item.id === targetObjectId);
@@ -143,6 +150,7 @@ export function ConnectPhysicalEndpoint({
   }, [selectedObjectIsVisible, targetObjectId]);
   useEffect(() => {
     setTargetEntityId("");
+    setTargetMember(undefined);
     if (!targetObjectId || !open) {
       setTargetState({ kind: "idle" });
       return undefined;
@@ -205,8 +213,16 @@ export function ConnectPhysicalEndpoint({
           (item) => item.label,
         )
       : [];
+  const targetPoint = points.find(point => point.connection_point_ref.entity_id === targetEntityId);
+  const sourceIndex = selectedPhysicalMember(sourcePoint, sourceMember);
+  const targetIndex = targetPoint ? selectedPhysicalMember(targetPoint, targetMember) : undefined;
+  const canSubmit = Boolean(targetEntityId && sourceIndex && (mode === "INTERFACE" || targetIndex));
+  const targetName = candidates.find(item => item.id === targetObjectId)?.label;
+  const summary = targetPoint && canSubmit && (sourcePoint.cardinality > 1 || targetPoint.cardinality > 1) ? (
+    `${physicalMemberLabel(sourcePoint, sourcePoint.label, sourceIndex, true)} ↔ ${targetName} / ${physicalMemberLabel(targetPoint, targetPoint.label, targetIndex, true)}`
+  ) : undefined;
   const submit = async () => {
-    if (!targetEntityId || busy || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
+    if (!canSubmit || !sourceIndex || busy || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
     setBusy(true);
     setError(null);
     const target: PhysicalEndpointRequest =
@@ -214,7 +230,7 @@ export function ConnectPhysicalEndpoint({
         ? {
             kind: "CONNECTION_POINT",
             connection_point_id: targetEntityId,
-            member_index: 1,
+            member_index: targetIndex!,
           }
         : { kind: "NETWORK_INTERFACE", network_interface_id: targetEntityId };
     try {
@@ -222,13 +238,13 @@ export function ConnectPhysicalEndpoint({
         source: {
           kind: "CONNECTION_POINT",
           connection_point_id: sourcePoint.connection_point_ref.entity_id,
-          member_index: 1,
+          member_index: sourceIndex,
         },
         target,
         ...cableNaming,
       };
       if (writeDataSource.previewPhysicalEndpointConnection) {
-        const compatibility = await confirm(await writeDataSource.previewPhysicalEndpointConnection(request));
+        const compatibility = await confirm(await writeDataSource.previewPhysicalEndpointConnection(request), summary);
         if (!compatibility) return;
         request.compatibility = compatibility;
       }
@@ -252,8 +268,7 @@ export function ConnectPhysicalEndpoint({
         title={t("connect.connectPort")}
         aria-expanded={open}
         disabled={
-          busy || (sourcePoint.external_connection_count ?? 0) >=
-          sourcePoint.cardinality
+          busy || !isAvailablePhysicalPort(sourcePoint)
         }
         onClick={() => {
           if (open) reset();
@@ -305,7 +320,7 @@ export function ConnectPhysicalEndpoint({
                   aria-label={t("connect.freePort")}
                   value={targetEntityId}
                   disabled={busy || targetState.kind !== "points"}
-                  onChange={(event) => setTargetEntityId(event.target.value)}
+                  onChange={(event) => { setTargetEntityId(event.target.value); setTargetMember(undefined); }}
                 >
                   <option value="">{t("connect.selectPort")}</option>
                   {points.map((point) => (
@@ -318,10 +333,12 @@ export function ConnectPhysicalEndpoint({
                   ))}
                 </select>
               </label>
+              {targetPoint && <PhysicalMemberSelect point={targetPoint} label={t("connect.targetMember")}
+                value={targetMember} onChange={setTargetMember} disabled={busy} />}
               {targetState.kind === "points" && !points.length && (
                 <p className="muted">{t("connect.noFreePoints")}</p>
               )}
-              <button
+              {sourcePoint.cardinality === 1 && <button
                 type="button"
                 className="connect-interface__advanced"
                 disabled={busy}
@@ -332,7 +349,7 @@ export function ConnectPhysicalEndpoint({
                 }}
               >
                 {t("connect.advanced")}
-              </button>
+              </button>}
             </>
           ) : (
             <>
@@ -404,6 +421,9 @@ export function ConnectPhysicalEndpoint({
               {error}
             </p>
           )}
+          <PhysicalMemberSelect point={sourcePoint} label={t("connect.sourceMember")}
+            value={sourceMember} onChange={setSourceMember} disabled={busy} />
+          {summary && <p>{summary}</p>}
           <CableNamingFields dataSource={cableLabelDataSource} disabled={busy} value={cableNaming} onChange={setCableNaming} />
           <div className="connect-interface__actions">
             <button type="button" disabled={busy} onClick={reset}>
@@ -412,7 +432,7 @@ export function ConnectPhysicalEndpoint({
             <button
               type="submit"
               disabled={
-                !targetEntityId || !selectedObjectIsVisible || busy || (cableNaming.generate_cable_label === true && !cableNaming.cable_label_template_id)
+                !canSubmit || !selectedObjectIsVisible || busy || (cableNaming.generate_cable_label === true && !cableNaming.cable_label_template_id)
               }
             >
               {submitting ? t("connect.connecting") : busy ? t('compatibility.checking') : error ? t("action.retry") : t("connect.connect")}

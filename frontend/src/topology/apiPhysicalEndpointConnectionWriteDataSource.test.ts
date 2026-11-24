@@ -49,6 +49,18 @@ describe('ApiPhysicalEndpointConnectionWriteDataSource', () => {
     });
   });
 
+  it('accepts exact member indices on existing points', async () => {
+    const created = { ...document, source: { ...document.source, member_index: 24 }, target: {
+      kind: 'CONNECTION_POINT', endpoint_ref: ref('ConnectionPoint', 'point-b'),
+      connection_point_ref: ref('ConnectionPoint', 'point-b'), member_index: 2,
+    } };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(created), { status: 201 })));
+    await expect(new ApiPhysicalEndpointConnectionWriteDataSource().createPhysicalEndpointConnection({
+      source: { kind: 'CONNECTION_POINT', connection_point_id: 'point-a', member_index: 24 },
+      target: { kind: 'CONNECTION_POINT', connection_point_id: 'point-b', member_index: 2 },
+    })).resolves.toEqual(created);
+  });
+
   it('rejects a response that omits a NetworkInterface materialization binding', async () => {
     const malformed = structuredClone(document);
     delete (malformed.target as { interface_binding_ref?: unknown }).interface_binding_ref;

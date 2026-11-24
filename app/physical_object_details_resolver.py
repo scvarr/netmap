@@ -3,6 +3,7 @@ import uuid
 
 from sqlalchemy import and_, select
 
+from app.physical_compatibility import point_member_designations
 from app.module_endpoint_names import EndpointNames
 from app.device_catalog import DeviceCatalog, DisplayAliasRecord
 from app.cable_labels import resolved_cable_label
@@ -41,12 +42,13 @@ class ConfiguredPhysicalObjectDetailsResolver:
         interface_aliases = EndpointNames(self.repository.session).network_interfaces(list(interface_ids))
         built_in = self._built_in_panel_contexts(endpoint_ids | point_ids)
         provenance, slots, contexts, panels = self._blueprint_instance(physical_object_id, built_in, point_ids)
+        designations = point_member_designations(self.repository.session, endpoint_ids | point_ids)
         details = [
             self._point_details(
                 point, point_aliases.get(point.point_id), incident, point_by_id,
                 point_aliases, object_aliases, bindings_by_point[point.point_id],
                 interface_aliases, slots.get(point.point_id), cables_by_connection,
-                canonical_aliases.get(point.point_id), built_in,
+                canonical_aliases.get(point.point_id), built_in, designations,
             )
             for point in points
         ]
@@ -57,7 +59,7 @@ class ConfiguredPhysicalObjectDetailsResolver:
         object_alias = object_aliases.get(physical_object_id)
         return PhysicalObjectDetailsDocument(physical_object=PhysicalObjectDetails(source_ref=self._ref("PhysicalObject", physical_object_id), label=self._label(object_alias, "PhysicalObject", physical_object_id), label_source=None if object_alias else "TECHNICAL_FALLBACK", class_=(object_class.value if object_class else None)), blueprint_provenance=provenance, panels=panels, connection_points=details, owned_interface_count=len(owners), gaps=[], warnings=[])
 
-    def _point_details(self, point, alias, incident, point_by_id, point_aliases, object_aliases, bindings, interface_aliases, slot, cables_by_connection, canonical_alias, built_in):
+    def _point_details(self, point, alias, incident, point_by_id, point_aliases, object_aliases, bindings, interface_aliases, slot, cables_by_connection, canonical_alias, built_in, designations):
         point_members = [member for member in incident if point.point_id in (member.point_a_id, member.point_b_id)]
         refs = [self._ref("ConnectionPoint", point.point_id)]
         if alias and alias.metadata_id: refs.append(self._ref("EntityMetadata", alias.metadata_id))
@@ -89,7 +91,13 @@ class ConfiguredPhysicalObjectDetailsResolver:
             cable = cables_by_connection.get(member.connection_id)
             if cable is not None:
                 evidence.append(self._ref("Cable", cable.id))
+            local_is_a = member.point_a_id == point.point_id
+            local_index = member.point_a_member if local_is_a else member.point_b_member
+            remote_index = member.point_b_member if local_is_a else member.point_a_member
             external.append(ExternalPhysicalAttachmentDetails(
+                local_member_index=local_index,
+                remote_member_index=remote_index,
+                remote_member_designation=designations.get(peer_point_id, {}).get(remote_index, str(remote_index)),
                 kind="CABLE" if cable is not None else "DIRECT_CONNECTION",
                 connection_ref=self._ref("Connection", member.connection_id),
                 evidence_refs=evidence,
@@ -101,7 +109,13 @@ class ConfiguredPhysicalObjectDetailsResolver:
                 remote_panel_name=peer_panel_name,
                 remote_connection_point_label=peer_label,
             ))
-        return ConnectionPointDetails(canonical_label=(canonical_alias.value if canonical_alias else None), connection_point_ref=self._ref("ConnectionPoint", point.point_id), label=self._label(alias, "ConnectionPoint", point.point_id), label_source=None if alias else "TECHNICAL_FALLBACK", cardinality=point.cardinality, incident_connection_count=len({member.connection_id for member in point_members}), external_connection_count=len(external_connections), direct_interface_binding_count=len(bindings), ordering_key=slot.slot_key if slot else self._label(alias, "ConnectionPoint", point.point_id), blueprint_slot=slot, direct_interface_bindings=direct_bindings, internal_physical_counterparts=internal, external_physical_attachments=external, source_refs=self._dedupe_refs(refs))
+        occupied = {attachment.local_member_index for attachment in external}
+        point_designations = designations.get(point.point_id, {})
+        members = [
+            {"index": index, "designation": point_designations.get(index, str(index)), "occupied": index in occupied}
+            for index in range(1, point.cardinality + 1)
+        ]
+        return ConnectionPointDetails(members=members, canonical_label=(canonical_alias.value if canonical_alias else None), connection_point_ref=self._ref("ConnectionPoint", point.point_id), label=self._label(alias, "ConnectionPoint", point.point_id), label_source=None if alias else "TECHNICAL_FALLBACK", cardinality=point.cardinality, incident_connection_count=len({member.connection_id for member in point_members}), external_connection_count=len(external_connections), direct_interface_binding_count=len(bindings), ordering_key=slot.slot_key if slot else self._label(alias, "ConnectionPoint", point.point_id), blueprint_slot=slot, direct_interface_bindings=direct_bindings, internal_physical_counterparts=internal, external_physical_attachments=external, source_refs=self._dedupe_refs(refs))
 
     def _built_in_panel_contexts(self, point_ids):
         rows = self.repository.session.execute(

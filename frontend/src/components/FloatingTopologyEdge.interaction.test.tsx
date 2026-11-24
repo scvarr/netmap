@@ -142,6 +142,36 @@ describe('cable route edge interaction', () => {
     });
   });
 
+  it('keeps two member Cables individually selectable at the same marker after refresh', () => {
+    const entry = (id: string, x: number) => {
+      const node = blueprintNode(id, x, id, {
+        connectionPointId: id + '-port', kind: 'CONNECTION_POINT', renderedX: .25, attachmentX: 0, side: 'LEFT',
+      });
+      const attributes = node.data.projection.attributes;
+      return { ...node, data: { ...node.data, projection: { ...node.data.projection, attributes: { ...attributes, connection_points: [{
+        connection_point_id: id + '-port', display_name: id + '-port', cardinality: 2, external_connection_count: 2,
+        members: [{ index: 1, designation: 'Alpha', occupied: true }, { index: 2, designation: 'Beta', occupied: true }],
+      }] } } } };
+    };
+    const cables = [1, 2].map(index => ({
+      id: 'cable-' + index, source: 'left', target: 'right',
+      data: { cableNode: { id: 'cable-' + index, label: 'Fiber', source_refs: [cableRef('cable-' + index)] },
+        endpointPair: { from_connection_point_id: 'left-port', to_connection_point_id: 'right-port',
+          from_member_index: index, to_member_index: 3 - index } },
+    })) as any;
+    const selectCable = vi.fn();
+    withNodes({ left: entry('left', 0), right: entry('right', 300) }, () => {
+      const view = render(<ForegroundCableRoutes edges={cables} virtualChannels onCableSelect={selectCable} />);
+      expect(view.container.querySelectorAll('.cable-route-port-marker[data-connection-point-id="left-port"]')).toHaveLength(1);
+      const reloaded = structuredClone(cables);
+      view.rerender(<ForegroundCableRoutes edges={reloaded} virtualChannels onCableSelect={selectCable} />);
+      const shared = view.container.querySelector('.cable-route-hit[data-cable-count="2"]')!;
+      fireEvent.click(shared);
+      fireEvent.click(within(view.getByRole('dialog')).getByRole('button', { name: /left-port · Beta.*right-port · Alpha/ }));
+      expect(selectCable).toHaveBeenLastCalledWith(reloaded[1]);
+    });
+  });
+
   it('uses shared geometry for hover, selection, trace, and cable choice', () => {
     const fixture = (id: string, x: number) => blueprintNode(id, x, id, {
       connectionPointId: id + '-a', kind: 'CONNECTION_POINT', renderedX: .1, attachmentX: 0, side: 'LEFT',

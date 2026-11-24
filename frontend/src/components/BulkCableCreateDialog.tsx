@@ -61,7 +61,7 @@ function portList(document: PhysicalObjectDetailsDocument | null | undefined, si
   const panel = options.find(item => item.key === side.panel) ?? options[0];
   const rows = points.filter(point => group(point) === panel.key).map(point => ({
     point, id: pointId(point), label: displayPointLabel(point, t('physical.port')),
-    available: isAvailablePhysicalPort(point),
+    available: point.cardinality === 1 && isAvailablePhysicalPort(point),
   })).sort((a, b) => {
     const direction = side.sort === 'ascending' ? 1 : -1;
     return direction * collator.compare(a.label, b.label) || a.id.localeCompare(b.id);

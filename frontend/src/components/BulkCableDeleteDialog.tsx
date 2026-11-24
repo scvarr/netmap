@@ -81,6 +81,8 @@ export function BulkCableDeleteDialog({ sourceId, nodes, preview, remove, refres
     await refreshAfterDelete();
   });
 
+  const withMembers = (label: string, members?: string[]) => members?.length ? `${label} · ${members.join(', ')}` : label;
+
   const endpoint = (row: CableDeleteCandidate, source: boolean) => {
     const pointA = source === row.source_is_point_a;
     const pointId = pointA ? row.expected.point_a_id : row.expected.point_b_id;
@@ -88,7 +90,8 @@ export function BulkCableDeleteDialog({ sourceId, nodes, preview, remove, refres
     const slots = blueprint?.slots.filter(slot => slot.connection_point_id === pointId);
     const face = slots?.length === 1 ? blueprint?.panels.find(panel => panel.panel_key === slots[0].panel_key)?.face : undefined;
     const label = source ? row.source_point_label : row.target_point_label;
-    return <>{label}{face && <> · {t(face === 'FRONT' ? 'face.front' : 'face.rear')}</>}</>;
+    const members = source ? row.source_member_designations : row.target_member_designations;
+    return <>{withMembers(label, members)}{face && <> · {t(face === 'FRONT' ? 'face.front' : 'face.rear')}</>}</>;
   };
 
   const confirming = stage === 'confirm';
@@ -129,7 +132,7 @@ export function BulkCableDeleteDialog({ sourceId, nodes, preview, remove, refres
             <tbody>{(confirming ? chosen : sortedRows).map(row => {
               const id = row.expected.cable_id;
               return <tr key={id}>
-                {!confirming && <td><input type="checkbox" aria-label={`${row.display_label} · ${row.source_point_label} ↔ ${row.target_point_label}`}
+                {!confirming && <td><input type="checkbox" aria-label={`${row.display_label} · ${withMembers(row.source_point_label, row.source_member_designations)} ↔ ${withMembers(row.target_point_label, row.target_member_designations)}`}
                   checked={selected.has(id)} onChange={event => {
                     const checked = event.target.checked;
                     setSelected(current => {

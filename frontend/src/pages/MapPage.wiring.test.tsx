@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { MapPage } from './MapPage';
+import type { PhysicalEndpointConnectionWriteDataSource } from '../topology/physicalEndpointConnectionWriteTypes';
 import { createMapPageHarness } from './MapPage.testHarness';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -12,7 +13,7 @@ const map = { map_ref: { entity_type: 'SavedMap', entity_id: 'map-1' }, active_v
 const node = (id: string, label: string, cp: string, count = 0) => ({ id, kind: 'PHYSICAL_OBJECT', label, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: { class: 'switch', connection_points: [{ connection_point_id: cp, display_name: cp === 'a-cp' ? 'A01' : 'B01', cardinality: 1, external_connection_count: count }] } });
 const doc = { schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [node('a', 'Source', 'a-cp'), node('b', 'Target', 'b-cp')], edges: [], gaps: [], warnings: [] } as any;
 const creation = { cable_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: 'cable-1' }, source: {}, target: {}, connection_refs: [] } as any;
-const renderPage = (write = vi.fn().mockResolvedValue(creation), loadProjection = vi.fn().mockResolvedValue(doc), cableLabelDataSource: any = { loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [{ id: 'template-1', name: 'FC', pattern: 'FC####', start_at: 1 }] }) }) => { const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), createMap: vi.fn() }; renderMapPage({ dataSource: { loadProjection }, savedMapDataSource: maps, physicalEndpointConnectionWriteDataSource: { createPhysicalEndpointConnection: write }, cableLabelDataSource }, '/map?map=map-1&view=physical'); return { write, loadProjection, maps }; };
+const renderPage = (write = vi.fn().mockResolvedValue(creation), loadProjection = vi.fn().mockResolvedValue(doc), cableLabelDataSource: any = { loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [{ id: 'template-1', name: 'FC', pattern: 'FC####', start_at: 1 }] }) }, preview?: PhysicalEndpointConnectionWriteDataSource["previewPhysicalEndpointConnection"]) => { const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), createMap: vi.fn() }; renderMapPage({ dataSource: { loadProjection }, savedMapDataSource: maps, physicalEndpointConnectionWriteDataSource: { createPhysicalEndpointConnection: write, previewPhysicalEndpointConnection: preview }, cableLabelDataSource }, '/map?map=map-1&view=physical'); return { write, loadProjection, maps }; };
 const startWiring = () => { fireEvent.click(screen.getByRole('button', { name: 'Инструменты' })); fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); };
 
 describe('MapPage visual wiring', () => {
@@ -56,6 +57,36 @@ describe('MapPage visual wiring', () => {
     expect(write).toHaveBeenCalledTimes(1);
     expect(maps.loadMap).toHaveBeenCalledTimes(mapReads + 1);
     expect(loadProjection.mock.calls.length).toBeGreaterThan(projectionReads);
+  });
+
+  it('previews and creates the selected permutation even with only one free member per marker', async () => {
+    const nodes = [0, 1].map((index) => {
+      const item = doc.nodes[index];
+      return { ...item, attributes: { ...item.attributes, connection_points: [{
+        ...item.attributes.connection_points[0], cardinality: 2, external_connection_count: 1,
+        members: [{ index: 1, designation: 'Alpha', occupied: index === 0 },
+          { index: 2, designation: 'Beta', occupied: index === 1 }],
+      }] } };
+    });
+    const preview = vi.fn().mockResolvedValue({ verdict: 'ALLOW', token: 'exact-preview', pairs: [] });
+    const { write } = renderPage(undefined, vi.fn().mockResolvedValue({ ...doc, nodes }), undefined, preview);
+    await screen.findByTestId('canvas');
+    startWiring();
+    fireEvent.click(screen.getByRole('button', { name: 'blueprint port' }));
+    fireEvent.click(screen.getByRole('button', { name: 'generic port' }));
+    const create = screen.getByRole('button', { name: 'Создать кабель' });
+    expect(create).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Канал источника'), { target: { value: '2' } });
+    expect(create).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Канал назначения'), { target: { value: '1' } });
+    expect(screen.getByText('Source / A01 · Beta → Target / B01 · Alpha')).toBeVisible();
+    fireEvent.click(create);
+    await waitFor(() => expect(write).toHaveBeenCalledWith(expect.objectContaining({
+      source: { kind: 'CONNECTION_POINT', connection_point_id: 'a-cp', member_index: 2 },
+      target: { kind: 'CONNECTION_POINT', connection_point_id: 'b-cp', member_index: 1 },
+      compatibility: { token: 'exact-preview', accept_unknown: false },
+    })));
+    expect(preview).toHaveBeenCalledTimes(1);
   });
 
   it('retries only projection refresh after a successful write', async () => {

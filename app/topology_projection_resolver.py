@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from sqlalchemy import select
 
+from app.physical_compatibility import point_member_designations
 from app.module_endpoint_names import EndpointNames
 from app.device_catalog import (
     DeviceCatalog,
@@ -193,10 +194,16 @@ class ConfiguredTopologyProjectionResolver:
         point_aliases = EndpointNames(self.repository.session).connection_points(
             [point.point_id for point in all_points if point.physical_object_id in selected_object_ids]
         )
+        designations = point_member_designations(self.repository.session, {
+            point.point_id for points in points_by_object.values() for point in points
+        })
+        occupied_members_by_point: dict[uuid.UUID, set[int]] = {}
         external_connection_ids_by_point: dict[uuid.UUID, set[uuid.UUID]] = {}
         for member in connection_members:
             if member.object_a_id == member.object_b_id:
                 continue
+            occupied_members_by_point.setdefault(member.point_a_id, set()).add(member.point_a_member)
+            occupied_members_by_point.setdefault(member.point_b_id, set()).add(member.point_b_member)
             external_connection_ids_by_point.setdefault(member.point_a_id, set()).add(member.connection_id)
             external_connection_ids_by_point.setdefault(member.point_b_id, set()).add(member.connection_id)
 
@@ -221,6 +228,8 @@ class ConfiguredTopologyProjectionResolver:
                 points_by_object.get(object_id, []),
                 point_aliases,
                 external_connection_ids_by_point,
+                occupied_members_by_point,
+                designations,
                 owners_by_object.get(object_id, []),
                 aliases.get(object_id),
                 classes.get(object_id),
@@ -407,6 +416,8 @@ class ConfiguredTopologyProjectionResolver:
         points: list,
         point_aliases: dict[uuid.UUID, DisplayAliasRecord],
         external_connection_ids_by_point: dict[uuid.UUID, set[uuid.UUID]],
+        occupied_members_by_point: dict[uuid.UUID, set[int]],
+        designations: dict[uuid.UUID, dict[int, str]],
         owners: list[NetworkInterfacePhysicalOwnerRecord],
         display_alias: DisplayAliasRecord | None,
         object_class: PhysicalObjectClassRecord | None,
@@ -449,6 +460,11 @@ class ConfiguredTopologyProjectionResolver:
                             else f"ConnectionPoint {str(point.point_id)[:8]}"
                         ),
                         "cardinality": point.cardinality,
+                        "members": [
+                            {"index": index, "designation": designations.get(point.point_id, {}).get(index, str(index)),
+                             "occupied": index in occupied_members_by_point.get(point.point_id, ())}
+                            for index in range(1, point.cardinality + 1)
+                        ],
                         "external_connection_count": len(
                             external_connection_ids_by_point.get(point.point_id, set())
                         ),

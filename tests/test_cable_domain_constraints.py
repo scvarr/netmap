@@ -48,7 +48,7 @@ def test_endpoint_link_domain_rejects_invalid_or_occupied_endpoints_without_new_
         left, right = points(repository)
         interface = owned_interface(repository)
         ownerless_interface = repository.add_network_interface()
-        unsupported = repository.add_connection_point(repository.add_physical_object().id, 2)
+        multichannel = repository.add_connection_point(repository.add_physical_object().id, 2)
         catalog = PhysicalConnectionCatalog(session)
         endpoints = ConnectionPointEndpoint(left.id), ConnectionPointEndpoint(right.id)
         preview = catalog.create_endpoint_link(*endpoints, preview=True)
@@ -60,8 +60,8 @@ def test_endpoint_link_domain_rejects_invalid_or_occupied_endpoints_without_new_
             catalog.create_endpoint_link(ConnectionPointEndpoint(right.id), ConnectionPointEndpoint(right.id))
         with pytest.raises(ValidationError, match="does not exist"):
             catalog.create_endpoint_link(ConnectionPointEndpoint(right.id), ConnectionPointEndpoint(uuid.uuid4()))
-        with pytest.raises(ValidationError, match="cardinality=1"):
-            catalog.create_endpoint_link(ConnectionPointEndpoint(right.id), ConnectionPointEndpoint(unsupported.id))
+        with pytest.raises(ValidationError, match="Select a member within the ConnectionPoint cardinality"):
+            catalog.create_endpoint_link(ConnectionPointEndpoint(right.id), ConnectionPointEndpoint(multichannel.id))
         with pytest.raises(ValidationError, match="no physical owner"):
             catalog.create_endpoint_link(ConnectionPointEndpoint(right.id), NetworkInterfaceEndpoint(ownerless_interface.id))
 
