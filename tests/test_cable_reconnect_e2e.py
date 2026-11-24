@@ -179,6 +179,38 @@ def test_member_reconnect_preserves_addresses_and_requires_exact_preview(cable):
     assert point_details(*b)["external_connection_count"] == 1
 
 
+@pytest.mark.parametrize("invalid_index", [True, "1", 1.0], ids=["boolean", "string", "float"])
+def test_reconnect_rejects_noninteger_indices_in_preview_and_write(cable, invalid_index):
+    _, url, _, _ = cable
+    _, destination = create_object_with_point(client, "Destination")
+    expected = preview(url)
+    payload = reconnect_payload(url, {
+        "expected": expected, "side": "A", "new_point_id": destination, "new_member_index": 1,
+    })
+    before = client.get("/v1/workspace/package")
+    assert before.status_code == 200, before.text
+    invalid_requests = [
+        (["body", "expected", field], {**payload, "expected": {**expected, field: invalid_index}})
+        for field in ("point_a_member", "point_b_member")
+    ]
+    invalid_requests.append((["body", "new_member_index"], {**payload, "new_member_index": invalid_index}))
+    for path in (f"{url}/compatibility-preview", url):
+        for location, invalid in invalid_requests:
+            rejected = client.post(path, json=invalid)
+            assert rejected.status_code == 422, rejected.text
+            error, = rejected.json()["error"]["details"]["errors"]
+            assert error["loc"] == location
+            assert error["type"] == "int_type"
+
+    after = client.get("/v1/workspace/package")
+    assert after.status_code == 200, after.text
+    assert after.json() == before.json()
+
+    written = client.post(url, json=payload)
+    assert written.status_code == 204, written.text
+    assert preview(url) == {**expected, "point_a_id": destination}
+
+
 def test_simplex_reconnect_accepts_implicit_current_and_destination_indices(cable):
     _, url, _, _ = cable
     _, point = create_object_with_point(client, "Destination")
