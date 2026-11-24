@@ -128,5 +128,9 @@ export function blueprintFace(blueprint: BlueprintPresentation, face: PhysicalFa
       side,
     } }];
   });
-  return { hiddenPorts, visibleBlueprint: { ...blueprint, panels, slots } };
+  return { hiddenPorts, visibleBlueprint: {
+    ...blueprint, panels, slots,
+    module_bodies: blueprint.module_bodies?.filter(body => byKey.has(body.panel_key)),
+    module_sockets: blueprint.module_sockets?.filter(socket => byKey.has(socket.panel_key)),
+  } };
 }

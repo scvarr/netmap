@@ -65,6 +65,17 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
       {blueprint.panels.map((panel) => {
         return <section key={panel.panel_key} className="blueprint-map-node__panel" data-testid={`blueprint-panel-${panel.panel_key}`} style={{ left: `${(panel.x - bounds.x) / bounds.width * 100}%`, top: `${(panel.y - bounds.y) / bounds.height * 100}%`, width: `${panel.width / bounds.width * 100}%`, height: `${panel.height / bounds.height * 100}%`, background: blueprint.body.fill_color ?? '#18383a' }}>
           <div className="blueprint-map-node__panel-surface" title={panel.display_name}>
+            {blueprint.module_bodies?.filter(body => body.panel_key === panel.panel_key).map(body =>
+              <div key={body.installation_id} className="blueprint-map-node__module-body" data-installation-id={body.installation_id}
+                title={body.display_name} style={{ left: `${body.x * 100}%`, top: `${body.y * 100}%`,
+                  width: `${body.width * 100}%`, height: `${body.height * 100}%`, backgroundColor: body.fill_color }} />
+            )}
+            {blueprint.module_sockets?.filter(socket => socket.panel_key === panel.panel_key).map(socket =>
+              <span key={socket.socket_key} data-module-socket-key={socket.socket_key}
+                className={`blueprint-map-node__socket${socket.installed ? ' blueprint-map-node__socket--installed' : ''}`}
+                title={socket.display_name} style={{ width: BLUEPRINT_PORT_SIZE, height: BLUEPRINT_PORT_SIZE,
+                  left: `${socket.panel_local_position.x * 100}%`, top: `${socket.panel_local_position.y * 100}%` }} />
+            )}
             {blueprint.slots.filter((slot) => slot.panel_key === panel.panel_key).map((slot) => {
               const id = slot.connection_point_id;
               const portType = portTypes?.find(type => type.id === slot.port_type_id);
@@ -72,9 +83,10 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
               const occupied = data.cableOccupiedPortIds?.has(id) ?? false;
               const traced = tracedPorts.has(id) || Boolean(data.traceHighlightedConnectionPointIds?.has(id));
               const { fill, outline } = physicalPortPaint(portType?.color, occupied, traced, state);
+              const transceiver = slot.marker === 'TRANSCEIVER';
               const style = { '--port-size': `${BLUEPRINT_PORT_SIZE}px`, '--port-stroke': `${BLUEPRINT_PORT_STROKE}px`,
-                backgroundColor: fill, borderColor: outline, left: `${slot.panel_local_position.x * 100}%`, top: `${slot.panel_local_position.y * 100}%` };
-              return <span key={id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}${traced ? ' blueprint-map-node__port--trace-highlighted' : ''}${data.wiringContinuationConnectionPointIds?.has(id) ? ' blueprint-map-node__port--wiring-continuation' : ''}${state ? ` blueprint-map-node__port--wiring-${state}` : ''}`}
+                backgroundColor: transceiver && !occupied ? 'transparent' : fill, borderColor: outline, left: `${slot.panel_local_position.x * 100}%`, top: `${slot.panel_local_position.y * 100}%` };
+              return <span key={id} className={`blueprint-map-node__port blueprint-map-node__port--${transceiver ? 'transceiver' : slot.kind.toLowerCase()}${traced ? ' blueprint-map-node__port--trace-highlighted' : ''}${data.wiringContinuationConnectionPointIds?.has(id) ? ' blueprint-map-node__port--wiring-continuation' : ''}${state ? ` blueprint-map-node__port--wiring-${state}` : ''}`}
                 style={style} data-connection-point-id={id} title={`${slot.display_name} · ${portType?.name ?? slot.kind}`} {...portProps(id, slot.display_name)}>
                 <span className="blueprint-map-node__port-label">{slot.display_name}</span>
               </span>;

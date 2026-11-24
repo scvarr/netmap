@@ -1077,7 +1077,11 @@ a { color: inherit; }
 .blueprint-map-node--selected:hover { outline: 2px solid #54e3b4; }
 .blueprint-map-node__panel { border: 0; box-shadow: inset 0 0 0 1px #78aaa5; }
 .blueprint-map-node__port { width: var(--port-size); height: var(--port-size); border-width: var(--port-stroke); cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cpath d='M4 9V4h5v5H4zm5-2h4v7h4' fill='%2318383a' stroke='%23e6fffb'/%3E%3C/svg%3E") 6 6, crosshair; }
-.blueprint-map-node__port--network_port { border-radius: 0; }
+.blueprint-map-node__port--network_port, .blueprint-map-node__port--transceiver { border-radius: 0; }
+.blueprint-map-node__port--transceiver::after { content: ''; position: absolute; inset: -1.5px; border: .5px solid #94a3b8; pointer-events: none; }
+.blueprint-map-node__module-body { position: absolute; box-shadow: inset 0 0 0 .5px #94a3b8; }
+.blueprint-map-node__socket { position: absolute; z-index: 3; box-sizing: border-box; border: .5px solid #a39bbb; background: #18383a; transform: translate(-50%, -50%) rotate(45deg); }
+.blueprint-map-node__socket--installed { background: #66538a; }
 .blueprint-map-node__port::before { content: ''; position: absolute; inset: -1.5px; }
 .blueprint-map-node__port:hover, .blueprint-map-node__port:focus-visible { outline: 1px solid #fff; outline-offset: 1px; z-index: 10; }
 .blueprint-map-node__port-label { display: none; position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); padding: 3px 6px; border: 1px solid #78aaa5; background: #10292a; color: #fff; font: 12px ui-monospace, monospace; white-space: nowrap; pointer-events: none; }

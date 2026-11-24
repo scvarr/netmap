@@ -189,8 +189,8 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates, endpointEmphasi
   const blueprint = projection.attributes.blueprint_presentation;
   const tracedPorts = tracedPortIds(projection, node.data.traceHighlightedConnectionMemberIds);
   const ports = blueprint
-    ? (node.data.facePresentation?.visibleBlueprint ?? blueprint).slots.map((slot) => ({ id: slot.connection_point_id, network: slot.kind === 'NETWORK_PORT', portTypeId: slot.port_type_id }))
-    : genericConnectionPoints(projection).map((point) => ({ id: point.connection_point_id, network: false, portTypeId: undefined }));
+    ? (node.data.facePresentation?.visibleBlueprint ?? blueprint).slots.map((slot) => ({ id: slot.connection_point_id, square: slot.kind === 'NETWORK_PORT' || slot.marker === 'TRANSCEIVER', transceiver: slot.marker === 'TRANSCEIVER', portTypeId: slot.port_type_id }))
+    : genericConnectionPoints(projection).map((point) => ({ id: point.connection_point_id, square: false, transceiver: false, portTypeId: undefined }));
   const box = absoluteNodeRectangle(node);
   const portStroke = blueprint ? BLUEPRINT_PORT_STROKE : 1.25;
   const radius = blueprint ? (BLUEPRINT_PORT_SIZE - portStroke) / 2 : 3.5;
@@ -207,10 +207,11 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates, endpointEmphasi
     {visiblePorts.map((port, index) => {
       const { endpoint } = port;
       const state = physicalPortStates?.[port.id];
+      const occupied = node.data.cableOccupiedPortIds?.has(port.id) ?? false;
       const { fill, outline } = physicalPortPaint(portTypes?.find(type => type.id === port.portTypeId)?.color,
-        node.data.cableOccupiedPortIds?.has(port.id) ?? false, tracedPorts.has(port.id) || Boolean(node.data.traceHighlightedConnectionPointIds?.has(port.id)), state);
-      const className = `cable-route-port-marker${blueprint ? ' cable-route-port-marker--blueprint' : ''}${port.network ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`;
-      const style = { fill, stroke: outline, strokeWidth: blueprint ? BLUEPRINT_PORT_STROKE : undefined };
+        occupied, tracedPorts.has(port.id) || Boolean(node.data.traceHighlightedConnectionPointIds?.has(port.id)), state);
+      const className = `cable-route-port-marker${blueprint ? ' cable-route-port-marker--blueprint' : ''}${port.square ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`;
+      const style = { fill: port.transceiver && !occupied ? 'none' : fill, stroke: outline, strokeWidth: blueprint ? BLUEPRINT_PORT_STROKE : undefined };
       const emphasis = state === 'source' || state === 'destination' ? undefined : endpointEmphasis.get(port.id);
       const neighbours = emphasis ? visiblePorts.filter(other => other !== port &&
         Math.abs(other.endpoint.x - endpoint.x) < haloBounds + exclusionRadius &&
@@ -228,11 +229,13 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates, endpointEmphasi
             width={2 * exclusionRadius} height={2 * exclusionRadius} fill="black" />)}
         </mask>}
         {emphasis && <g mask={cutoutId ? `url(#${cutoutId})` : undefined}>
-          {port.network
+          {port.square
             ? <rect {...halo} x={endpoint.x - haloRadius} y={endpoint.y - haloRadius} width={2 * haloRadius} height={2 * haloRadius} />
             : <circle {...halo} cx={endpoint.x} cy={endpoint.y} r={haloRadius} />}
         </g>}
-        {port.network
+        {port.transceiver && <rect x={endpoint.x - 4} y={endpoint.y - 4} width={8} height={8}
+          fill="none" stroke="#94a3b8" strokeWidth={BLUEPRINT_PORT_STROKE} />}
+        {port.square
           ? <rect className={className} style={style} data-connection-point-id={port.id} x={endpoint.x - radius} y={endpoint.y - radius} width={radius * 2} height={radius * 2} rx={0} pointerEvents="none" />
           : <circle className={className} style={style} data-connection-point-id={port.id} cx={endpoint.x} cy={endpoint.y} r={radius} pointerEvents="none" />}
       </g>;

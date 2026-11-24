@@ -51,7 +51,7 @@ export const blueprintNodeDisplayDimensions = (
 export const minimumBlueprintDisplayWidth = (presentation: BlueprintPresentation) => {
   const bounds = panelCompositionBounds(presentation.panels);
   // Use the pinned panel-local centres, including panel offsets and gaps.
-  const centres = presentation.slots.map(port => {
+  const centres = [...presentation.slots, ...(presentation.module_sockets ?? [])].map(port => {
     const panel = presentation.panels.find(panel => panel.panel_key === port.panel_key)!;
     return { x: panel.x + panel.width * port.panel_local_position.x,
       y: panel.y + panel.height * port.panel_local_position.y };

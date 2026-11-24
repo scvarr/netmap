@@ -1,5 +1,8 @@
+from tests.test_parent_hardware_interfaces import hardware
 from tests.l1_builders import create_device as build_device, post_confirmed_physical
 import uuid
+
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -234,3 +237,68 @@ def test_same_object_cable_has_one_selectable_projection_edge_with_exact_endpoin
     pair, = edge["attributes"]["endpoint_pairs"]
     assert pair["cable_ref"] == {"ref_type": "CANONICAL_FACT", "entity_type": "Cable", "entity_id": cable_id}
     assert {pair["from_connection_point_id"], pair["to_connection_point_id"]} == {str(front.id), str(rear.id)}
+
+def test_installed_board_projection_uses_pinned_geometry_and_canonical_endpoints(hardware):
+    from tests.test_module_layout_editing import request as layout_request
+    from tests.test_module_reconciliation import package
+    from tests.test_nested_module_installations import created, install, physical_transceiver
+    from tests.test_hardware_configuration import create_object
+
+    base, card, _, _, sfp = hardware
+    optic = created(client.post("/v1/library/module-templates", json=physical_transceiver(sfp)))
+
+    def presentation(object_id):
+        response = client.post("/v1/topology/projection", json=projection_query([object_id]))
+        assert response.status_code == 200, response.text
+        return node_by_object(response.json(), object_id)["attributes"]["blueprint_presentation"]
+
+    for orientation in ("HORIZONTAL", "VERTICAL"):
+        object_id = create_object(base)["physical_object_ref"]["entity_id"]
+        configuration = created(install(object_id, card, "board", orientation=orientation))
+        board = configuration["bays"][0]["installation"]
+        direct = configuration["bays"][1]
+        place, = board["module_places"]
+        before = package()
+        empty = presentation(object_id)
+        body, = empty["module_bodies"]
+        assert body["installation_id"] == board["id"]
+        assert {axis: body[axis] for axis in board["layout"]} == board["layout"]
+        sockets = {socket["socket_key"]: socket for socket in empty["module_sockets"]}
+        assert set(sockets) == {f"{board['id']}:socket", f"{configuration['configuration_id']}:direct"}
+        socket = sockets[f"{board['id']}:socket"]
+        x, y = (.25, .65) if orientation == "HORIZONTAL" else (.35, .25)
+        assert socket["panel_local_position"] == pytest.approx({
+            "x": body["x"] + x * body["width"], "y": body["y"] + y * body["height"],
+        })
+        assert not any("connection_point_id" in item for item in sockets.values())
+        assert package() == before
+
+        direct_config = created(install(object_id, optic, "direct"))
+        direct_point, = direct_config["bays"][1]["installation"]["endpoints"]
+        nested_config = created(install(object_id, optic, "socket", board["id"]))
+        nested_point, = nested_config["nested_installations"][0]["endpoints"]
+        installed_snapshot = package()
+        installed = presentation(object_id)
+        assert "module_sockets" not in installed
+        slots = {item["connection_point_id"]: item for item in installed["slots"]}
+        assert len(slots) == len(installed["slots"]) == 4
+        for point, mount in ((direct_point, direct), (nested_point, place)):
+            transceiver = slots[point["connection_point_id"]]
+            assert (transceiver["kind"], transceiver["marker"]) == ("CONNECTION_POINT", "TRANSCEIVER")
+            assert transceiver["network_interface_id"] == mount["network_interface_id"]
+        assert slots[nested_point["connection_point_id"]]["panel_local_position"] == socket["panel_local_position"]
+        assert installed_snapshot == package()
+
+        edit = layout_request(configuration)
+        url = f"/v1/topology/physical-objects/{object_id}/module-installations/{board['id']}/layout"
+        saved = client.put(url, json=edit)
+        assert saved.status_code == 200, saved.text
+        moved = presentation(object_id)
+        assert moved["module_bodies"][0]["x"] == edit["layout"]["x"]
+        moved_slots = {item["connection_point_id"]: item for item in moved["slots"]}
+        assert moved_slots.keys() == slots.keys()
+        assert moved_slots[nested_point["connection_point_id"]]["panel_local_position"] == pytest.approx({
+            "x": edit["layout"]["x"] + x * edit["layout"]["width"],
+            "y": edit["layout"]["y"] + y * edit["layout"]["height"],
+        })
+        assert package()["canonical"] == installed_snapshot["canonical"]

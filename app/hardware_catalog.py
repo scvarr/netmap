@@ -1,5 +1,5 @@
 import uuid
-from collections import deque
+from collections import defaultdict, deque
 from dataclasses import dataclass
 
 from sqlalchemy import delete, func, select
@@ -559,30 +559,55 @@ class HardwareCatalog:
         config = self.session.scalar(select(ObjectConfiguration).where(ObjectConfiguration.physical_object_id == object_id))
         if config is None:
             return {"configuration_id": None, "bays": []}
-        installations = list(self.session.scalars(select(ModuleInstallation).where(
-            ModuleInstallation.configuration_id == config.id).order_by(ModuleInstallation.id)))
-        occupied = {(i.parent_installation_id, i.bay_key): i for i in installations}
-        hardware_interfaces = {(row.parent_installation_id, row.bay_key): row.interface_id
-                               for row in self.session.scalars(select(HardwareInterfaceAssociation).where(
-                                   HardwareInterfaceAssociation.configuration_id == config.id))}
+        return self.configuration_documents([config])[config.id]
+
+    def configuration_documents(self, configurations):
+        """Load pinned configuration geometry for a set of objects in batches."""
+        if not configurations:
+            return {}
+        config_ids = {config.id for config in configurations}
+        version_ids = {config.base_revision_id for config in configurations}
+        installations = defaultdict(list)
+        for installation in self.session.scalars(select(ModuleInstallation).where(
+            ModuleInstallation.configuration_id.in_(config_ids)).order_by(ModuleInstallation.id)):
+            installations[installation.configuration_id].append(installation)
+        hardware_interfaces = defaultdict(dict)
+        for row in self.session.scalars(select(HardwareInterfaceAssociation).where(
+            HardwareInterfaceAssociation.configuration_id.in_(config_ids))):
+            hardware_interfaces[row.configuration_id][row.parent_installation_id, row.bay_key] = row.interface_id
+        all_installations = [item for group in installations.values() for item in group]
         modules = {r.id: (r, t) for r, t in self.session.execute(
             select(ModuleTemplateRevision, ModuleTemplate)
             .join(ModuleTemplate, ModuleTemplate.id == ModuleTemplateRevision.template_id)
-            .where(ModuleTemplateRevision.id.in_({i.module_revision_id for i in installations})))}
-        endpoints_by_installation = {}
+            .where(ModuleTemplateRevision.id.in_({i.module_revision_id for i in all_installations})))}
+        endpoints = defaultdict(list)
         for mapping, definition in self.session.execute(
             select(ModuleEndpointMapping, ModuleEndpointDefinition)
             .join(ModuleEndpointDefinition, ModuleEndpointDefinition.id == ModuleEndpointMapping.definition_id)
-            .where(ModuleEndpointMapping.installation_id.in_([i.id for i in installations]))
+            .where(ModuleEndpointMapping.installation_id.in_([i.id for i in all_installations]))
             .order_by(ModuleEndpointDefinition.order_index)
         ):
-            endpoints_by_installation.setdefault(mapping.installation_id, []).append((mapping, definition))
-        panels = [{k: getattr(p, k) for k in ("panel_key", "display_name", "width", "height")}
-                  for p in self.session.scalars(select(PresentationPanel).where(
-                      PresentationPanel.base_revision_id == config.base_revision_id))]
+            endpoints[mapping.installation_id].append((mapping, definition))
+        panels = defaultdict(list)
+        for panel in self.session.scalars(select(PresentationPanel).where(
+            PresentationPanel.base_revision_id.in_(version_ids))):
+            panels[panel.base_revision_id].append({k: getattr(panel, k) for k in
+                                                  ("panel_key", "display_name", "width", "height")})
+        bays = defaultdict(list)
+        for bay in self.session.scalars(select(ModuleBay).where(
+            ModuleBay.base_revision_id.in_(version_ids)).order_by(ModuleBay.bay_key)):
+            bays[bay.base_revision_id].append(bay)
+
+        return {config.id: self._configuration_geometry(
+            config, panels[config.base_revision_id], [_base_place(bay) for bay in bays[config.base_revision_id]],
+            installations[config.id], hardware_interfaces[config.id], modules, endpoints,
+        ) for config in configurations}
+
+    @staticmethod
+    def _configuration_geometry(config, panels, bays, installations, hardware_interfaces, modules,
+                                endpoints_by_installation):
+        occupied = {(i.parent_installation_id, i.bay_key): i for i in installations}
         panel_by_key = {p["panel_key"]: p for p in panels}
-        bays = [_base_place(row) for row in self.session.scalars(select(ModuleBay).where(
-            ModuleBay.base_revision_id == config.base_revision_id).order_by(ModuleBay.bay_key))]
         pending = deque((bay, None, panel_by_key[bay["panel_key"]], bays, None, 0, ()) for bay in bays)
         nested_installations = []
         while pending:

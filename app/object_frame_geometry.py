@@ -9,9 +9,9 @@ MIN_FRAME_HEIGHT = 24
 def object_frame_dimensions(panels, centres, display_width=None):
     if not panels:
         return 32 + NAME_ZONE_WIDTH + CABLE_ZONE_WIDTH, MIN_FRAME_HEIGHT
-    composition_width = max(p.x + p.width for p in panels) - min(p.x for p in panels)
-    composition_height = max(p.y + p.height for p in panels) - min(p.y for p in panels)
-    minimum = max(32, *(12 * composition_width / p.height for p in panels))
+    composition_width = max(p["x"] + p["width"] for p in panels) - min(p["x"] for p in panels)
+    composition_height = max(p["y"] + p["height"] for p in panels) - min(p["y"] for p in panels)
+    minimum = max(32, *(12 * composition_width / p["height"] for p in panels))
     for index, (x, y) in enumerate(centres):
         for ox, oy in centres[index + 1:]:
             distance = max(abs(x - ox), abs(y - oy))

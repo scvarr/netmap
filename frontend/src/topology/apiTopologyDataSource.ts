@@ -62,8 +62,38 @@ const validateBlueprintPresentation = (value: unknown, path: string): void => {
       if (typeof position.x !== 'number' || typeof position.y !== 'number' || !Number.isFinite(position.x) || !Number.isFinite(position.y)) malformed(`${path}.slots[${index}].geometry is invalid.`);
     }
     if (!['LEFT', 'RIGHT', 'TOP', 'BOTTOM'].includes(String(item.external_attachment.side))) malformed(`${path}.slots[${index}].external_attachment.side is invalid.`);
+    if (item.marker !== undefined && (item.marker !== 'TRANSCEIVER' || item.kind !== 'CONNECTION_POINT')) malformed(`${path}.slots[${index}].marker is invalid.`);
     requireString(item.connection_point_id, `${path}.slots[${index}].connection_point_id`);
     if (item.network_interface_id != null) requireString(item.network_interface_id, `${path}.slots[${index}].network_interface_id`);
+  }
+  for (const field of ['module_sockets', 'module_bodies'] as const) {
+    const items = value[field];
+    if (items === undefined) continue;
+    if (!Array.isArray(items)) malformed(`${path}.${field} must be an array.`);
+    for (const [index, item] of (items as unknown[]).entries()) {
+      const itemPath = `${path}.${field}[${index}]`;
+      requireObject(item, itemPath);
+      requireString(item.display_name, `${itemPath}.display_name`);
+      requireString(item.panel_key, `${itemPath}.panel_key`);
+      if (!keys.has(item.panel_key as string)) malformed(`${itemPath}.panel_key is invalid.`);
+      const position = field === 'module_sockets' ? item.panel_local_position : item;
+      requireObject(position, itemPath);
+      for (const axis of ['x', 'y'] as const) {
+        const coordinate = position[axis];
+        if (typeof coordinate !== 'number' || !Number.isFinite(coordinate)) {
+          malformed(`${itemPath}.${axis} is invalid.`);
+        }
+      }
+      if (field === 'module_sockets') {
+        requireString(item.socket_key, `${itemPath}.socket_key`);
+        if (typeof item.installed !== 'boolean') malformed(`${itemPath}.installed is invalid.`);
+      } else {
+        requireString(item.installation_id, `${itemPath}.installation_id`);
+        if (typeof item.fill_color !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(item.fill_color)) malformed(`${itemPath}.fill_color is invalid.`);
+        requirePositiveNumber(item.width, `${itemPath}.width`);
+        requirePositiveNumber(item.height, `${itemPath}.height`);
+      }
+    }
   }
 };
 const validateEndpointPairs = (value: unknown, path: string): void => { if (!Array.isArray(value)) malformed(`${path} must be an array.`); for (const [index, pair] of (value as unknown[]).entries()) { requireObject(pair, `${path}[${index}]`); for (const key of ['from_connection_point_id', 'to_connection_point_id', 'connection_id', 'connection_member_id']) requireString(pair[key], `${path}[${index}].${key}`); for (const key of ['from_member_index', 'to_member_index']) if (!Number.isInteger(pair[key]) || (pair[key] as number) < 1) malformed(`${path}[${index}].${key} must be positive integer.`); if (pair.cable_ref !== undefined) { validateCanonicalRef(pair.cable_ref, `${path}[${index}].cable_ref`, 'Cable'); requireString(pair.cable_display_name, `${path}[${index}].cable_display_name`); } } };

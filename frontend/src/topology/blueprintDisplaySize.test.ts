@@ -56,3 +56,14 @@ describe('compact port geometry', () => {
     expect(() => minimumBlueprintDisplayWidth(dense)).toThrow('map.portGeometryCoincident');
   });
 });
+
+it('reserves room for 48 MODULE_PORT markers and an interactive endpoint in the same row', () => {
+  const dense = presentation([first], [{ x: 49 / 50, y: .5 }]);
+  dense.module_sockets = Array.from({ length: 48 }, (_, index) => ({
+    socket_key: `sfp-${index}`, panel_key: 'a', display_name: `SFP ${index + 1}`,
+    installed: false, panel_local_position: { x: (index + 1) / 50, y: .5 },
+  }));
+  expect(blueprintNodeDisplayDimensions(dense, 240)).toEqual({
+    width: expect.closeTo(500, 6), height: expect.closeTo(62.5, 6),
+  });
+});
