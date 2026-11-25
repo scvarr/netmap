@@ -240,6 +240,71 @@ accepted milestone в `main`.
 [UX_IA_CONTRACT.md](https://github.com/scvarr/netmap/blob/main/docs/UX_IA_CONTRACT.md).
 Недоступность проверок и её влияние на приёмку явно оценивать.
 
+## Эксплуатация GitNexus на Windows
+
+Подтверждённый инцидент 25.11.2026 (C-CAP-01-03B, база
+`dcec60409da44b79eee42dc8be169341824103ab`, итог
+`0be809b639a39748782768b06f322d214812e65d`):
+
+- GitNexus 1.6.13-rc.255, Node.js 24.19.0, LadybugDB 0.22.0,
+  buffer pool 4 GiB, DirectML. CMD и PowerShell получают одинаковые
+  переменные. Самостоятельный CLI воспроизводил зависание
+  `detect-changes` на непустом diff даже после перестроения индекса.
+  Простой Cypher, пустой diff и адресный impact завершались.
+- V8 CPU profile локализовал вычисления в
+  `findBrokenKeywordCalls → definitionIndex → walkPythonScopes`.
+  В `pushChildren` распространение `...extra` после полей дочернего
+  узла перезаписывает их родительским `entry` при обработке
+  составных Python targets. Это вызывает бесконечный обход AST.
+- Подтверждённый локальный hotfix установленного пакета:
+  `dist/core/ingestion/languages/python/type-imports.js`
+  (под `E:\Program files\nvm\v24.19.0\node_modules\gitnexus`).
+  Заменена ровно одна строка:
+
+  ```javascript
+  push({ node: children[i], scope, flags, depth: depth + 1, ...extra });
+  ```
+
+  на:
+
+  ```javascript
+  push({ node: children[i], scope, flags, depth: depth + 1, kind: extra?.kind, statement: extra?.statement });
+  ```
+
+  Резервная копия — `%TEMP%\gitnexus-type-imports.js.bak`.
+  Проверка сигнатур не отключена. После исправления команда
+  `gitnexus detect-changes --scope compare --base-ref main --repo .`
+  завершилась: 27 файлов, 142 символа, 62 execution flows, risk critical.
+  Это результат инструмента, не приёмка milestone.
+  При обновлении пакета hotfix может исчезнуть; сначала проверить
+  upstream-код и воспроизводимость, не накатывать замену вслепую.
+  Изменение установленного кода может инвалидировать analyzer runner identity.
+  Upstream issue по решению пользователя не создаётся.
+- Отдельно Shared Store выдавал `Graph slot belongs to another repository`
+  при публикации и `EPERM` при rename, с fallback на приватный граф.
+  Регистронезависимость путей Windows в проверке публикации —
+  вероятная, но не доказанная причина первой ошибки.
+  Согласовано отключение через `GITNEXUS_SHARED_STORE=off`
+  (подтверждено в исходнике установленного тега). При следующем analyze
+  зарегистрированный shared checkout возвращается в локальную
+  `.gitnexus`; старый shared slot сохраняется. Не удалять индексы,
+  embeddings, evidence и не применять clean/GC без отдельной необходимости.
+  Проверки после перехода и перезапуска MCP пока не выполнены.
+- Рабочие переменные: `GITNEXUS_EMBEDDING_DEVICE=dml`,
+  `GITNEXUS_LBUG_BUFFER_POOL_SIZE=4294967296`,
+  `GITNEXUS_MAX_ENTRY_POINT_CANDIDATES=2000`,
+  `GITNEXUS_MAX_PROCESSES=4000`,
+  `GITNEXUS_MAX_PROCESS_BRANCHING=8`,
+  `GITNEXUS_MAX_PROCESS_TRACE_DEPTH=10`.
+  Явно передавать их и `GITNEXUS_SHARED_STORE=off` в
+  `[mcp_servers.gitnexus.env]`; после изменения полностью перезапустить
+  Codex. Не тратить сессию coding agent на диагностику инфраструктуры,
+  если достаточно автономного CLI.
+- При повторном зависании ограничить один диагностический запуск,
+  использовать адресные проверки и при необходимости CPU profile;
+  не повторять механически переиндексацию или MCP/CLI с тем же сбоем.
+  Недоступный или неполный результат не считать PASS.
+
 ## Документационная сверка
 
 После завершения существенного функционального этапа или связанной серии
@@ -263,6 +328,12 @@ status WIP, следующий bounded milestone, нерешённые реше�
 Новая сессия всё равно проверяет repository и относящиеся к задаче документы.
 
 ## Язык и стиль
+
+Пользователь работает в единственном рабочем checkout NetMap в CMD, в
+каталоге `E:\Projects\netmap`. При подтверждённом состоянии Git давать
+только необходимые команды; не повторять cd, checkout main, pull,
+status или rev-parse без новой причины. Например, после подтверждённого
+merge для следующего согласованного milestone достаточно git checkout -b.
 
 Ответы пользователю, планы, документация, критерии приёмки и задания агентам
 пишутся по-русски. Английский сохраняется только для точных имён сущностей,
