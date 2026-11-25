@@ -289,7 +289,12 @@ accepted milestone в `main`.
   зарегистрированный shared checkout возвращается в локальную
   `.gitnexus`; старый shared slot сохраняется. Не удалять индексы,
   embeddings, evidence и не применять clean/GC без отдельной необходимости.
-  Проверки после перехода и перезапуска MCP пока не выполнены.
+  Переход подтверждён: `setx GITNEXUS_SHARED_STORE off`,
+  `set GITNEXUS_SHARED_STORE=off`, `gitnexus analyze --index-only`.
+  Полная перестройка локального индекса заняла 211,5 с; причины —
+  устаревшая provenance/parser, schema и runner identity. Индекс на
+  `0be809b639a39748782768b06f322d214812e65d`: 16908 узлов,
+  59059 рёбер, 472 кластера, 2195 flows. Старый shared store не удалён.
 - Рабочие переменные: `GITNEXUS_EMBEDDING_DEVICE=dml`,
   `GITNEXUS_LBUG_BUFFER_POOL_SIZE=4294967296`,
   `GITNEXUS_MAX_ENTRY_POINT_CANDIDATES=2000`,
@@ -300,6 +305,38 @@ accepted milestone в `main`.
   `[mcp_servers.gitnexus.env]`; после изменения полностью перезапустить
   Codex. Не тратить сессию coding agent на диагностику инфраструктуры,
   если достаточно автономного CLI.
+- Подтверждённая конфигурация MCP для NVM Windows:
+
+  ```toml
+  [mcp_servers.gitnexus]
+  command = 'C:\nvm4w\nodejs\gitnexus.cmd'
+  args = ["mcp"]
+
+  [mcp_servers.gitnexus.env]
+  GITNEXUS_EMBEDDING_DEVICE = "dml"
+  GITNEXUS_LBUG_BUFFER_POOL_SIZE = "4294967296"
+  GITNEXUS_MAX_ENTRY_POINT_CANDIDATES = "2000"
+  GITNEXUS_MAX_PROCESSES = "4000"
+  GITNEXUS_MAX_PROCESS_BRANCHING = "8"
+  GITNEXUS_MAX_PROCESS_TRACE_DEPTH = "10"
+  GITNEXUS_SHARED_STORE = "off"
+  ```
+
+  Не использовать устаревший `C:\Users\infarh\AppData\Roaming\npm\gitnexus.cmd`:
+  MCP с ним сообщал несовместимость формата LadybugDB (граф 49,
+  runtime 43). После исправления пути MCP подтвердил `current` на HEAD,
+  `context` для `ModuleTemplateReview` (`epistemic: exact`, часть ссылок
+  `unverified`) и полный `detect_changes` относительно main: 27 файлов,
+  142 символа, 62 процесса, 11 разделов документации, CRITICAL;
+  проверка несовместимых вызовов выполнена, без partial/truncated.
+  Это подтверждение работоспособности CLI/MCP, не приёмка 03B.
+- Полную индексацию предпочтительно выполнять пользователю вручную
+  после merge перед следующим milestone; длительность полного rebuild
+  не считать длительностью штатного incremental analyze. Агент использует
+  готовый индекс, проверяет его актуальность и выполняет обязательный
+  `detect_changes` перед коммитом согласно AGENTS.md. Если необходима
+  длительная актуализация, запросить её у пользователя, не повторять
+  прерываемые analyze. Не считать устаревший граф актуальным.
 - При повторном зависании ограничить один диагностический запуск,
   использовать адресные проверки и при необходимости CPU profile;
   не повторять механически переиндексацию или MCP/CLI с тем же сбоем.
