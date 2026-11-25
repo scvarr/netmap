@@ -70,8 +70,8 @@
   подключить кабелем через обычную таблицу портов. FN-010-MAP-01 IMPLEMENTED,
   ACCEPTED: L1-карта отображает корпуса плат, пустые гнёзда и физические
   трансиверы с учётом FRONT/REAR, сохраняя реальные UUID и Cable.
-  MOD-03B (LC Duplex), MOD-03C (замена), пассивная ModuleTemplate continuity
-  и QSFP breakout остаются OPEN.
+  MOD-03B и MOD-03C IMPLEMENTED, ACCEPTED. Пассивная ModuleTemplate continuity,
+  QSFP breakout и смена аппаратного режима остаются OPEN.
 - **Карта.** DOC-LOC-03 PARTIAL. Есть стрелочная расстановка, сортировка
   Location и порядок непосредственного оборудования. Остался grid-specific
   partial-collapse UX. Полный collapse проверен на ручной карте, в uniform grid
