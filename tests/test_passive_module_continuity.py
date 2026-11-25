@@ -36,7 +36,7 @@ def module_definition(pairs, *, capacity=3):
 def create_module(definition):
     response = client.post("/v1/library/module-templates", json=definition)
     assert response.status_code == 201, response.text
-    assert response.json()["internal_links"] == definition["internal_links"]
+    assert response.json().get("internal_links", []) == definition["internal_links"]
     return response.json()
 
 
@@ -218,3 +218,45 @@ def test_layout_reconcile_and_workspace_preserve_canonical_continuity():
     assert outcome["target_revision_id"] == published["revision_id"]
     assert package()["canonical"] == before["canonical"]
     assert trace(local["rear"], 1, local["front"], 3)["verdict"] == "REACHABLE"
+
+
+@pytest.mark.parametrize("source_pairs", [[], [(1, 2)]])
+def test_restore_incompatible_draft_from_pinned_wiring(source_pairs):
+    definition = module_definition(source_pairs or [(1, 2)])
+    if not source_pairs:
+        definition["internal_links"] = []
+    module = create_module(definition)
+    tid = module["template_id"]
+    original = open_draft(tid)
+    url = f"/v1/library/module-templates/{tid}/draft/restore-source"
+
+    def restore(generation):
+        return client.post(url, params={"expected_generation": generation})
+
+    response = restore(original["generation"])
+    assert response.status_code == 409 and "DRAFT_RESTORE_NOT_REQUIRED" in response.text
+    checked = check(tid, original)
+    saved = save(tid, checked, {**original["definition"], "name": "Incompatible draft",
+                              "internal_links": [link("rear", "front", [(1, 3)])]})
+    response = client.post(f"/v1/library/module-templates/{tid}/draft/check",
+                           params={"expected_generation": saved["generation"]})
+    assert response.status_code == 409 and "PHYSICAL_STRUCTURE_IMMUTABLE" in response.text
+    conflict = restore(original["generation"])
+    assert conflict.status_code == 409 and "DRAFT_CONFLICT" in conflict.text
+    assert open_draft(tid)["definition"] == saved["definition"]
+    before = package()
+
+    restored_response = restore(saved["generation"])
+    assert restored_response.status_code == 200, restored_response.text
+    restored = restored_response.json()
+    assert restored["definition"] == original["definition"]
+    assert restored["source_revision_id"] == original["source_revision_id"]
+    assert restored["generation"] == saved["generation"] + 1
+    assert not restored["review"]["current"]
+    assert publish(tid, checked["review"]["candidate_id"]).status_code == 409
+    after = package()
+    assert after["canonical"] == before["canonical"]
+    assert after["authoring"]["ModuleTemplateRevision"] == before["authoring"]["ModuleTemplateRevision"]
+    ready = check(tid, restored)
+    assert publish(tid, ready["review"]["candidate_id"]).status_code == 200
+    assert open_draft(tid)["definition"] == original["definition"]

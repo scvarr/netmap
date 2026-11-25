@@ -6,7 +6,7 @@ import { I18nProvider, localeStorageKey } from '../i18n';
 import { newBlueprintEditorState } from '../pages/BaseTemplateEditor';
 import { addEndpoints, addModulePlaces, addPanel, linkMemberPairs, type BlueprintEditorState } from '../blueprints/editorModel';
 import { memberPairKey } from '../blueprints/memberMappings';
-import { EndpointLinkWorkspace } from './EndpointLinkWorkspace';
+import { BaseEndpointLinkWorkspace } from './BaseEndpointLinkWorkspace';
 
 afterEach(() => localStorage.removeItem(localeStorageKey));
 
@@ -20,7 +20,7 @@ function setup(count = 2, configure = (state: BlueprintEditorState) => state) {
   initial.slots[0].display_name = '10'; initial.slots[1].display_name = '2';
   initial = configure(initial);
   let latest = initial;
-  function Harness() { const [state,setState] = useState(initial); return <I18nProvider><EndpointLinkWorkspace state={state} onChange={(s: BlueprintEditorState) => { latest = s; setState(s); }} onClose={() => {}} /></I18nProvider>; }
+  function Harness() { const [state,setState] = useState(initial); return <I18nProvider><BaseEndpointLinkWorkspace state={state} onChange={(s: BlueprintEditorState) => { latest = s; setState(s); }} onClose={() => {}} /></I18nProvider>; }
   const view = render(<Harness />);
   const side = (name: string) => within(screen.getByRole('region', { name }));
   const selectAll = (name: string) => fireEvent.click(side(name).getByRole('button', { name: 'Выбрать все' }));
@@ -201,7 +201,7 @@ it('reopens manual order with new ports, drops removed references and recovers d
  const initial = newBlueprintEditorState();
  let state = addEndpoints(initial, 'CONNECTION_POINT', 3, initial.activePanelKey, 'type');
  const panel = state.activePanelKey;
- const open = () => render(<I18nProvider><EndpointLinkWorkspace state={state} onChange={s => {state = s;}} onClose={() => {}} /></I18nProvider>);
+ const open = () => render(<I18nProvider><BaseEndpointLinkWorkspace state={state} onChange={s => {state = s;}} onClose={() => {}} /></I18nProvider>);
  let view = open();
  const a = within(screen.getByRole('region', {name: 'A'}));
  fireEvent.change(a.getByLabelText('Сортировка'), {target:{value:'manual'}});

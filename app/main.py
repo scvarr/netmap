@@ -1683,6 +1683,13 @@ def save_module_template_draft(template_id: uuid.UUID, query: CreateModuleTempla
         return ModuleTemplateReview(session).save(template_id, query.model_dump(mode="json"), expected_generation)
 
 
+@app.post("/v1/library/module-templates/{template_id}/draft/restore-source")
+def restore_module_template_draft_source(template_id: uuid.UUID, expected_generation: int,
+                                         session: Session = Depends(get_session)):
+    with session.begin():
+        return ModuleTemplateReview(session).restore_source(template_id, expected_generation)
+
+
 @app.post("/v1/library/module-templates/{template_id}/draft/check")
 def check_module_template_draft(template_id: uuid.UUID, expected_generation: int,
                                 session: Session = Depends(get_session)):

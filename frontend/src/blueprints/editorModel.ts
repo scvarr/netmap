@@ -2,7 +2,7 @@ import { isModulePlaceMarker, moduleMount, mountTypeId, type ModuleMount } from 
 import type { BaseInternalLink, BlueprintSlot, BlueprintSlotKind, CreateBaseTemplateRequest, BaseTemplateRevisionDocument, PresentationPanel } from '../topology/baseTemplateTypes';
 import { isPlacedBay, moduleBayMarkers, positionModulePort, type BlueprintMarker } from '../topology/hardwareModules';
 
-import { internalOccupancy, memberAddressKey, memberPairKey, validateMemberPairs, type MemberPair, type MemberPairError } from './memberMappings';
+import { internalOccupancy, memberAddressKey, appendMemberPairs, mappedMemberPairs, memberMapping, removeMemberPairs, validateMemberPairs, type MemberPair, type MemberPairError } from './memberMappings';
 
 export interface EndpointNamingSide {
   panel: string; mode: 'name' | 'spatial' | 'manual'; order: string[];
@@ -21,10 +21,7 @@ export const internalLinkPairKey = (first: string, second: string) => [first, se
 const singleMemberMapping = { from_member_index: 1, to_member_index: 1 };
 
 export function linkMemberPairs(link: BaseInternalLink): MemberPair[] {
-  return (link.member_mappings ?? [singleMemberMapping]).map(mapping => ({
-    a: { endpointKey: link.from_slot_key, memberIndex: mapping.from_member_index },
-    b: { endpointKey: link.to_slot_key, memberIndex: mapping.to_member_index },
-  }));
+  return mappedMemberPairs(link.from_slot_key, link.to_slot_key, link.member_mappings ?? [singleMemberMapping]);
 }
 
 const baseMemberEndpoints = (slots: readonly BlueprintSlot[]) => slots.map(slot => ({
@@ -43,26 +40,17 @@ export function validateBlueprintMemberPairs(
 
 export function applyMemberMappings(state: BlueprintEditorState, pairs: readonly MemberPair[]): BlueprintEditorState {
   if (!pairs.length || validateBlueprintMemberPairs(state, pairs)) return state;
-  const links = new Map(state.individualLinks.map(link => [internalLinkPairKey(link.from_slot_key, link.to_slot_key), link]));
-  for (const { a, b } of pairs) {
-    const key = internalLinkPairKey(a.endpointKey, b.endpointKey);
-    const link = links.get(key) ?? { from_slot_key: a.endpointKey, to_slot_key: b.endpointKey, member_mappings: [] };
-    const [from, to] = link.from_slot_key === a.endpointKey ? [a, b] : [b, a];
-    links.set(key, { ...link, member_mappings: [...link.member_mappings ?? [singleMemberMapping], {
-      from_member_index: from.memberIndex, to_member_index: to.memberIndex,
-    }] });
-  }
-  return { ...state, individualLinks: [...links.values()] };
+  const individualLinks = appendMemberPairs(state.individualLinks, pairs, link => [link.from_slot_key, link.to_slot_key],
+    (link, pair) => ({
+      from_slot_key: pair.a.endpointKey, to_slot_key: pair.b.endpointKey,
+      member_mappings: [...(link ? link.member_mappings ?? [singleMemberMapping] : []), memberMapping(pair)],
+    }));
+  return { ...state, individualLinks };
 }
 
 export function removeMemberMappings(state: BlueprintEditorState, keys: ReadonlySet<string>): BlueprintEditorState {
-  const individualLinks = state.individualLinks.flatMap(link => {
-    const retained = linkMemberPairs(link).map(pair => !keys.has(memberPairKey(pair)));
-    if (retained.every(Boolean)) return [link];
-    const member_mappings = link.member_mappings?.filter((_, index) => retained[index]);
-    return member_mappings?.length ? [{ ...link, member_mappings }] : [];
-  });
-  return { ...state, individualLinks };
+  return { ...state, individualLinks: removeMemberPairs(state.individualLinks, keys, linkMemberPairs,
+    (link, indices) => ({ ...link, member_mappings: indices.map(index => link.member_mappings![index]) })) };
 }
 
 export function blueprintWiringError(state: BlueprintEditorState): BlueprintValidationError | undefined {

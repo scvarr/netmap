@@ -54,20 +54,15 @@ const serverRow = () => screen.findByRole('button', { name: /^Server/ });
 const objectsTab = () => screen.getByRole('tab', { name: 'Объекты' });
 const modulesTab = () => screen.getByRole('tab', { name: 'Шаблоны плат' });
 
-it.each([true, false])('offers board copy only without internal wiring (wiring=%s)', async wired => {
+it.each([true, false])('offers board copy with or without internal wiring (wiring=%s)', async wired => {
   const { user } = show(undefined, { ...module, internal_links: wired ? [{
     from_endpoint_key: 'p1', to_endpoint_key: 'p2',
     member_mappings: [{ from_member_index: 1, to_member_index: 1 }],
   }] : [] });
   await user.click(modulesTab());
   await user.click(await screen.findByRole('button', { name: /^NIC/ }));
-  if (wired) {
-    expect(screen.queryByRole('link', { name: 'Создать копию' })).not.toBeInTheDocument();
-    expect(screen.getByText(/Копирование шаблона модуля с внутренней разводкой/)).toBeVisible();
-  } else {
-    expect(screen.getByRole('link', { name: 'Создать копию' }))
-      .toHaveAttribute('href', '/library/module-templates/new');
-  }
+  expect(screen.getByRole('link', { name: 'Создать копию' }))
+    .toHaveAttribute('href', '/library/module-templates/new');
 });
 
 it('lists transceivers separately by mount kind and opens their specialized editor', async () => {

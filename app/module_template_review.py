@@ -204,6 +204,24 @@ class ModuleTemplateReview:
         self.session.flush()
         return self.document(draft, self._latest_candidate(draft))
 
+    def restore_source(self, template_id, expected_generation):
+        draft = self._draft(template_id, lock=True)
+        if draft.generation != expected_generation:
+            raise ModelError("Draft changed in another session; reopen before restoring", {"reason": "DRAFT_CONFLICT"})
+        published = published_definition(self.session, template_id, draft.source_revision_id)
+        if published["mount_kind"] != "MODULE_BAY":
+            raise ModelError("Source restoration is only available for boards", {"reason": "DRAFT_RESTORE_NOT_REQUIRED"})
+        definition = validate_definition(draft.definition)
+        try:
+            _require_retained_port_types(published, definition)
+            require_unchanged_internal_links(published, definition)
+        except ModelError:
+            draft.definition = published
+            draft.generation += 1
+            self.session.flush()
+            return self.document(draft, self._latest_candidate(draft))
+        raise ModelError("Draft is compatible with its source revision", {"reason": "DRAFT_RESTORE_NOT_REQUIRED"})
+
     def check(self, template_id, expected_generation):
         draft = self._draft(template_id)
         self.session.refresh(draft, with_for_update=True)

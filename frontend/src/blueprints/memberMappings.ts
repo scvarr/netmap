@@ -63,3 +63,53 @@ export function replacePreviewMember(pairs: readonly MemberPair[], row: number, 
     return pair;
   });
 }
+
+export const endpointPairKey = (a: string, b: string) => JSON.stringify([a, b].sort());
+
+// Keep stored link order and direction, including when a new pair is entered in reverse.
+export function appendMemberPairs<Link>(
+  links: readonly Link[],
+  additions: readonly MemberPair[],
+  endpoints: (link: Link) => readonly [string, string],
+  append: (link: Link | undefined, pair: MemberPair) => Link,
+): Link[] {
+  const grouped = new Map(links.map(link => [endpointPairKey(...endpoints(link)), link]));
+  for (const pair of additions) {
+    const key = endpointPairKey(pair.a.endpointKey, pair.b.endpointKey);
+    const existing = grouped.get(key);
+    const oriented = existing && endpoints(existing)[0] !== pair.a.endpointKey
+      ? { a: pair.b, b: pair.a } : pair;
+    grouped.set(key, append(existing, oriented));
+  }
+  return [...grouped.values()];
+}
+
+export function removeMemberPairs<Link>(
+  links: readonly Link[],
+  keys: ReadonlySet<string>,
+  pairsOf: (link: Link) => MemberPair[],
+  retain: (link: Link, indices: number[]) => Link,
+): Link[] {
+  return links.flatMap(link => {
+    const pairs = pairsOf(link);
+    const indices = pairs.flatMap((pair, index) => keys.has(memberPairKey(pair)) ? [] : [index]);
+    if (indices.length === pairs.length) return [link];
+    return indices.length ? [retain(link, indices)] : [];
+  });
+}
+
+export interface MemberMapping {
+  from_member_index: number;
+  to_member_index: number;
+}
+
+export function mappedMemberPairs(from: string, to: string, mappings: readonly MemberMapping[]): MemberPair[] {
+  return mappings.map(mapping => ({
+    a: { endpointKey: from, memberIndex: mapping.from_member_index },
+    b: { endpointKey: to, memberIndex: mapping.to_member_index },
+  }));
+}
+
+export const memberMapping = ({ a, b }: MemberPair): MemberMapping => ({
+  from_member_index: a.memberIndex, to_member_index: b.memberIndex,
+});

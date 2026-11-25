@@ -52,17 +52,18 @@ export function PortTypeNotice({ types, failed }: ReturnType<typeof usePortTypes
   </p>;
 }
 
-export function PortTypeSelect({ types, value, onChange, bulk = false, singleMember = false, compact = false }: {
+export function PortTypeSelect({ types, value, onChange, bulk = false, singleMember = false, compact = false, disabled = false }: {
   types: PortType[] | undefined;
   value: string;
   onChange: (id: string) => void;
   bulk?: boolean;
   singleMember?: boolean;
   compact?: boolean;
+  disabled?: boolean;
 }) {
   const { t } = useI18n();
   const current = types?.find(type => type.id === value);
-  const select = <select value={value} disabled={!types} onChange={event => onChange(event.target.value)}>
+  const select = <select value={value} disabled={disabled || !types} onChange={event => onChange(event.target.value)}>
       <option value="" disabled>{t('portTypes.select')}</option>
       {types?.filter(type => (type.is_active && (!singleMember || type.cardinality === 1)) || type.id === value).map(type =>
         <option key={type.id} value={type.id} disabled={!type.is_active}>

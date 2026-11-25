@@ -1,10 +1,7 @@
-import { isMountKind } from '../topology/hardwareModules';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
-import { applyBulkNames, blueprintMarkers, bulkNamePreview, spatialOrderedKeys, reorderOrderedKeys, applyMemberMappings, blueprintInternalOccupancy, linkMemberPairs, removeMemberMappings, validateBlueprintMemberPairs, type BlueprintEditorState } from '../blueprints/editorModel';
-
-import { memberAddressKey, memberPairKey, pairSelectedMembers, replacePreviewMember, type MemberAddress, type MemberPair } from '../blueprints/memberMappings';
-import type { PortType } from './PortTypeSelect';
+import { reorderOrderedKeys } from '../blueprints/editorModel';
+import { internalOccupancy, memberAddressKey, memberPairKey, pairSelectedMembers, replacePreviewMember, type MemberAddress, type MemberPair, type MemberPairError } from '../blueprints/memberMappings';
 
 const markerKinds = {
   CONNECTION_POINT: { label: 'blueprint.endpoint.connectionPoint', glyph: '●' },
@@ -13,86 +10,99 @@ const markerKinds = {
   MODULE_BAY: { label: 'blueprint.endpoint.moduleBay', glyph: '◆' },
 } as const;
 
-export function presentedLinks(state: BlueprintEditorState, sides: { panel: string; order: string[] }[], all: boolean) {
-  const slots = new Map(state.slots.map(s => [s.key, s]));
-  const compare = (a: string, b: string) => {
-    const x = slots.get(a)!; const y = slots.get(b)!;
-    return (state.panels.find(p => p.panel_key === x.panel_key)!.panel_number - state.panels.find(p => p.panel_key === y.panel_key)!.panel_number)
-      || x.display_name.localeCompare(y.display_name, 'ru', { numeric: true }) || a.localeCompare(b);
-  };
-  return state.individualLinks.flatMap(link => {
-    let a = link.from_slot_key; let b = link.to_slot_key;
-    if (all) { if (compare(a,b) > 0) [a,b] = [b,a]; }
-    else {
-      const forward = slots.get(a)?.panel_key === sides[0].panel && slots.get(b)?.panel_key === sides[1].panel;
-      const backward = slots.get(b)?.panel_key === sides[0].panel && slots.get(a)?.panel_key === sides[1].panel;
-      if (!forward && !backward) return [];
-      if (!forward || (backward && compare(a,b) > 0)) [a,b] = [b,a];
-    }
-    return [{ link, a, b }];
-  }).sort((x,y) => compare(x.a,y.a) || compare(x.b,y.b));
+export interface WorkspaceSide {
+  panel?: string;
+  mode: 'name' | 'spatial' | 'manual';
+  order: string[];
+  selected: string[];
+  horizontal: 'ltr' | 'rtl';
+  vertical: 'ttb' | 'btt';
+  naming: { mask: string; start: string; step: string };
 }
 
-export function EndpointLinkWorkspace({ state, onChange, onClose, initialSelectedKeys, portTypes, wiringReadOnly = false }: {
-  state: BlueprintEditorState;
-  initialSelectedKeys?: string[];
-  portTypes?: PortType[];
-  wiringReadOnly?: boolean;
-  onChange: (state: BlueprintEditorState) => void;
+interface WorkspaceEndpoint {
+  key: string;
+  display_name: string;
+  kind: keyof typeof markerKinds;
+  panel?: string;
+  cardinality: number;
+  designations?: readonly string[];
+}
+
+interface PanelTools {
+  panels: { key: string; name: string }[];
+  defaultPanels: string[];
+  initialSides?: Omit<WorkspaceSide, 'selected'>[];
+  onPreferencesChange: (sides: WorkspaceSide[]) => void;
+  spatialOrder: (side: WorkspaceSide, keys: string[]) => string[];
+  names: (side: WorkspaceSide, keys: string[]) => { key: string; display_name: string }[] | undefined;
+  rename: (side: WorkspaceSide, keys: string[]) => void;
+  present: (sides: WorkspaceSide[], all: boolean) => MemberPair[];
+}
+
+export function EndpointLinkWorkspace({
+  endpoints, storedPairs, validate, onApply, onRemove, onClose,
+  initialSelectedKeys, panelTools, wiringReadOnly = false,
+}: {
+  endpoints: WorkspaceEndpoint[];
+  storedPairs: MemberPair[];
+  validate: (pairs: readonly MemberPair[]) => MemberPairError | undefined;
+  onApply: (pairs: readonly MemberPair[]) => void;
+  onRemove: (keys: ReadonlySet<string>) => void;
   onClose: () => void;
+  initialSelectedKeys?: string[];
+  panelTools?: PanelTools;
+  wiringReadOnly?: boolean;
 }) {
   const { t } = useI18n();
-  const markers = blueprintMarkers(state);
-  const markersByKey = new Map(markers.map(marker => [marker.key, marker]));
-  const panelMarkers = (panel: string) => markers.filter(marker => marker.panel_key === panel);
-  const [sideState, setSides] = useState(() => (initialSelectedKeys?.length ? undefined : state.endpointNaming?.map(side => {
-    const panel = state.panels.some(p => p.panel_key === side.panel) ? side.panel : state.activePanelKey;
-    const available = panelMarkers(panel).map(marker => marker.key);
-    const retained = side.order.filter(key => available.includes(key));
-    return { ...side, panel, order: [...retained, ...available.filter(key => !retained.includes(key))], selected: [] as string[] };
-  })) ?? [state.activePanelKey, state.panels.find(p => p.panel_key !== state.activePanelKey)?.panel_key ?? state.activePanelKey].map((panel, index) => {
+  const markersByKey = new Map(endpoints.map(marker => [marker.key, marker]));
+  const panelMarkers = (panel?: string) => endpoints.filter(marker => marker.panel === panel);
+  const compare = (a: WorkspaceEndpoint, b: WorkspaceEndpoint) =>
+    a.display_name.localeCompare(b.display_name, 'ru', { numeric: true }) || a.key.localeCompare(b.key);
+  const [sideState, setSides] = useState<WorkspaceSide[]>(() => [0, 1].map(index => {
+    const initial = panelTools?.initialSides?.[index];
+    const panel = initial?.panel ?? panelTools?.defaultPanels[index];
     const available = panelMarkers(panel).map(marker => marker.key);
     const selected = index === 0 ? (initialSelectedKeys ?? []).filter(key => available.includes(key)) : [];
-    return { panel, mode: (selected.length ? 'manual' : 'name') as 'name' | 'spatial' | 'manual', order: [...selected, ...available.filter(key => !selected.includes(key))], selected, horizontal: 'ltr' as 'ltr' | 'rtl', vertical: 'ttb' as 'ttb' | 'btt', naming: { mask: '#', start: '1', step: '1' } }; }));
-  useEffect(() => {
-    const endpointNaming = sideState.map(({ selected: _selected, ...side }) => side);
-    if (JSON.stringify(endpointNaming) !== JSON.stringify(state.endpointNaming)) onChange({ ...state, endpointNaming });
-  }, [sideState]);
+    const retained = initial?.order.filter(key => available.includes(key)) ?? selected;
+    return {
+      mode: panelTools && selected.length ? 'manual' : 'name', horizontal: 'ltr', vertical: 'ttb',
+      naming: { mask: '#', start: '1', step: '1' }, ...initial,
+      panel, selected, order: [...retained, ...available.filter(key => !retained.includes(key))],
+    };
+  }));
+  useEffect(() => { panelTools?.onPreferencesChange(sideState); }, [sideState]);
   const sides = sideState.map(side => {
     const available = panelMarkers(side.panel);
-    const order = side.mode === 'name' ? [...available].sort((a,b) => a.display_name.localeCompare(b.display_name, 'ru', { numeric: true }) || a.key.localeCompare(b.key)).map(s => s.key)
-      : side.mode === 'spatial' ? spatialOrderedKeys({ ...state, activePanelKey: side.panel }, available.map(s => s.key), side.horizontal, side.vertical)
-      : side.order.filter(key => available.some(s => s.key === key));
+    const order = side.mode === 'name' ? [...available].sort(compare).map(marker => marker.key)
+      : side.mode === 'spatial' && panelTools ? panelTools.spatialOrder(side, available.map(marker => marker.key))
+      : side.order.filter(key => available.some(marker => marker.key === key));
     return { ...side, order };
   });
-  const [tab, setTab] = useState<'ports' | 'links'>(wiringReadOnly && !initialSelectedKeys?.length ? 'links' : 'ports');
+  const [tab, setTab] = useState<'ports' | 'links'>(wiringReadOnly && (!panelTools || !initialSelectedKeys?.length) ? 'links' : 'ports');
   const tabId = useId();
   const tabs = useRef<HTMLDivElement>(null);
   const existingList = useRef<HTMLDivElement>(null);
   const previewList = useRef<HTMLDivElement>(null);
   const [allLinks, setAllLinks] = useState(wiringReadOnly);
-  const visiblePairs = presentedLinks(state, sides, allLinks).flatMap(({ link, a }) =>
-    linkMemberPairs(link).map(pair => a === pair.a.endpointKey ? pair : { a: pair.b, b: pair.a })
-      .sort((first, second) => first.a.memberIndex - second.a.memberIndex || first.b.memberIndex - second.b.memberIndex));
-  const storedCount = state.individualLinks.reduce((count, link) => count + linkMemberPairs(link).length, 0);
+  const visiblePairs = panelTools?.present(sides, allLinks) ?? storedPairs;
   const [removed, setRemoved] = useState<string[]>([]);
   const [status, setStatus] = useState('');
   const [memberSelections, setMemberSelections] = useState<string[][]>([[], []]);
   const [activeChooser, setActiveChooser] = useState<string>();
   const [editedPreview, setEditedPreview] = useState<{ source: string; pairs: MemberPair[] }>();
-  const patch = (index: number, value: Partial<typeof sides[number]>) => {
+  const patch = (index: number, value: Partial<WorkspaceSide>) => {
     if (value.panel !== undefined || value.selected !== undefined && !value.selected.length) {
       setMemberSelections(old => old.map((selection, i) => i === index ? [] : selection));
     }
     if (Object.keys(value).some(field => field !== 'naming')) setEditedPreview(undefined);
-    setSides(old => old.map((s, i) => i === index ? { ...s, ...value } : s));
+    setSides(old => old.map((side, i) => i === index ? { ...side, ...value } : side));
   };
   const keys = sides.map(side => side.order.filter(key => side.selected.includes(key)));
-  const slots = new Map(state.slots.map(slot => [slot.key, slot]));
-  const occupancy = blueprintInternalOccupancy(state);
+  const occupancy = internalOccupancy(storedPairs);
   const addresses = (key: string): MemberAddress[] => {
-    const slot = slots.get(key);
-    return slot ? Array.from({ length: slot.cardinality ?? 1 }, (_, i) => ({ endpointKey: key, memberIndex: i + 1 })) : [];
+    const slot = markersByKey.get(key);
+    return slot ? Array.from({ length: slot.cardinality }, (_, i) => ({ endpointKey: key, memberIndex: i + 1 })) : [];
   };
   const setMembers = (side: number, members: MemberAddress[], checked: boolean) => {
     const ids = new Set(members.map(memberAddressKey));
@@ -105,35 +115,35 @@ export function EndpointLinkWorkspace({ state, onChange, onClose, initialSelecte
     const selectedSlots = new Set(sides[side].selected);
     const selectedChannels = new Set(memberSelections[side]);
     return members.filter(address => {
-      const slot = slots.get(address.endpointKey)!;
-      return (slot.cardinality ?? 1) === 1 ? selectedSlots.has(slot.key) : selectedChannels.has(memberAddressKey(address));
+      const slot = markersByKey.get(address.endpointKey)!;
+      return slot.cardinality === 1 ? selectedSlots.has(slot.key) : selectedChannels.has(memberAddressKey(address));
     });
   });
   const [left, right] = selectedMembers;
-  const hasSelectedModules = keys.some(selection => selection.some(key => isMountKind(markersByKey.get(key)?.kind)));
+  const hasSelectedModules = keys.some(selection => selection.some(key => markersByKey.get(key)?.kind.startsWith('MODULE_')));
   const source = JSON.stringify([sides.map(side => side.panel), selectedMembers]);
   const pairs = editedPreview?.source === source ? editedPreview.pairs : pairSelectedMembers(left, right);
   const previewError = !left.length || !right.length ? 'empty' : left.length !== right.length ? 'countMismatch'
-    : validateBlueprintMemberPairs(state, pairs, occupancy);
-  const typeById = new Map(portTypes?.map(type => [type.id, type]));
+    : validate(pairs);
   const memberName = ({ endpointKey, memberIndex }: MemberAddress) => {
-    const name = typeById.get(slots.get(endpointKey)?.port_type_id ?? '')?.members[memberIndex - 1];
+    const name = markersByKey.get(endpointKey)?.designations?.[memberIndex - 1];
     return name && name !== String(memberIndex) ? `${memberIndex} · ${name}` : String(memberIndex);
   };
   const label = ({ endpointKey, memberIndex }: MemberAddress) => {
-    const slot = slots.get(endpointKey);
+    const slot = markersByKey.get(endpointKey);
     if (!slot) return endpointKey;
-    const panel = state.panels.find(p => p.panel_key === slot.panel_key);
-    const member = (slot.cardinality ?? 1) > 1 ? ` · ${t('endpointWorkspace.member', { member: memberName({ endpointKey, memberIndex }) })}` : '';
-    return `${slot.display_name}${member} · ${panel?.display_name}`;
+    const panel = panelTools?.panels.find(p => p.key === slot.panel);
+    const member = slot.cardinality > 1 || (!panelTools && slot.designations?.[memberIndex - 1]) ? ` · ${t('endpointWorkspace.member', { member: memberName({ endpointKey, memberIndex }) })}` : '';
+    return `${slot.display_name}${member}${panel ? ` · ${panel.name}` : ''}`;
   };
   const removePairs = (ids: string[]) => {
-    onChange(removeMemberMappings(state, new Set(ids)));
+    onRemove(new Set(ids));
     setRemoved(selected => selected.filter(key => !ids.includes(key)));
     existingList.current?.focus();
   };
   return <section className="catalog-dialog endpoint-workspace-dialog" role="dialog" aria-modal="true" aria-label={t('endpointWorkspace.title')}
     onKeyDown={event => {
+      if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
       if (event.key !== 'Tab') return;
       const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>('button, input, select, details > summary, [tabindex]')]
         .filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && !!element.getClientRects().length);
@@ -142,8 +152,9 @@ export function EndpointLinkWorkspace({ state, onChange, onClose, initialSelecte
         event.preventDefault();
         (event.shiftKey ? focusable.at(-1) : focusable[0])?.focus();
       }
-    }}><div className="catalog-dialog__surface endpoint-workspace" data-tab={tab}>
+    }}><div className="catalog-dialog__surface endpoint-workspace" data-tab={tab} data-module-wiring={!panelTools || undefined}>
     <h2>{t('endpointWorkspace.title')}</h2>
+    {!panelTools && wiringReadOnly && <p>{t('moduleReview.publishedWiring')}</p>}
     <div ref={tabs} role="tablist" aria-label={t('endpointWorkspace.title')} className="endpoint-workspace__tabs">
       {(['ports', 'links'] as const).map(item => <button key={item} id={`${tabId}-${item}`} type="button" role="tab"
         tabIndex={tab === item ? 0 : -1} aria-selected={tab === item} aria-controls={`${tabId}-panel-${item}`}
@@ -153,32 +164,43 @@ export function EndpointLinkWorkspace({ state, onChange, onClose, initialSelecte
           const next = event.key === 'Home' ? 'ports' : event.key === 'End' ? 'links' : item === 'ports' ? 'links' : 'ports';
           setTab(next);
           tabs.current?.querySelectorAll('button')[next === 'ports' ? 0 : 1]?.focus();
-        }}>{item === 'ports' ? t('endpointWorkspace.operations') : `${t('endpointWorkspace.existing')} · ${storedCount}`}</button>)}
+        }}>{item === 'ports' ? t('endpointWorkspace.operations') : `${t('endpointWorkspace.existing')} · ${storedPairs.length}`}</button>)}
     </div>
     {tab === 'ports' && <div role="tabpanel" id={`${tabId}-panel-ports`} aria-labelledby={`${tabId}-ports`}>
     <div className="endpoint-workspace__columns">{sides.map((side, index) => {
-      const scoped = { ...state, activePanelKey: side.panel };
-      const names = bulkNamePreview(scoped, keys[index], side.naming);
+      const names = panelTools?.names(side, keys[index]);
+      const freeChannels = keys[index].flatMap(key => {
+        const members = addresses(key);
+        return members.length > 1 ? members.filter(member => !occupancy.has(memberAddressKey(member))) : [];
+      });
       return <section key={index} aria-label={index === 0 ? 'A' : 'B'}>
-        <label>{index === 0 ? 'A' : 'B'}<select value={side.panel} onChange={e => patch(index, { panel: e.target.value, mode: 'name', order: panelMarkers(e.target.value).map(marker => marker.key), selected: [] })}>{state.panels.map(p => <option key={p.panel_key} value={p.panel_key}>{p.display_name}</option>)}</select></label>
+        {panelTools ? <label>{index === 0 ? 'A' : 'B'}<select value={side.panel} onChange={e => patch(index, { panel: e.target.value, mode: 'name', order: panelMarkers(e.target.value).map(marker => marker.key), selected: [] })}>{panelTools.panels.map(panel => <option key={panel.key} value={panel.key}>{panel.name}</option>)}</select></label>
+          : <h3>{index === 0 ? 'A' : 'B'}</h3>}
         <div className="endpoint-workspace__tools">
-          <label>{t('endpointWorkspace.sort')}<select value={side.mode} onChange={e => patch(index, { mode: e.target.value as typeof side.mode, order: [...side.order] })}>{(['name','spatial','manual'] as const).map(mode => <option key={mode} value={mode}>{t(`endpointWorkspace.sort.${mode}`)}</option>)}</select></label>
+          <label>{t('endpointWorkspace.sort')}<select value={side.mode} onChange={e => patch(index, { mode: e.target.value as typeof side.mode, order: [...side.order] })}>{(['name','spatial','manual'] as const).filter(mode => panelTools || mode !== 'spatial').map(mode => <option key={mode} value={mode}>{t(`endpointWorkspace.sort.${mode}`)}</option>)}</select></label>
           {side.mode === 'spatial' && <>
           <label>{t('blueprint.order.horizontal')}<select value={side.horizontal} onChange={e => patch(index, { horizontal: e.target.value as 'ltr' | 'rtl' })}>{(['ltr','rtl'] as const).map(v => <option key={v} value={v}>{t(`blueprint.order.${v}`)}</option>)}</select></label>
           <label>{t('blueprint.order.vertical')}<select value={side.vertical} onChange={e => patch(index, { vertical: e.target.value as 'ttb' | 'btt' })}>{(['ttb','btt'] as const).map(v => <option key={v} value={v}>{t(`blueprint.order.${v}`)}</option>)}</select></label>
           </>}
-          <button type="button" onClick={() => patch(index, { selected: [...side.order] })}>{t('blueprint.links.selectAll')}</button>
+          <button type="button" onClick={() => patch(index, { selected: side.order.filter(key => panelTools || addresses(key).some(member => !occupancy.has(memberAddressKey(member)))) })}>{t('blueprint.links.selectAll')}</button>
           <button type="button" onClick={() => patch(index, { selected: [] })}>{t('blueprint.links.clearSelection')}</button>
+          {!panelTools && !wiringReadOnly && <button type="button" disabled={!freeChannels.length}
+            onClick={() => setMembers(index, freeChannels, true)}>
+            {t('endpointWorkspace.selectFree')}
+          </button>}
         </div>
         <div className="endpoint-workspace__list">{side.order.map((key, row) => { const slot = markersByKey.get(key)!; const kind = markerKinds[slot.kind]; const members = addresses(key);
           const free = members.filter(member => !occupancy.has(memberAddressKey(member)));
           const singlePeer = members.length === 1 ? occupancy.get(memberAddressKey(members[0])) : undefined;
           return <div key={key}><div className="endpoint-workspace__row" data-endpoint-row={key} data-manual={side.mode === 'manual'}>
-          <label><input type="checkbox" checked={side.selected.includes(key)} onChange={e => patch(index, { selected: e.target.checked ? [...side.selected, key] : side.selected.filter(k => k !== key) })} /><span title={slot.display_name}>{slot.display_name}</span></label>
+          <label><input type="checkbox" disabled={!panelTools && (wiringReadOnly || !free.length)} checked={side.selected.includes(key)} onChange={e => patch(index, { selected: e.target.checked ? [...side.selected, key] : side.selected.filter(k => k !== key) })} /><span title={slot.display_name}>{slot.display_name}</span></label>
           <span className="endpoint-workspace__kind" role="img" aria-label={t(kind.label)} title={t(kind.label)}>{kind.glyph}</span>
-          <span className="endpoint-workspace__name-preview" title={names?.find(n => n.key === key)?.display_name}>{names?.find(n => n.key === key)?.display_name && `→ ${names.find(n => n.key === key)!.display_name}`}</span>
+          <span className="endpoint-workspace__name-preview" title={names?.find(n => n.key === key)?.display_name}>
+            {names?.find(n => n.key === key)?.display_name && `→ ${names.find(n => n.key === key)!.display_name}`}
+            {!panelTools && members.length === 1 && slot.designations?.[0] && t('endpointWorkspace.member', { member: memberName(members[0]) })}
+          </span>
           <span className="endpoint-workspace__connections" title={singlePeer && label(singlePeer)}>
-            {members.length > 1 ? t('endpointWorkspace.occupancy', { used: members.length - free.length, total: members.length })
+            {!panelTools && !members.length ? t('catalog.undefined') : members.length > 1 ? t('endpointWorkspace.occupancy', { used: members.length - free.length, total: members.length })
               : members.length === 1 && (singlePeer ? `↔ ${label(singlePeer)}` : t('endpointWorkspace.free'))}
           </span>
           {side.mode === 'manual' && <><button type="button" aria-label={t('blueprint.order.up', { index: row + 1 })} disabled={!row} onClick={() => patch(index, { order: reorderOrderedKeys(side.order, row, -1) })}>↑</button>
@@ -201,9 +223,9 @@ export function EndpointLinkWorkspace({ state, onChange, onClose, initialSelecte
           })}
         </details>}
         </div>; })}</div>
-        <div className="endpoint-workspace__tools">{(['mask','start','step'] as const).map(field => <label key={field}>{t(`blueprint.naming.${field}`)}<input value={side.naming[field]} onChange={e => patch(index, { naming: { ...side.naming, [field]: e.target.value } })} /></label>)}</div>
+        {panelTools && <><div className="endpoint-workspace__tools">{(['mask','start','step'] as const).map(field => <label key={field}>{t(`blueprint.naming.${field}`)}<input value={side.naming[field]} onChange={e => patch(index, { naming: { ...side.naming, [field]: e.target.value } })} /></label>)}</div>
         {!names && <p role="alert">{t('blueprint.naming.invalid')}</p>}
-        <button type="button" disabled={!names?.length} onClick={() => { const renamed = applyBulkNames(scoped, keys[index], side.naming); onChange({ ...renamed, activePanelKey: state.activePanelKey }); }}>{t('blueprint.naming.apply')}</button>
+        <button type="button" disabled={!names?.length} onClick={() => panelTools.rename(side, keys[index])}>{t('blueprint.naming.apply')}</button></>}
       </section>;
     })}</div>
     {!wiringReadOnly && <>
@@ -241,9 +263,8 @@ export function EndpointLinkWorkspace({ state, onChange, onClose, initialSelecte
         </table>
       </div>}
       <button type="button" disabled={!!previewError || !pairs.length} onClick={() => {
-        const next = applyMemberMappings(state, pairs);
-        if (next === state) return;
-        onChange(next);
+        if (validate(pairs)) return;
+        onApply(pairs);
         setEditedPreview(undefined);
         setMemberSelections([[], []]);
         setStatus(t('endpointWorkspace.applied'));
@@ -253,7 +274,8 @@ export function EndpointLinkWorkspace({ state, onChange, onClose, initialSelecte
     </>}
     </div>}
     {tab === 'links' && <div role="tabpanel" id={`${tabId}-panel-links`} aria-labelledby={`${tabId}-links`} className="endpoint-workspace__existing-links">
-    <label className="endpoint-workspace__filter"><input type="checkbox" checked={allLinks} onChange={e => { setAllLinks(e.target.checked); setRemoved([]); }} />{t('endpointWorkspace.allLinks')}</label>
+    {panelTools && <label className="endpoint-workspace__filter"><input type="checkbox" checked={allLinks} onChange={e => { setAllLinks(e.target.checked); setRemoved([]); }} />{t('endpointWorkspace.allLinks')}</label>}
+    {!panelTools && !visiblePairs.length && <p>{t('moduleReview.emptyWiring')}</p>}
     <div ref={existingList} className="endpoint-workspace__link-list" role="region" aria-label={t('endpointWorkspace.existing')} tabIndex={0}>
       <table className="catalog-table endpoint-workspace__link-table" aria-label={t('blueprint.composition.links')}>
         <thead>

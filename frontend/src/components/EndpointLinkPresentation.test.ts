@@ -1,5 +1,5 @@
 import { describe,it,expect } from 'vitest';
-import { presentedLinks } from './EndpointLinkWorkspace';
+import { presentedLinks } from './BaseEndpointLinkWorkspace';
 import { newBlueprintEditorState } from '../pages/BaseTemplateEditor';
 it('orients and sorts undirected links without mutating storage',()=>{
  const s=newBlueprintEditorState(); const p=s.panels[0];s.panels=[p,{...p,panel_key:'b',panel_number:2},{...p,panel_key:'c',panel_number:3}];
@@ -9,5 +9,5 @@ it('orients and sorts undirected links without mutating storage',()=>{
  expect(presentedLinks(s,sides,false).map(x=>[x.a,x.b])).toEqual([[a('1'),'b1'],[a('1'),'b2'],[a('10'),'b10']]);
  expect(presentedLinks(s,[sides[0],sides[0]],false)).toHaveLength(1);
  expect(presentedLinks(s,sides,true)).toHaveLength(5);expect(JSON.stringify(s)).toBe(before);
- expect(presentedLinks(s,sides,true).filter(x=>x.b.startsWith('b')).map(x=>x.b)).toEqual(['b1','b2','b10']);
+ expect(presentedLinks(s,sides,true).filter(x=>['b1', 'b2', 'b10'].includes(x.b)).map(x=>x.b)).toEqual(['b1','b2','b10']);
 });

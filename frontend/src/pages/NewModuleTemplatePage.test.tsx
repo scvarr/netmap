@@ -20,7 +20,10 @@ it.each([true, false])('handles a module copy payload safely (wiring=%s)', async
   const createModule = vi.fn().mockResolvedValue({});
   const moduleCopy: ModuleTemplateInput = {
     name: 'Board', mount_kind: 'MODULE_BAY', module_bay_type_id: 'PCIe',
-    endpoints: [], geometry: initialModuleGeometry(),
+    endpoints: ['rear', 'front'].map(key => ({ key, display_name: key, kind: 'CONNECTION_POINT', port_type_id: 'test-type' })),
+    geometry: { ...initialModuleGeometry(), endpoints: { rear: { x: .2, y: .5 }, front: { x: .8, y: .5 } } },
+    module_places: [{ key: 'socket', display_name: 'Socket', mount_kind: 'MODULE_PORT', module_port_type_id: 'PCIe',
+      hardware_interface_key: 'published-interface', x: .5, y: .5 }],
     internal_links: wired ? [{
       from_endpoint_key: 'rear', to_endpoint_key: 'front',
       member_mappings: [{ from_member_index: 1, to_member_index: 1 }],
@@ -29,16 +32,16 @@ it.each([true, false])('handles a module copy payload safely (wiring=%s)', async
   render(<I18nProvider><MemoryRouter initialEntries={[{
     pathname: '/library/module-templates/new', state: { moduleCopy },
   }]}><NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} /></MemoryRouter></I18nProvider>);
-  if (wired) {
-    expect(screen.getByRole('alert')).toHaveTextContent(/Копирование шаблона модуля с внутренней разводкой/);
-    expect(screen.queryByRole('button', { name: 'Создать шаблон' })).not.toBeInTheDocument();
-    expect(createModule).not.toHaveBeenCalled();
-  } else {
-    expect(screen.getByLabelText('Название')).toHaveValue('Board (копия)');
-    await screen.findByRole('option', { name: 'PCIe' });
-    fireEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));
-    await waitFor(() => expect(createModule).toHaveBeenCalledWith({ ...moduleCopy, name: 'Board (копия)' }));
-  }
+  expect(screen.getAllByLabelText('Название')[0]).toHaveValue('Board (копия)');
+  await screen.findAllByRole('option', { name: 'PCIe' });
+  fireEvent.click(screen.getByRole('button', { name: 'Внутренние связи' }));
+  const workspace = screen.getByRole('dialog');
+  expect(within(workspace).getByRole('tab', { name: /·/ })).toHaveTextContent(wired ? '1' : '0');
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Закрыть' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));
+  await waitFor(() => expect(createModule).toHaveBeenCalledWith({
+    ...moduleCopy, name: 'Board (копия)', module_places: [{ ...moduleCopy.module_places![0], hardware_interface_key: expect.stringMatching(/^[0-9a-f-]{36}$/) }],
+  }));
 });
 
 it('assigns selected and remaining board sockets while retaining existing declarations', () => {
@@ -230,4 +233,47 @@ it('creates a board with two SFP+ sockets and exposes no bay authoring', async (
       expect.objectContaining({ mount_kind: 'MODULE_PORT', module_port_type_id: 'sfpplus' }),
     ],
   })));
+});
+
+
+it('confirms linked endpoint deletion atomically and guards role and bulk type changes', async () => {
+  const changed = vi.fn();
+  const endpoints = ['A', 'B', 'C'].map(key => ({
+    key, display_name: key, kind: 'CONNECTION_POINT' as const, port_type_id: 'test-type',
+  }));
+  const links = [{
+    from_endpoint_key: 'A', to_endpoint_key: 'B',
+    member_mappings: [{ from_member_index: 1, to_member_index: 1 }],
+  }];
+  function Editor() {
+    const [value, setValue] = useState<ModuleTemplateInput>({
+      name: 'Board', mount_kind: 'MODULE_BAY', module_bay_type_id: 'Parent', endpoints,
+      geometry: { ...initialModuleGeometry(), endpoints: { A: { x: .2, y: .5 }, B: { x: .5, y: .5 }, C: { x: .8, y: .5 } } },
+      internal_links: links,
+    });
+    return <ModuleTemplateEditor value={value} onChange={next => { setValue(next); changed(next); }} />;
+  }
+  render(<I18nProvider><MemoryRouter><Editor /></MemoryRouter></I18nProvider>);
+  await screen.findAllByRole('option', { name: 'Copper · #336699' });
+  expect(screen.getAllByRole('combobox', { name: 'Вид точки' }).at(-1)).toBeDisabled();
+  expect(screen.getAllByRole('combobox', { name: 'Тип порта' }).at(-1)).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Выбрать порт C' }));
+  expect(screen.getByRole('combobox', { name: /Назначить тип/ })).toBeDisabled();
+
+  const remove = screen.getByRole('button', { name: 'Удалить' });
+  fireEvent.click(remove);
+  let confirmation = within(screen.getByRole('dialog'));
+  expect(confirmation.getByText(/окончания \(1\).*пары каналов \(1\)/)).toBeVisible();
+  fireEvent.click(confirmation.getByRole('button', { name: 'Отмена' }));
+  expect(changed).not.toHaveBeenCalled();
+
+  fireEvent.click(remove);
+  confirmation = within(screen.getByRole('dialog'));
+  fireEvent.click(confirmation.getByRole('button', { name: 'Удалить' }));
+  expect(changed).toHaveBeenCalledTimes(1);
+  expect(changed).toHaveBeenLastCalledWith(expect.objectContaining({
+    endpoints: endpoints.slice(1),
+    internal_links: [],
+    geometry: expect.objectContaining({ endpoints: { B: expect.any(Object), C: expect.any(Object) } }),
+  }));
 });

@@ -1,3 +1,4 @@
+import { DestructiveConfirmationDialog } from '../components/DestructiveConfirmationDialog';
 import { mountTypeId } from '../topology/hardwareModules';
 import { moduleEndpointPositions } from '../topology/hardwareModules';
 import { ModuleTemplateEditor } from '../components/ModuleTemplateEditor';
@@ -6,9 +7,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Breadcrumbs, PageHeader, PageShell } from '../components/PageChrome';
 import { useI18n } from '../i18n';
-import { moduleReviewDataSource, type ModuleReconciliationResult, type ModuleDraftDocument, type ModuleReviewDataSource, type ModuleTemplateInput } from '../topology/hardwareModules';
+import { HardwareModuleError, moduleReviewDataSource, type ModuleReconciliationResult, type ModuleDraftDocument, type ModuleReviewDataSource, type ModuleTemplateInput } from '../topology/hardwareModules';
 
-const signature = (d: ModuleTemplateInput) => JSON.stringify([d.name, d.mount_kind, mountTypeId(d), d.geometry, d.module_places ?? [], d.endpoints, d.transceiver]);
+const signature = (d: ModuleTemplateInput) => JSON.stringify([d.name, d.mount_kind, mountTypeId(d), d.geometry, d.module_places ?? [], d.endpoints, d.transceiver, d.internal_links ?? []]);
 
 export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, transceiverRoute = false }: {
   dataSource?: ModuleReviewDataSource; transceiverRoute?: boolean;
@@ -19,43 +20,71 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
   const [definition, setDefinition] = useState<ModuleTemplateInput>();
   const [error, setError] = useState(''); const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false); const [revalidating, setRevalidating] = useState(false);
-  const validating = useRef(false);
+  const [incompatibleGeneration, setIncompatibleGeneration] = useState<number>();
+  const [restorePhase, setRestorePhase] = useState<'confirming' | 'pending'>();
+  const restoring = useRef(false);
   useEffect(() => {
     let active = true;
     setDocument(undefined); setDefinition(undefined); setError(''); setNotice(''); setRevalidating(false);
+    setIncompatibleGeneration(undefined); setRestorePhase(undefined);
     void dataSource.loadDraft(templateId).then(doc => { if (active) { setDocument(doc); setDefinition(doc.definition); } })
       .catch(e => { if (active) setError(String(e)); });
     return () => { active = false; };
   }, [dataSource, templateId]);
   useEffect(() => {
     let active = true;
+    let validating = false;
+    setRevalidating(false);
     const validate = () => {
-      if (!document || busy || validating.current) return;
-      validating.current = true; setRevalidating(true);
+      if (!document || busy || restorePhase || validating) return;
+      validating = true; setRevalidating(true);
       void dataSource.loadDraft(templateId).then(doc => {
         if (!active) return;
         if (doc.generation !== document.generation) throw new Error(t('review.conflict'));
         setDocument(doc);
         setError('');
       }).catch(e => { if (active) setError(String(e)); })
-        .finally(() => { validating.current = false; if (active) setRevalidating(false); });
+        .finally(() => { validating = false; if (active) setRevalidating(false); });
     };
     const timer = window.setInterval(validate, 15000); window.addEventListener('focus', validate);
     return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', validate); };
-  }, [dataSource, templateId, document?.generation, busy, t]);
+  }, [dataSource, templateId, document?.generation, busy, restorePhase, t]);
   const dirty = !!document && !!definition && signature(document.definition) !== signature(definition);
-  const hasInternalLinks = Boolean(document?.definition.internal_links?.length);
+
   const current = document?.review?.current && !dirty && !busy && !revalidating && !error;
   const change = (value: ModuleTemplateInput) => { value = { ...value, geometry: { ...value.geometry, endpoints: moduleEndpointPositions(value.endpoints, value.geometry.endpoints) } }; setDefinition(value); setNotice(''); };
   const run = async (check: boolean) => {
-    if (!document || !definition || busy || revalidating || (!check && hasInternalLinks)) return;
+    if (!document || !definition || busy || restorePhase || revalidating || (check && dirty)) return;
     setBusy(true); setError(''); setNotice('');
     try {
       const doc = check ? await dataSource.checkDraft(templateId, document.generation)
         : await dataSource.saveDraft(templateId, definition, document.generation);
       setDocument(doc); setDefinition(doc.definition);
+      setIncompatibleGeneration(undefined);
       if (!check) setNotice(t('review.saved'));
-    } catch (e) { setError(String(e)); } finally { setBusy(false); }
+    } catch (e) {
+      if (check && e instanceof HardwareModuleError && e.reason === 'PHYSICAL_STRUCTURE_IMMUTABLE') {
+        setIncompatibleGeneration(document.generation);
+      }
+      setError(String(e));
+    } finally { setBusy(false); }
+  };
+  const canRestore = !!document && document.generation === incompatibleGeneration && !!dataSource.restoreDraftSource;
+  const restore = async () => {
+    if (!document || !canRestore || restorePhase !== 'confirming' || restoring.current || busy || revalidating) return;
+    restoring.current = true;
+    setRestorePhase('pending'); setBusy(true); setError(''); setNotice('');
+    try {
+      const restored = await dataSource.restoreDraftSource!(templateId, document.generation);
+      setDocument(restored); setDefinition(restored.definition);
+      setIncompatibleGeneration(undefined);
+      setNotice(t('review.sourceRestored'));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      restoring.current = false;
+      setRestorePhase(undefined); setBusy(false);
+    }
   };
   const review = document?.review;
   const transceiver = definition ? definition.mount_kind === 'MODULE_PORT' : transceiverRoute;
@@ -91,10 +120,16 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
     <PageHeader title={title} />
     <p>{t('review.description')}</p>
     {error && <p role="alert">{error}</p>}
-    {hasInternalLinks && <p role="status">{t('moduleReview.internalLinksReadOnly')}</p>}
-    {definition && !hasInternalLinks && <form className="module-template-form" onSubmit={e => { e.preventDefault(); void run(false); }}>
+    {!transceiver && canRestore && <button type="button" className="secondary-action" disabled={busy || revalidating}
+      onClick={() => setRestorePhase('confirming')}>{t('review.restoreSource')}</button>}
+    {restorePhase && <DestructiveConfirmationDialog title={t('review.restoreSource')}
+      description={t('review.restoreSourceConfirm')} action={t('review.restoreSourceAction')}
+      pendingMessage={restorePhase === 'pending' ? t('review.restoringSource') : undefined}
+      onCancel={() => { if (!restoring.current) setRestorePhase(undefined); }}
+      onConfirm={() => void restore()} />}
+    {definition && <form className="module-template-form" onSubmit={e => { e.preventDefault(); void run(false); }}>
       {transceiver ? <TransceiverTemplateForm value={definition} onChange={change} disabled={busy} />
-        : <ModuleTemplateEditor value={definition} onChange={change} disabled={busy} />}
+        : <ModuleTemplateEditor value={definition} onChange={change} disabled={busy} wiringReadOnly />}
         <button type="submit" className="primary-action" disabled={busy || revalidating || !definition.name.trim() || !mountTypeId(definition) || definition.endpoints.some(e => !e.display_name.trim()) || definition.module_places?.some(port => !port.display_name.trim() || !mountTypeId(port))}>{t('review.save')}</button>
     </form>}
     {document?.publication_state && <section aria-label={t('publication.state')}>

@@ -3,7 +3,7 @@ import { MountTypeSelect, useMountTypes } from '../components/ModulePortTypeSele
 import { HardwareInterfaceCheckbox } from '../components/HardwareInterfaceCheckbox';
 import { HardwareInterfaceActions } from '../components/HardwareInterfaceActions';
 import { DestructiveConfirmationDialog } from '../components/DestructiveConfirmationDialog';
-import { EndpointLinkWorkspace } from '../components/EndpointLinkWorkspace';
+import { BaseEndpointLinkWorkspace } from '../components/BaseEndpointLinkWorkspace';
 import { TemplateElementCreator } from '../components/TemplateElementKindSelect';
 import { LogicalModulePlacesEditor } from '../components/LogicalModulePlacesEditor';
 import { useEffect, useRef, useState } from 'react';
@@ -368,6 +368,6 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
       fallbackFocus={() => linksEntry.current}
       onCancel={() => setPendingDeletion(undefined)}
       onConfirm={() => { removeSelection(pendingDeletion.keys); setPendingDeletion(undefined); }} />}
-    {linksOpen && <EndpointLinkWorkspace wiringReadOnly={physicalReadOnly} portTypes={catalog.types} initialSelectedKeys={workspaceSelection} state={editor} onChange={setEditor} onClose={closeLinks} />}
+    {linksOpen && <BaseEndpointLinkWorkspace wiringReadOnly={physicalReadOnly} portTypes={catalog.types} initialSelectedKeys={workspaceSelection} state={editor} onChange={setEditor} onClose={closeLinks} />}
   </>;
 }

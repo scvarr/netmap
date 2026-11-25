@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
 import { EditModuleTemplatePage } from './EditModuleTemplatePage';
-import type { ModuleDraftDocument, ModuleReviewDataSource } from '../topology/hardwareModules';
+import { HardwareModuleError, type ModuleDraftDocument, type ModuleReviewDataSource } from '../topology/hardwareModules';
 
 const catalog = [
   { id: 'test-type', name: 'Copper', color: '#336699', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, compatibility_mode: 'UNDEFINED' },
@@ -35,6 +35,10 @@ function setup(initial = draft()) {
       return structuredClone(persisted);
     }),
     checkDraft: vi.fn(async () => { persisted = reviewed(persisted); return structuredClone(persisted); }),
+    restoreDraftSource: vi.fn(async (_id, _generation: number) => {
+      persisted = { ...draft(), generation: persisted.generation + 1 };
+      return structuredClone(persisted);
+    }),
   } satisfies ModuleReviewDataSource;
   const mount = () => render(<I18nProvider><MemoryRouter initialEntries={['/library/module-templates/module/edit']}><Routes>
     <Route path="/library/module-templates/:templateId/edit" element={<EditModuleTemplatePage dataSource={source} />} />
@@ -43,22 +47,62 @@ function setup(initial = draft()) {
 }
 afterEach(() => { vi.useRealTimers(); });
 describe('module persisted draft and review', () => {
-  it('keeps definitions with internal wiring out of the geometry editor', async () => {
+  it.each([true, false])('shows published wiring read-only and roundtrips allowed edits (wiring=%s)', async wired => {
     const doc = draft();
     doc.definition.endpoints[0].kind = 'CONNECTION_POINT';
-    doc.definition.internal_links = [{
+    doc.definition.internal_links = wired ? [{
       from_endpoint_key: 'first', to_endpoint_key: 'second',
-      member_mappings: [{ from_member_index: 1, to_member_index: 2 }],
-    }];
+      member_mappings: [{ from_member_index: 1, to_member_index: 1 }],
+    }] : [];
     const { source, mount } = setup(doc);
-    mount();
-    await screen.findByText(/У модуля есть внутренняя разводка/);
-    expect(screen.queryByRole('button', { name: 'Сохранить черновик' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    const user = userEvent.setup();
+    let view = mount();
+    await user.click(await screen.findByRole('button', { name: 'Внутренние связи' }));
+    const workspace = within(screen.getByRole('dialog'));
+    expect(workspace.getByRole('tab', { name: /·/ })).toHaveTextContent(wired ? '1' : '0');
+    expect(workspace.queryByRole('button', { name: 'Удалить' })).not.toBeInTheDocument();
+    await user.click(workspace.getAllByRole('tab')[0]);
+    expect(workspace.queryByRole('button', { name: /Создать связь|Применить/ })).not.toBeInTheDocument();
+    await user.click(workspace.getByRole('button', { name: 'Закрыть' }));
+    fireEvent.change(screen.getByDisplayValue('Сохранённый модуль'), { target: { value: 'Новое имя' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
+    await screen.findByText('Черновик сохранён');
+    expect(source.saveDraft).toHaveBeenCalledWith('module', expect.objectContaining({
+      name: 'Новое имя', internal_links: doc.definition.internal_links,
+    }), 3);
+    view.unmount();
+    view = mount();
+    await screen.findByDisplayValue('Новое имя');
     fireEvent.click(screen.getByRole('button', { name: 'Проверить изменения' }));
     await screen.findByText('Потенциально безопасное автоматическое обновление');
-    expect(source.saveDraft).not.toHaveBeenCalled();
-    expect(source.checkDraft).toHaveBeenCalledWith('module', 3);
+    expect(source.checkDraft).toHaveBeenCalledWith('module', 4);
+    view.unmount();
+  });
+
+  it('blocks during recovery, keeps local edits on conflict and replaces them only after successful restore', async () => {
+    const { source, mount } = setup();
+    source.checkDraft.mockRejectedValueOnce(new HardwareModuleError('Incompatible', 'PHYSICAL_STRUCTURE_IMMUTABLE'));
+    let rejectRestore!: (reason: Error) => void;
+    source.restoreDraftSource.mockImplementationOnce(() => new Promise((_, reject) => { rejectRestore = reject; }));
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Проверить изменения' }));
+    const restore = await screen.findByRole('button', { name: 'Восстановить опубликованное определение' });
+    fireEvent.change(screen.getByDisplayValue('P1'), { target: { value: 'Local edit' } });
+    fireEvent.click(restore);
+    let dialog = within(screen.getByRole('dialog'));
+    expect(dialog.getByText(/локальные правки будут потеряны/)).toBeVisible();
+    fireEvent.click(dialog.getByRole('button', { name: 'Восстановить' }));
+    expect(dialog.getByRole('button', { name: 'Отмена' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Сохранить черновик' })).toBeDisabled();
+    await act(async () => rejectRestore(new HardwareModuleError('Conflict', 'DRAFT_CONFLICT')));
+    expect(screen.getByDisplayValue('Local edit')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Conflict');
+    fireEvent.click(restore);
+    dialog = within(screen.getByRole('dialog'));
+    fireEvent.click(dialog.getByRole('button', { name: 'Восстановить' }));
+    await screen.findByDisplayValue('P1');
+    expect(source.restoreDraftSource.mock.calls).toEqual([['module', 3], ['module', 3]]);
+    expect(screen.queryByDisplayValue('Local edit')).not.toBeInTheDocument();
   });
 
   it('restores, renames, reorders and adds endpoints preserving keys and exact type matching', async () => {
@@ -145,8 +189,8 @@ describe('module persisted draft and review', () => {
     const { source, mount } = setup(reviewed(draft())); mount();
     await screen.findByText('Потенциально безопасное автоматическое обновление');
     source.loadDraft.mockRejectedValueOnce(new Error('Offline'));
-    fireEvent(window, new Event('focus'));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Offline');
+    await act(async () => { fireEvent(window, new Event('focus')); });
+    expect(screen.getByRole('alert')).toHaveTextContent('Offline');
     expect(screen.queryByText('Потенциально безопасное автоматическое обновление')).not.toBeInTheDocument();
     if (mode === 'dirty') fireEvent.change(screen.getByDisplayValue('P1'), { target: { value: 'Keep local edits' } });
     if (mode === 'generation') source.loadDraft.mockResolvedValueOnce({ ...reviewed(draft()), generation: 4 });

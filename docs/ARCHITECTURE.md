@@ -438,9 +438,11 @@ handoff local metadata не переносится как packet facts. Повр
 Действующая семантика BaseTemplate находится в
 [L1_CONNECTIVITY](L1_CONNECTIVITY.md#c-cap-01-01--definitions-и-materialization).
 
-В C-CAP-01-03A общий frontend-модуль member addressing проверяет адреса,
-внутреннюю занятость и пары. Адаптер BaseTemplate определяет допустимые
-окончания и переводит пары в `internal_links[].member_mappings`. Изменения
-порядка, меток и координат затрагивают представление. Адаптер ModuleTemplate
-для графического authoring относится к C-CAP-01-03B.
-[Контракт BaseTemplate](L1_CONNECTIVITY.md#c-cap-01-03a--basetemplate-member-mappings-authoring).
+Общий frontend-модуль `memberMappings.ts` проверяет адреса, внутреннюю
+занятость и пары. Доменные адаптеры BaseTemplate и ModuleTemplate определяют
+допустимые окончания и переводят пары в `internal_links[].member_mappings`.
+Оба используют `EndpointLinkWorkspace`. В BaseTemplate списки привязаны к
+панелям. В ModuleTemplate оба списка показывают окончания самой платы.
+Изменения порядка, меток и координат затрагивают представление.
+[Контракт BaseTemplate](L1_CONNECTIVITY.md#c-cap-01-03a--basetemplate-member-mappings-authoring) ·
+[Контракт ModuleTemplate](L1_CONNECTIVITY.md#c-cap-01-03b--moduletemplate-member-mappings-authoring).

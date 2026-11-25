@@ -119,6 +119,7 @@ export interface ModuleReviewDataSource {
   publishCandidate(id: string, candidateId: string): Promise<{ revision_id: string; version_number: number }>;
   loadDraft(id: string): Promise<ModuleDraftDocument>;
   saveDraft(id: string, definition: ModuleTemplateInput, generation: number): Promise<ModuleDraftDocument>;
+  restoreDraftSource?(id: string, generation: number): Promise<ModuleDraftDocument>;
   checkDraft(id: string, generation: number): Promise<ModuleDraftDocument>;
 }
 export type InstalledModulePlace = PlacedModuleBay & {
@@ -219,6 +220,7 @@ export const moduleReviewDataSource: ModuleReviewDataSource = {
   publishCandidate: (id, candidate) => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/candidates/${encodeURIComponent(candidate)}/publish`, undefined, "POST"),
   loadDraft: id => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/draft`),
   saveDraft: (id, input, generation) => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/draft?expected_generation=${generation}`, input, 'PUT'),
+  restoreDraftSource: (id, generation) => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/draft/restore-source?expected_generation=${generation}`, undefined, 'POST'),
   checkDraft: (id, generation) => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/draft/check?expected_generation=${generation}`, undefined, 'POST'),
 };
 

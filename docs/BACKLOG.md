@@ -134,8 +134,10 @@ Workspace roundtrip.
 при копировании опубликованной версии.
 [Контракт](L1_CONNECTIVITY.md#c-cap-01-03a--basetemplate-member-mappings-authoring).
 
-**OPEN · C-CAP-01-03B.** Графический authoring явных member mappings
-в ModuleTemplate.
+**IMPLEMENTED · C-CAP-01-03B.** Графическое задание точных пар каналов в
+новой плате и копии, просмотр опубликованной разводки и восстановление
+несовместимого черновика из исходной ревизии.
+[Контракт](L1_CONNECTIVITY.md#c-cap-01-03b--moduletemplate-member-mappings-authoring).
 
 **OPEN · C-CAP-01-04.** Пользовательский exact member trace и групповая трассировка.
 Для сквозной проверки нужны конструкция этапа 2 и внешний lifecycle этапа 3.
