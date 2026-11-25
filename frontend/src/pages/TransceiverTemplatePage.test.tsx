@@ -48,6 +48,7 @@ it('creates a physical transceiver with catalog UUIDs and optional typed charact
 
 it('saves a characteristics-only edit and publishes the checked generation', async () => {
   let doc: ModuleDraftDocument = {
+    source_wiring: null,
     template_id: 'optic', source_revision_id: 'original', generation: 1, review: null,
     definition: {
       name: 'SFP+ 10G LR', mount_kind: 'MODULE_PORT', module_port_type_id: 'sfp-plus',

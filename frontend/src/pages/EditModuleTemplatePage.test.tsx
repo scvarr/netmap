@@ -16,6 +16,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 const draft = (): ModuleDraftDocument => ({ template_id: 'module', source_revision_id: 'revision', generation: 3,
+  source_wiring: { endpoints: [], internal_links: [], draft_incompatible: false },
   definition: { geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { first: { x: .3, y: .5 }, second: { x: .7, y: .5 } } }, name: 'Сохранённый модуль', mount_kind: 'MODULE_BAY' as const, module_bay_type_id: ' OCP3 ', endpoints: [
     { key: 'first', display_name: 'P1', port_type_id: 'test-type', kind: 'NETWORK_PORT' }, { key: 'second', display_name: 'P2', port_type_id: 'test-type', kind: 'CONNECTION_POINT' },
   ] }, review: null });
@@ -54,6 +55,7 @@ describe('module persisted draft and review', () => {
       from_endpoint_key: 'first', to_endpoint_key: 'second',
       member_mappings: [{ from_member_index: 1, to_member_index: 1 }],
     }] : [];
+    doc.source_wiring = { endpoints: doc.definition.endpoints, internal_links: doc.definition.internal_links, draft_incompatible: false };
     const { source, mount } = setup(doc);
     const user = userEvent.setup();
     let view = mount();
@@ -79,13 +81,39 @@ describe('module persisted draft and review', () => {
     view.unmount();
   });
 
+  it.each([true, false])('uses pinned source wiring despite incompatible draft (published wired=%s)', async wired => {
+    const doc = draft();
+    const links = [{
+      from_endpoint_key: 'first', to_endpoint_key: 'second',
+      member_mappings: [{ from_member_index: 1, to_member_index: 2 }],
+    }];
+    doc.definition.internal_links = wired ? [] : links;
+    doc.source_wiring = { endpoints: doc.definition.endpoints.map(endpoint => ({
+      ...endpoint, kind: 'CONNECTION_POINT', display_name: 'Published ' + endpoint.display_name,
+    })), internal_links: wired ? links : [], draft_incompatible: true };
+    const { source, mount } = setup(doc);
+    mount();
+    await screen.findByText(/Сохранённый черновик несовместим/);
+    fireEvent.change(screen.getByDisplayValue('P1'), { target: { value: 'Local endpoint' } });
+    await act(async () => { fireEvent(window, new Event('focus')); });
+    expect(source.loadDraft).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/Сохранённый черновик несовместим/)).toBeVisible();
+    expect(screen.getByDisplayValue('Local endpoint')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Внутренние связи' }));
+    const workspace = within(screen.getByRole('dialog'));
+    expect(workspace.getByRole('tab', { name: /·/ })).toHaveTextContent(wired ? '1' : '0');
+    if (wired) expect(workspace.getByRole('cell', { name: 'Published P2 · Канал 2' })).toBeVisible();
+    else expect(workspace.getByText('Внутренних связей пока нет.')).toBeVisible();
+    expect(workspace.queryByText(/Local endpoint/)).not.toBeInTheDocument();
+  });
+
   it('blocks during recovery, keeps local edits on conflict and replaces them only after successful restore', async () => {
-    const { source, mount } = setup();
-    source.checkDraft.mockRejectedValueOnce(new HardwareModuleError('Incompatible', 'PHYSICAL_STRUCTURE_IMMUTABLE'));
+    const doc = draft();
+    doc.source_wiring!.draft_incompatible = true;
+    const { source, mount } = setup(doc);
     let rejectRestore!: (reason: Error) => void;
     source.restoreDraftSource.mockImplementationOnce(() => new Promise((_, reject) => { rejectRestore = reject; }));
     mount();
-    fireEvent.click(await screen.findByRole('button', { name: 'Проверить изменения' }));
     const restore = await screen.findByRole('button', { name: 'Восстановить опубликованное определение' });
     fireEvent.change(screen.getByDisplayValue('P1'), { target: { value: 'Local edit' } });
     fireEvent.click(restore);
@@ -96,7 +124,8 @@ describe('module persisted draft and review', () => {
     expect(screen.getByRole('button', { name: 'Сохранить черновик' })).toBeDisabled();
     await act(async () => rejectRestore(new HardwareModuleError('Conflict', 'DRAFT_CONFLICT')));
     expect(screen.getByDisplayValue('Local edit')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Conflict');
+    expect(screen.getByText(/Conflict/)).toBeVisible();
+    expect(screen.getByText(/Сохранённый черновик несовместим/)).toBeVisible();
     fireEvent.click(restore);
     dialog = within(screen.getByRole('dialog'));
     fireEvent.click(dialog.getByRole('button', { name: 'Восстановить' }));

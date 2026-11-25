@@ -10,7 +10,7 @@ type ModuleLink = NonNullable<ModuleTemplateInput['internal_links']>[number];
 export const moduleLinkPairs = (link: ModuleLink) =>
   mappedMemberPairs(link.from_endpoint_key, link.to_endpoint_key, link.member_mappings);
 
-export function moduleWiringEndpoints(definition: ModuleTemplateInput, portTypes?: readonly PortType[]) {
+export function moduleWiringEndpoints(definition: Pick<ModuleTemplateInput, 'mount_kind' | 'endpoints'>, portTypes?: readonly PortType[]) {
   if (definition.mount_kind !== 'MODULE_BAY') return [];
   const types = new Map(portTypes?.map(type => [type.id, type]));
   return definition.endpoints.filter(endpoint => endpoint.kind === 'CONNECTION_POINT').map(endpoint => {

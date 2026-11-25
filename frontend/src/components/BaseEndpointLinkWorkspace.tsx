@@ -5,7 +5,8 @@ import type { PortType } from './PortTypeSelect';
 export function presentedLinks(state: BlueprintEditorState, sides: { panel: string; order: string[] }[], all: boolean) {
   const slots = new Map(state.slots.map(s => [s.key, s]));
   const compare = (a: string, b: string) => {
-    const x = slots.get(a)!; const y = slots.get(b)!;
+    const x = slots.get(a); const y = slots.get(b);
+    if (!x || !y) return Number(!x) - Number(!y) || a.localeCompare(b);
     return (state.panels.find(p => p.panel_key === x.panel_key)!.panel_number - state.panels.find(p => p.panel_key === y.panel_key)!.panel_number)
       || x.display_name.localeCompare(y.display_name, 'ru', { numeric: true }) || a.localeCompare(b);
   };

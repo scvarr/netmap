@@ -94,7 +94,12 @@ export type ModuleTemplateInput = ModuleMount & {
   }[];
 };
 export type ModuleTemplate = ModuleTemplateInput & { template_id: string; revision_id: string; publication_state?: ModuleDraftDocument["publication_state"] };
+export type ModuleSourceWiring = Pick<ModuleTemplateInput, 'endpoints'> & {
+  internal_links: NonNullable<ModuleTemplateInput['internal_links']>;
+  draft_incompatible: boolean;
+};
 export interface ModuleDraftDocument {
+  source_wiring: ModuleSourceWiring | null;
   template_id: string; source_revision_id: string; generation: number; definition: ModuleTemplateInput;
   publication_state?: { revision_id: string; version_number: number; outdated_count: number; awaiting_update_count: number; requires_intervention_count: number; installations: NonNullable<ModuleDraftDocument["review"]>["result"]["installations"] };
   review: null | {

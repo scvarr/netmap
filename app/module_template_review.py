@@ -71,6 +71,21 @@ def _require_retained_port_types(before, after):
                          {"reason": "PHYSICAL_STRUCTURE_IMMUTABLE"})
 
 
+def _require_unchanged_structure(published, definition):
+    _require_retained_port_types(published, definition)
+    require_unchanged_internal_links(published, definition)
+
+
+def _board_draft_incompatible(published, definition):
+    if published["mount_kind"] != "MODULE_BAY":
+        return False
+    try:
+        _require_unchanged_structure(published, definition)
+    except ModelError:
+        return True
+    return False
+
+
 def analyze_installation(session, installation, candidate, placement_plan=None):
     config = session.get(m.ObjectConfiguration, installation.configuration_id)
     revision = session.get(m.ModuleTemplateRevision, installation.module_revision_id)
@@ -168,7 +183,14 @@ class ModuleTemplateReview:
     def _latest_candidate(self, draft):
         return self.session.scalar(select(m.ModuleTemplateCandidate).where(m.ModuleTemplateCandidate.template_id == draft.template_id).order_by(m.ModuleTemplateCandidate.created_at.desc(), m.ModuleTemplateCandidate.id.desc()).limit(1))
 
-    def document(self, draft, candidate, input_fingerprint=None):
+    def document(self, draft, candidate, published, input_fingerprint=None):
+        source_wiring = None
+        if published["mount_kind"] == "MODULE_BAY":
+            source_wiring = {
+                "endpoints": published["endpoints"],
+                "internal_links": published.get("internal_links", []),
+                "draft_incompatible": _board_draft_incompatible(published, draft.definition),
+            }
         review = None
         if candidate:
             publication = self.session.get(m.ModuleTemplatePublication, candidate.id)
@@ -181,12 +203,15 @@ class ModuleTemplateReview:
                       "created_at": candidate.created_at.isoformat()}
         return {"template_id": str(draft.template_id), "source_revision_id": str(draft.source_revision_id),
                 "generation": draft.generation, "definition": draft.definition, "review": review,
+                "source_wiring": source_wiring,
                 "publication_state": publication_state(self.session, draft.template_id)}
 
     def open(self, template_id):
         draft = self._draft(template_id)
         candidate = self._latest_candidate(draft)
-        return self.document(draft, candidate, self._inputs() if candidate and candidate.draft_generation == draft.generation else None)
+        published = published_definition(self.session, template_id, draft.source_revision_id)
+        return self.document(draft, candidate, published,
+                             self._inputs() if candidate and candidate.draft_generation == draft.generation else None)
 
     def save(self, template_id, definition, expected_generation):
         draft = self._draft(template_id, lock=True)
@@ -194,7 +219,8 @@ class ModuleTemplateReview:
             raise ModelError("Draft changed in another session; reopen before saving", {"reason": "DRAFT_CONFLICT"})
         updated = validate_definition(definition)
         validate_module_authoring(updated)
-        validate_transceiver_authoring(updated, published_definition(self.session, template_id, draft.source_revision_id))
+        published = published_definition(self.session, template_id, draft.source_revision_id)
+        validate_transceiver_authoring(updated, published)
         capacities = validate_port_type_assignments(self.session, updated["endpoints"], draft.definition["endpoints"],
                                                    transceiver=updated.get("transceiver"))
         validate_member_capacity(updated, capacities)
@@ -202,25 +228,20 @@ class ModuleTemplateReview:
         draft.definition = updated
         draft.generation += 1
         self.session.flush()
-        return self.document(draft, self._latest_candidate(draft))
+        return self.document(draft, self._latest_candidate(draft), published)
 
     def restore_source(self, template_id, expected_generation):
         draft = self._draft(template_id, lock=True)
         if draft.generation != expected_generation:
             raise ModelError("Draft changed in another session; reopen before restoring", {"reason": "DRAFT_CONFLICT"})
         published = published_definition(self.session, template_id, draft.source_revision_id)
-        if published["mount_kind"] != "MODULE_BAY":
-            raise ModelError("Source restoration is only available for boards", {"reason": "DRAFT_RESTORE_NOT_REQUIRED"})
         definition = validate_definition(draft.definition)
-        try:
-            _require_retained_port_types(published, definition)
-            require_unchanged_internal_links(published, definition)
-        except ModelError:
-            draft.definition = published
-            draft.generation += 1
-            self.session.flush()
-            return self.document(draft, self._latest_candidate(draft))
-        raise ModelError("Draft is compatible with its source revision", {"reason": "DRAFT_RESTORE_NOT_REQUIRED"})
+        if not _board_draft_incompatible(published, definition):
+            raise ModelError("Draft is compatible with its source revision", {"reason": "DRAFT_RESTORE_NOT_REQUIRED"})
+        draft.definition = published
+        draft.generation += 1
+        self.session.flush()
+        return self.document(draft, self._latest_candidate(draft), published)
 
     def check(self, template_id, expected_generation):
         draft = self._draft(template_id)
@@ -231,8 +252,7 @@ class ModuleTemplateReview:
         definition = validate_definition(draft.definition)
         validate_module_authoring(definition)
         validate_transceiver_authoring(definition, published)
-        _require_retained_port_types(published, definition)
-        require_unchanged_internal_links(published, definition)
+        _require_unchanged_structure(published, definition)
         if definition.get("transceiver") is not None or definition.get("internal_links"):
             endpoints = definition["endpoints"]
             capacities = validate_port_type_assignments(self.session, endpoints, endpoints, transceiver=definition.get("transceiver"))
@@ -247,7 +267,7 @@ class ModuleTemplateReview:
                     "installations": [analyze_installation(self.session, i, definition) for i in installations]})
         self.session.add(candidate)
         self.session.flush()
-        return self.document(draft, candidate, fingerprint)
+        return self.document(draft, candidate, published, fingerprint)
 
     def publish(self, template_id, candidate_id):
         candidate = self.session.get(m.ModuleTemplateCandidate, candidate_id)
@@ -300,8 +320,7 @@ class ModuleTemplateReview:
         validate_module_authoring(candidate.definition)
         published = published_definition(self.session, template_id, latest.id)
         validate_transceiver_authoring(candidate.definition, published)
-        _require_retained_port_types(published, candidate.definition)
-        require_unchanged_internal_links(published, candidate.definition)
+        _require_unchanged_structure(published, candidate.definition)
         if candidate.definition.get("transceiver") is not None or candidate.definition.get("internal_links"):
             endpoints = candidate.definition["endpoints"]
             capacities = validate_port_type_assignments(self.session, endpoints, endpoints, transceiver=candidate.definition.get("transceiver"))

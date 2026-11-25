@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Breadcrumbs, PageHeader, PageShell } from '../components/PageChrome';
 import { useI18n } from '../i18n';
-import { HardwareModuleError, moduleReviewDataSource, type ModuleReconciliationResult, type ModuleDraftDocument, type ModuleReviewDataSource, type ModuleTemplateInput } from '../topology/hardwareModules';
+import { moduleReviewDataSource, type ModuleReconciliationResult, type ModuleDraftDocument, type ModuleReviewDataSource, type ModuleTemplateInput } from '../topology/hardwareModules';
 
 const signature = (d: ModuleTemplateInput) => JSON.stringify([d.name, d.mount_kind, mountTypeId(d), d.geometry, d.module_places ?? [], d.endpoints, d.transceiver, d.internal_links ?? []]);
 
@@ -20,13 +20,12 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
   const [definition, setDefinition] = useState<ModuleTemplateInput>();
   const [error, setError] = useState(''); const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false); const [revalidating, setRevalidating] = useState(false);
-  const [incompatibleGeneration, setIncompatibleGeneration] = useState<number>();
   const [restorePhase, setRestorePhase] = useState<'confirming' | 'pending'>();
   const restoring = useRef(false);
   useEffect(() => {
     let active = true;
     setDocument(undefined); setDefinition(undefined); setError(''); setNotice(''); setRevalidating(false);
-    setIncompatibleGeneration(undefined); setRestorePhase(undefined);
+    setRestorePhase(undefined);
     void dataSource.loadDraft(templateId).then(doc => { if (active) { setDocument(doc); setDefinition(doc.definition); } })
       .catch(e => { if (active) setError(String(e)); });
     return () => { active = false; };
@@ -51,7 +50,8 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
   }, [dataSource, templateId, document?.generation, busy, restorePhase, t]);
   const dirty = !!document && !!definition && signature(document.definition) !== signature(definition);
 
-  const current = document?.review?.current && !dirty && !busy && !revalidating && !error;
+  const incompatible = document?.source_wiring?.draft_incompatible;
+  const current = !incompatible && document?.review?.current && !dirty && !busy && !revalidating && !error;
   const change = (value: ModuleTemplateInput) => { value = { ...value, geometry: { ...value.geometry, endpoints: moduleEndpointPositions(value.endpoints, value.geometry.endpoints) } }; setDefinition(value); setNotice(''); };
   const run = async (check: boolean) => {
     if (!document || !definition || busy || restorePhase || revalidating || (check && dirty)) return;
@@ -60,16 +60,12 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
       const doc = check ? await dataSource.checkDraft(templateId, document.generation)
         : await dataSource.saveDraft(templateId, definition, document.generation);
       setDocument(doc); setDefinition(doc.definition);
-      setIncompatibleGeneration(undefined);
       if (!check) setNotice(t('review.saved'));
     } catch (e) {
-      if (check && e instanceof HardwareModuleError && e.reason === 'PHYSICAL_STRUCTURE_IMMUTABLE') {
-        setIncompatibleGeneration(document.generation);
-      }
       setError(String(e));
     } finally { setBusy(false); }
   };
-  const canRestore = !!document && document.generation === incompatibleGeneration && !!dataSource.restoreDraftSource;
+  const canRestore = incompatible && !!dataSource.restoreDraftSource;
   const restore = async () => {
     if (!document || !canRestore || restorePhase !== 'confirming' || restoring.current || busy || revalidating) return;
     restoring.current = true;
@@ -77,7 +73,6 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
     try {
       const restored = await dataSource.restoreDraftSource!(templateId, document.generation);
       setDocument(restored); setDefinition(restored.definition);
-      setIncompatibleGeneration(undefined);
       setNotice(t('review.sourceRestored'));
     } catch (e) {
       setError(String(e));
@@ -120,6 +115,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
     <PageHeader title={title} />
     <p>{t('review.description')}</p>
     {error && <p role="alert">{error}</p>}
+    {incompatible && <p role="alert">{t('moduleReview.incompatibleDraft')}</p>}
     {!transceiver && canRestore && <button type="button" className="secondary-action" disabled={busy || revalidating}
       onClick={() => setRestorePhase('confirming')}>{t('review.restoreSource')}</button>}
     {restorePhase && <DestructiveConfirmationDialog title={t('review.restoreSource')}
@@ -129,7 +125,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
       onConfirm={() => void restore()} />}
     {definition && <form className="module-template-form" onSubmit={e => { e.preventDefault(); void run(false); }}>
       {transceiver ? <TransceiverTemplateForm value={definition} onChange={change} disabled={busy} />
-        : <ModuleTemplateEditor value={definition} onChange={change} disabled={busy} wiringReadOnly />}
+        : document?.source_wiring && <ModuleTemplateEditor value={definition} onChange={change} disabled={busy} publishedWiring={document.source_wiring} />}
         <button type="submit" className="primary-action" disabled={busy || revalidating || !definition.name.trim() || !mountTypeId(definition) || definition.endpoints.some(e => !e.display_name.trim()) || definition.module_places?.some(port => !port.display_name.trim() || !mountTypeId(port))}>{t('review.save')}</button>
     </form>}
     {document?.publication_state && <section aria-label={t('publication.state')}>
@@ -140,7 +136,9 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
         setBusy(true); setError(''); setResults(undefined);
         try {
           setResults(await dataSource.reconcileInstallations!(templateId));
-          setDocument(await dataSource.loadDraft(templateId));
+          const refreshed = await dataSource.loadDraft(templateId);
+          if (refreshed.generation !== document.generation) throw new Error(t('review.conflict'));
+          setDocument(refreshed);
         } catch (e) { setError(String(e)); } finally { setBusy(false); }
       }}>{t('moduleReconciliation.action')}</button>
       {results && <ul>{results.installations.map(i => <li key={i.installation_id}>

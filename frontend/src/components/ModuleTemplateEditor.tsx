@@ -11,7 +11,7 @@ import { PortTypeSelect, usePortTypes } from './PortTypeSelect';
 import { TemplateElementCreator } from './TemplateElementKindSelect';
 import { useI18n } from '../i18n';
 import { ModuleGeometryEditor } from './ModuleGeometryEditor';
-import { moduleEndpointPositions, modulePortPosition, positionModulePort, type ModuleGeometry, type ModulePortMarker, type ModuleTemplateInput } from '../topology/hardwareModules';
+import { moduleEndpointPositions, modulePortPosition, positionModulePort, type ModuleGeometry, type ModulePortMarker, type ModuleTemplateInput, type ModuleSourceWiring } from '../topology/hardwareModules';
 
 function CoordinateInput({ value, label, onCommit }: {
   value: number; label: string; onCommit: (value: number) => void;
@@ -30,8 +30,8 @@ function CoordinateInput({ value, label, onCommit }: {
   }} /></label>;
 }
 
-export function ModuleTemplateEditor({ value, onChange, disabled = false, wiringReadOnly = false }: {
-  value: ModuleTemplateInput; onChange: (value: ModuleTemplateInput) => void; disabled?: boolean; wiringReadOnly?: boolean;
+export function ModuleTemplateEditor({ value, onChange, disabled = false, publishedWiring }: {
+  value: ModuleTemplateInput; onChange: (value: ModuleTemplateInput) => void; disabled?: boolean; publishedWiring?: ModuleSourceWiring;
 }) {
   const { t } = useI18n();
   const catalog = usePortTypes();
@@ -39,10 +39,13 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false, wiring
   const [linksOpen, setLinksOpen] = useState(false);
   const [pendingRemoval, setPendingRemoval] = useState<ReadonlySet<string>>();
   const linksButton = useRef<HTMLButtonElement>(null);
-  const storedPairs = (value.internal_links ?? []).flatMap(moduleLinkPairs);
-  const linked = new Set(storedPairs.flatMap(pair => [pair.a.endpointKey, pair.b.endpointKey]));
+  const wiringReadOnly = !!publishedWiring;
+  const wiringDefinition = publishedWiring ? { mount_kind: value.mount_kind, ...publishedWiring } : value;
+  const storedPairs = (wiringDefinition.internal_links ?? []).flatMap(moduleLinkPairs);
+  const draftPairs = publishedWiring ? (value.internal_links ?? []).flatMap(moduleLinkPairs) : storedPairs;
+  const linked = new Set([...storedPairs, ...draftPairs].flatMap(pair => [pair.a.endpointKey, pair.b.endpointKey]));
   const pairsFor = (keys: ReadonlySet<string>) =>
-    storedPairs.filter(pair => keys.has(pair.a.endpointKey) || keys.has(pair.b.endpointKey));
+    draftPairs.filter(pair => keys.has(pair.a.endpointKey) || keys.has(pair.b.endpointKey));
   const closeLinks = () => { setLinksOpen(false); requestAnimationFrame(() => linksButton.current?.focus()); };
   const places = value.module_places ?? [];
   const modulePorts = places.filter(port => port.mount_kind === 'MODULE_PORT' && value.mount_kind === 'MODULE_BAY');
@@ -87,7 +90,7 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false, wiring
     onChange({ ...value, module_places: places.map(port => port.key === key ? { ...port, ...patch } as ModulePlaceDefinition : port) });
   const removeDefinitions = (keys: ReadonlySet<string>) => {
     const pairs = pairsFor(keys);
-    if (disabled || (wiringReadOnly && pairs.length)) return;
+    if (disabled || (wiringReadOnly && [...keys].some(key => linked.has(key)))) return;
     const definition = pairs.length ? removeModuleMemberPairs(value, new Set(pairs.map(memberPairKey))) : value;
     const endpoints = value.endpoints.filter(endpoint => !keys.has(endpoint.key));
     onChange({ ...definition, endpoints, geometry: { ...value.geometry, endpoints: moduleEndpointPositions(endpoints, value.geometry.endpoints) },
@@ -199,7 +202,7 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false, wiring
     <ModuleGeometryEditor portTypes={catalog.types} geometry={markerGeometry} endpoints={markers}
       selectedKeys={selected} onSelectionChange={setSelection} onChange={disabled || linksOpen ? undefined : changeGeometry} />
   </fieldset>
-    {linksOpen && <EndpointLinkWorkspace endpoints={moduleWiringEndpoints(value, catalog.types)}
+    {linksOpen && <EndpointLinkWorkspace endpoints={moduleWiringEndpoints(wiringDefinition, catalog.types)}
       storedPairs={storedPairs} initialSelectedKeys={[...selected]} wiringReadOnly={wiringReadOnly || disabled}
       validate={pairs => validateModuleMemberPairs(value, catalog.types, pairs)}
       onApply={pairs => { if (!disabled && !wiringReadOnly) onChange(applyModuleMemberPairs(value, catalog.types, pairs)); }}

@@ -228,6 +228,9 @@ def test_restore_incompatible_draft_from_pinned_wiring(source_pairs):
     module = create_module(definition)
     tid = module["template_id"]
     original = open_draft(tid)
+    expected_wiring = {"endpoints": original["definition"]["endpoints"],
+                       "internal_links": definition["internal_links"], "draft_incompatible": False}
+    assert original["source_wiring"] == expected_wiring
     url = f"/v1/library/module-templates/{tid}/draft/restore-source"
 
     def restore(generation):
@@ -237,7 +240,10 @@ def test_restore_incompatible_draft_from_pinned_wiring(source_pairs):
     assert response.status_code == 409 and "DRAFT_RESTORE_NOT_REQUIRED" in response.text
     checked = check(tid, original)
     saved = save(tid, checked, {**original["definition"], "name": "Incompatible draft",
-                              "internal_links": [link("rear", "front", [(1, 3)])]})
+                              "internal_links": [] if source_pairs else [link("rear", "front", [(1, 3)])]})
+    incompatible = {**expected_wiring, "draft_incompatible": True}
+    assert saved["source_wiring"] == incompatible
+    assert open_draft(tid)["source_wiring"] == incompatible
     response = client.post(f"/v1/library/module-templates/{tid}/draft/check",
                            params={"expected_generation": saved["generation"]})
     assert response.status_code == 409 and "PHYSICAL_STRUCTURE_IMMUTABLE" in response.text
@@ -249,6 +255,7 @@ def test_restore_incompatible_draft_from_pinned_wiring(source_pairs):
     restored_response = restore(saved["generation"])
     assert restored_response.status_code == 200, restored_response.text
     restored = restored_response.json()
+    assert restored["source_wiring"] == expected_wiring
     assert restored["definition"] == original["definition"]
     assert restored["source_revision_id"] == original["source_revision_id"]
     assert restored["generation"] == saved["generation"] + 1

@@ -131,10 +131,9 @@ export function EndpointLinkWorkspace({
   };
   const label = ({ endpointKey, memberIndex }: MemberAddress) => {
     const slot = markersByKey.get(endpointKey);
-    if (!slot) return endpointKey;
-    const panel = panelTools?.panels.find(p => p.key === slot.panel);
-    const member = slot.cardinality > 1 || (!panelTools && slot.designations?.[memberIndex - 1]) ? ` · ${t('endpointWorkspace.member', { member: memberName({ endpointKey, memberIndex }) })}` : '';
-    return `${slot.display_name}${member}${panel ? ` · ${panel.name}` : ''}`;
+    const panel = panelTools?.panels.find(p => p.key === slot?.panel);
+    const member = !panelTools || !slot || slot.cardinality > 1 || memberIndex !== 1 ? ` · ${t('endpointWorkspace.member', { member: memberName({ endpointKey, memberIndex }) })}` : '';
+    return `${slot?.display_name ?? endpointKey}${member}${panel ? ` · ${panel.name}` : ''}`;
   };
   const removePairs = (ids: string[]) => {
     onRemove(new Set(ids));

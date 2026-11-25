@@ -136,6 +136,7 @@ const messages = {
 
     'moduleReview.up': 'Выше', 'moduleReview.down': 'Ниже', 'moduleReview.endpoints': 'Конечные точки модуля',
     'moduleReview.emptyWiring': 'Внутренних связей пока нет.',
+    'moduleReview.incompatibleDraft': 'Сохранённый черновик несовместим с исходной опубликованной ревизией. В окне внутренних связей показана разводка исходной ревизии.',
     'moduleReview.publishedWiring': 'Опубликованная разводка неизменна. Для изменений создайте копию шаблона.',
     'moduleReview.linkedEndpoint': 'Сначала удалите внутренние связи этого окончания, чтобы изменить его роль или тип.',
     'moduleReview.removeLinkedTitle': 'Удалить окончания и их внутренние связи?',
@@ -620,6 +621,7 @@ const messages = {
 
     'moduleReview.up': 'Move up', 'moduleReview.down': 'Move down', 'moduleReview.endpoints': 'Module endpoints',
     'moduleReview.emptyWiring': 'There are no internal links yet.',
+    'moduleReview.incompatibleDraft': 'The saved draft is incompatible with its published source revision. Internal links shows the wiring of that source revision.',
     'moduleReview.publishedWiring': 'Published wiring is immutable. Copy the template to make changes.',
     'moduleReview.linkedEndpoint': 'Remove this endpoint’s internal links before changing its role or type.',
     'moduleReview.removeLinkedTitle': 'Delete endpoints and their internal links?',
