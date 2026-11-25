@@ -17,6 +17,7 @@ from app.models import (
     PacketProcessingPlanAttachment, PhysicalObject, PortType, RoutingPolicyRule, SecurityPolicyAttachment,
 )
 from app.port_types import supports_transceiver_termination
+from app.physical_object_details_resolver import cable_endpoint_addresses
 
 
 class ModuleInstallationDeletionCatalog:
@@ -165,13 +166,25 @@ class ModuleInstallationDeletionCatalog:
             .join(Connection, Connection.id == Cable.connection_id)
             .outerjoin(ConnectionMember, ConnectionMember.connection_id == Connection.id)
             .where(or_(Connection.point_a_id == point_id, Connection.point_b_id == point_id))
-            .order_by(Cable.id, ConnectionMember.index))
-        return [{
-            "cable_id": str(cable.id), "label": cable.label, "connection_id": str(connection.id),
-            "point_id": str(point_id),
-            "member_index": (member.point_a_member if connection.point_a_id == point_id else member.point_b_member)
-            if member else None,
-        } for cable, connection, member in rows]
+            .order_by(Cable.id, ConnectionMember.index)).all()
+        if not rows:
+            return []
+        addresses = cable_endpoint_addresses(self.session, {
+            endpoint_id for _, connection, _ in rows for endpoint_id in (connection.point_a_id, connection.point_b_id)
+        })
+        cables = []
+        for cable, connection, member in rows:
+            local_is_a = connection.point_a_id == point_id
+            remote_id = connection.point_b_id if local_is_a else connection.point_a_id
+            local_index = (member.point_a_member if local_is_a else member.point_b_member) if member else None
+            remote_index = (member.point_b_member if local_is_a else member.point_a_member) if member else None
+            cables.append({
+                "cable_id": str(cable.id), "label": cable.label, "connection_id": str(connection.id),
+                "connection_member_id": str(member.id) if member else None,
+                "local": {**addresses[point_id], "member_index": local_index},
+                "remote": {**addresses[remote_id], "member_index": remote_index},
+            })
+        return cables
 
     @staticmethod
     def _refuse(installation, blockers, cables=()):

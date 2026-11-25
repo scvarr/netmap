@@ -21,8 +21,15 @@ export const selectedPhysicalMember = (point: PhysicalPortAvailability, index: n
     : point.members?.find(member => member.index === index && !member.occupied)?.index
 );
 
-export const physicalMemberLabel = (point: PhysicalPortAvailability, label: string, index?: number, includeSingle = false): string => {
+type PhysicalMemberNames = { cardinality: number; members?: Pick<PhysicalPointMember, 'index' | 'designation'>[] };
+
+export const physicalMemberLabel = (point: PhysicalMemberNames, label: string, index?: number, includeSingle = false): string => {
   const member = (includeSingle || point.cardinality > 1) ? point.members?.find(value => value.index === index) : undefined;
   const designation = member?.designation ?? (includeSingle && point.cardinality === 1 ? "1" : undefined);
   return designation ? `${label} · ${designation}` : label;
 };
+
+export const physicalEndpointAddress = (objectLabel: string, panelLabel: string, pointLabel: string,
+  point: PhysicalMemberNames, index?: number, includeSingle = false, location: string[] = []): string =>
+  [...location, objectLabel, panelLabel, physicalMemberLabel(point, pointLabel, index, includeSingle)]
+    .filter(Boolean).join(' / ');

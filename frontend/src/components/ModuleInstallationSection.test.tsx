@@ -75,11 +75,37 @@ it.each([['single', ['1']], ['duplex', ['Alpha', 'Beta']]] as const)(
   expect(screen.queryByText('Корректировать расположение плат')).toBeNull();
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
   const extract = screen.getByRole('button', { name: 'Извлечь' });
+  const localEnd = { object_id: 'object', object_label: 'Switch', point_id: 'point',
+    point_label: 'PCIe1 / Termination', panel: null, location_path: [],
+    cardinality: members.length, members: members.map((designation, index) => ({ designation, index: index + 1 })),
+  };
+  const cables = members.map((_, index) => ({
+    cable_id: `cable-id-${index}`, connection_id: `connection-id-${index}`,
+    connection_member_id: `connection-member-id-${index}`,
+    label: index === 0 ? 'Patch 12' : null,
+    local: { ...localEnd, member_index: index + 1 },
+    remote: { ...localEnd, object_id: 'peer', object_label: 'Peer', point_id: 'peer-point',
+      point_label: 'LC', panel: { panel_key: 'rear', name: 'Patch panel', face: 'REAR' as const, number: 2 },
+      location_path: [{ location_id: 'site', name: 'Campus' }, { location_id: 'rack', name: 'Rack 42' }],
+      member_index: members.length - index,
+    },
+  }));
   vi.mocked(data.uninstallModule).mockRejectedValueOnce(new HardwareModuleError('In use', 'MODULE_INSTALLATION_IN_USE',
-    [{ cable_id: 'cable-id', label: 'Patch 12', member_index: members.length }]));
+    cables));
   await userEvent.click(extract);
   expect(confirm).toHaveBeenCalledWith('Извлечь трансивер «Optic» из гнезда «PCIe1»?');
-  expect(await screen.findByRole('alert')).toHaveTextContent(`Patch 12 · cable-id · канал ${members.length}`);
+  const refusal = await screen.findByRole('alert');
+  expect(refusal).toHaveTextContent('Невозможно извлечь трансивер «Optic» из гнезда «PCIe1»');
+  expect(refusal).toHaveTextContent('Отключите или переподключите указанные кабели');
+  expect(refusal).not.toHaveTextContent(/cable-id|connection-id|peer-point/);
+  const rows = within(refusal).getAllByRole('listitem');
+  expect(rows[0]).toHaveTextContent(members.length === 1
+    ? /Patch 12 · Switch \/ PCIe1 \/ Termination ↔ Campus \/ Rack 42 \/ Peer.* \/ LC$/
+    : /Patch 12 · Switch \/ PCIe1 \/ Termination · Alpha ↔ Campus \/ Rack 42 \/ Peer.* \/ LC · Beta$/);
+  expect(rows[0]).toHaveTextContent(/Patch panel.*#2/);
+  if (members.length === 2) {
+    expect(rows[1]).toHaveTextContent(/^Switch \/ PCIe1 \/ Termination · Beta ↔ .* \/ LC · Alpha$/);
+  }
   expect(document.querySelector('rect[data-endpoint-id="point"]')).toBeInTheDocument();
   vi.mocked(data.uninstallModule).mockResolvedValueOnce({ ...free, bays: [socket] });
   refresh.mockRejectedValueOnce(new Error('Read failed'));

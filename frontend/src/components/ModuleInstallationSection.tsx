@@ -7,7 +7,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { BlueprintPresentation } from '../topology/types';
 import { panelCompositionBounds } from '../topology/blueprintDisplaySize';
 import { useI18n, type MessageKey } from '../i18n';
-import { HardwareModuleError, hardwareModuleDataSource, type BlockingModuleCable, type HardwareConfiguration, type HardwareModuleDataSource, type ModuleInstallation, type ModuleTemplate } from '../topology/hardwareModules';
+import { HardwareModuleError, hardwareModuleDataSource, type BlockingModuleCable, type BlockingModuleCableEndpoint, type HardwareConfiguration, type HardwareModuleDataSource, type ModuleInstallation, type ModuleTemplate } from '../topology/hardwareModules';
+import { physicalEndpointAddress } from '../topology/physicalPortAvailability';
 
 function compareKeys(a: string, b: string) {
   return a < b ? -1 : a > b ? 1 : 0;
@@ -153,10 +154,20 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [choices, setChoices] = useState<Record<string, { module: string; orientation: 'HORIZONTAL' | 'VERTICAL' }>>({});
   useEffect(() => { let active = true; setConfig(undefined); setError(''); setChoices({}); setExpanded(new Set()); void Promise.all([dataSource.loadConfiguration(objectId), dataSource.listModules()]).then(([c, m]) => { if (active) { setConfig(c); setModules(m.modules); } }, e => { if(active) setError(t('hardware.failed', { error: String(e) })); }); return () => { active = false; }; }, [objectId, dataSource, retry, t]);
-  const showOperationError = (error: unknown) => {
+  const showOperationError = (error: unknown, removal?: { name: string; bay: string }) => {
     const key = error instanceof HardwareModuleError && operationErrors[error.reason ?? ''];
-    setBlockingCables(error instanceof HardwareModuleError ? error.blockingCables : []);
-    setError(key ? t(key) : t('hardware.failed', { error: String(error) }));
+    const cables = error instanceof HardwareModuleError ? error.blockingCables : [];
+    setBlockingCables(cables);
+    setError(removal && cables.length ? t('hardware.error.transceiverConnected', removal)
+      : key ? t(key) : t('hardware.failed', { error: String(error) }));
+  };
+  const cableEnd = (endpoint: BlockingModuleCableEndpoint) => {
+    const panel = endpoint.panel;
+    const panelLabel = panel ? [panel.name, panel.face && t(panel.face === 'FRONT' ? 'face.front' : 'face.rear'),
+      `#${panel.number}`].filter(Boolean).join(' · ') : '';
+    return physicalEndpointAddress(endpoint.object_label ?? t('hardware.unnamedObject'), panelLabel,
+      endpoint.point_label ?? t('physical.port'), endpoint, endpoint.member_index ?? undefined, false,
+      endpoint.location_path.map(location => location.name));
   };
   const install = async (bay: ModuleBay, parentId?: string) => {
     const choice = choices[placeChoiceKey(bay.bay_key, parentId)];
@@ -183,7 +194,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
       setConfig(await dataSource.uninstallModule(objectId, installationId));
       await refreshAfterRemoval();
     }
-    catch(e) { showOperationError(e); }
+    catch(e) { showOperationError(e, { name, bay: bay.display_name }); }
     finally { setPending(false); }
   };
   const nested = new Map(config?.nested_installations?.map(item => [item.id, item]));
@@ -277,9 +288,9 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
         <button className="secondary-action" disabled={pending || !installed?.initial_layout} onClick={() => setDraft(installed!.initial_layout)}>{t('layout.reset')}</button></>}
     </div>}
     {error && <div role="alert">{error} {blockingCables.length > 0
-      ? <ul>{blockingCables.map(cable => <li key={`${cable.cable_id}:${cable.member_index}`}>
-        {cable.label && <>{cable.label} · </>}<code>{cable.cable_id}</code>
-        {cable.member_index !== null && <> · {t('hardware.cableMember', { member: cable.member_index })}</>}
+      ? <ul>{blockingCables.map(cable => <li key={`${cable.cable_id}:${cable.connection_member_id}`}>
+        {cable.label && <><strong>{cable.label}</strong> · </>}
+        {cableEnd(cable.local)} ↔ {cableEnd(cable.remote)}
       </li>)}</ul>
       : !editing && <button type="button" className="secondary-action" onClick={() => setRetry(v => v + 1)}>{t('action.retry')}</button>}</div>}
     {refreshFailed && <p role="alert">{t('physical.loadFailed')} <button type="button" className="secondary-action"

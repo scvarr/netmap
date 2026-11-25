@@ -7,7 +7,7 @@ from app.physical_compatibility import point_member_designations
 from app.module_endpoint_names import EndpointNames
 from app.device_catalog import DeviceCatalog, DisplayAliasRecord
 from app.cable_labels import resolved_cable_label
-from app.models import BuiltInEndpointDefinition, ObjectConfiguration, BuiltInEndpointMapping, Cable, InterfacePhysicalBinding, BaseTemplate, BaseTemplateRevision, PresentationPanel
+from app.models import BuiltInEndpointDefinition, ObjectConfiguration, BuiltInEndpointMapping, Cable, InterfacePhysicalBinding, ConnectionPoint, Location, PhysicalObject, BaseTemplate, BaseTemplateRevision, PresentationPanel
 from app.repository import CanonicalRepository, PhysicalBindingRecord
 from app.schemas import ObjectConfigurationProvenance, BlueprintLibraryRef, BlueprintSlotMetadata, ConnectionPointDetails, DirectInterfaceBindingDetails, ExternalPhysicalAttachmentDetails, InternalPhysicalCounterpartDetails, PhysicalObjectDetails, PhysicalObjectDetailsDocument, ProjectionSourceRef, PhysicalPanelDetails, EndpointPanelContext
 
@@ -40,7 +40,7 @@ class ConfiguredPhysicalObjectDetailsResolver:
             bindings_by_point[binding.point_id].append(PhysicalBindingRecord(binding.id, binding.interface_id, binding.point_id, binding.point_member))
         interface_ids = {binding.interface_id for values in bindings_by_point.values() for binding in values}
         interface_aliases = EndpointNames(self.repository.session).network_interfaces(list(interface_ids))
-        built_in = self._built_in_panel_contexts(endpoint_ids | point_ids)
+        built_in = _built_in_panel_contexts(self.repository.session, endpoint_ids | point_ids)
         provenance, slots, contexts, panels = self._blueprint_instance(physical_object_id, built_in, point_ids)
         designations = point_member_designations(self.repository.session, endpoint_ids | point_ids)
         details = [
@@ -117,23 +117,6 @@ class ConfiguredPhysicalObjectDetailsResolver:
         ]
         return ConnectionPointDetails(members=members, canonical_label=(canonical_alias.value if canonical_alias else None), connection_point_ref=self._ref("ConnectionPoint", point.point_id), label=self._label(alias, "ConnectionPoint", point.point_id), label_source=None if alias else "TECHNICAL_FALLBACK", cardinality=point.cardinality, incident_connection_count=len({member.connection_id for member in point_members}), external_connection_count=len(external_connections), direct_interface_binding_count=len(bindings), ordering_key=slot.slot_key if slot else self._label(alias, "ConnectionPoint", point.point_id), blueprint_slot=slot, direct_interface_bindings=direct_bindings, internal_physical_counterparts=internal, external_physical_attachments=external, source_refs=self._dedupe_refs(refs))
 
-    def _built_in_panel_contexts(self, point_ids):
-        rows = self.repository.session.execute(
-            select(BuiltInEndpointMapping.connection_point_id, BuiltInEndpointDefinition, PresentationPanel)
-            .select_from(BuiltInEndpointMapping)
-            .join(BuiltInEndpointDefinition, BuiltInEndpointDefinition.id == BuiltInEndpointMapping.definition_id)
-            .join(ObjectConfiguration, and_(
-                ObjectConfiguration.id == BuiltInEndpointMapping.configuration_id,
-                ObjectConfiguration.base_revision_id == BuiltInEndpointDefinition.base_revision_id,
-            ))
-            .join(PresentationPanel, and_(
-                PresentationPanel.base_revision_id == ObjectConfiguration.base_revision_id,
-                PresentationPanel.panel_key == BuiltInEndpointDefinition.panel_key,
-            ))
-            .where(BuiltInEndpointMapping.connection_point_id.in_(point_ids))
-        )
-        return {point_id: (slot, panel) for point_id, slot, panel in rows}
-
     def _blueprint_instance(self, object_id, built_in, point_ids):
         row = self.repository.session.execute(select(ObjectConfiguration, BaseTemplateRevision, BaseTemplate).join(BaseTemplateRevision, BaseTemplateRevision.id == ObjectConfiguration.base_revision_id).join(BaseTemplate, BaseTemplate.id == BaseTemplateRevision.template_id).where(ObjectConfiguration.physical_object_id == object_id)).one_or_none()
         if row is None:
@@ -183,3 +166,79 @@ class ConfiguredPhysicalObjectDetailsResolver:
         return [by_key[key] for key in sorted(by_key)]
     @staticmethod
     def _natural_key(value: str): return tuple(int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)", value))
+
+
+def _built_in_panel_contexts(session, point_ids):
+    rows = session.execute(
+        select(BuiltInEndpointMapping.connection_point_id, BuiltInEndpointDefinition, PresentationPanel)
+        .select_from(BuiltInEndpointMapping)
+        .join(BuiltInEndpointDefinition, BuiltInEndpointDefinition.id == BuiltInEndpointMapping.definition_id)
+        .join(ObjectConfiguration, and_(
+            ObjectConfiguration.id == BuiltInEndpointMapping.configuration_id,
+            ObjectConfiguration.base_revision_id == BuiltInEndpointDefinition.base_revision_id,
+        ))
+        .join(PresentationPanel, and_(
+            PresentationPanel.base_revision_id == ObjectConfiguration.base_revision_id,
+            PresentationPanel.panel_key == BuiltInEndpointDefinition.panel_key,
+        ))
+        .where(BuiltInEndpointMapping.connection_point_id.in_(point_ids))
+    )
+    return {point_id: (slot, panel) for point_id, slot, panel in rows}
+
+
+def cable_endpoint_addresses(session, point_ids):
+    """Resolve addresses for the requested cable ends in one batch, independent of maps."""
+    points = tuple(session.scalars(select(ConnectionPoint).where(ConnectionPoint.id.in_(point_ids))))
+    object_ids = {point.physical_object_id for point in points}
+    names = EndpointNames(session).connection_points(list(point_ids))
+    object_names = DeviceCatalog(session).physical_object_display_aliases(list(object_ids))
+    designations = point_member_designations(session, point_ids)
+    built_in = _built_in_panel_contexts(session, point_ids)
+    panels = {(owner_id, panel.panel_key): panel for owner_id, panel in session.execute(
+        select(ObjectConfiguration.physical_object_id, PresentationPanel)
+        .join(PresentationPanel, PresentationPanel.base_revision_id == ObjectConfiguration.base_revision_id)
+        .where(ObjectConfiguration.physical_object_id.in_(object_ids))
+    )}
+    locations_by_object = dict(session.execute(
+        select(PhysicalObject.id, PhysicalObject.location_id).where(PhysicalObject.id.in_(object_ids))
+    ).all())
+    ancestors = select(Location.id, Location.name, Location.parent_location_id).where(
+        Location.id.in_({location_id for location_id in locations_by_object.values() if location_id is not None})
+    ).cte("endpoint_locations", recursive=True)
+    ancestors = ancestors.union(select(Location.id, Location.name, Location.parent_location_id)
+                                .join(ancestors, Location.id == ancestors.c.parent_location_id))
+    locations = {row.id: row for row in session.execute(select(ancestors))}
+
+    addresses = {}
+    for point in points:
+        point_id, object_id = point.id, point.physical_object_id
+        name = names.get(point_id)
+        context = getattr(name, "context", {})
+        panel = panels.get((object_id, context.get("panel_key")))
+        label = name.value if name else None
+        if point_id in built_in:
+            slot, panel = built_in[point_id]
+            label = slot.display_name
+        elif context:
+            label = name.value.removeprefix(f"{context['panel_display_name']} / ")
+        location_path = []
+        location_id = locations_by_object[object_id]
+        seen = set()
+        while location_id in locations and location_id not in seen:
+            location = locations[location_id]
+            location_path.append({"location_id": str(location.id), "name": location.name})
+            seen.add(location_id)
+            location_id = location.parent_location_id
+        addresses[point_id] = {
+            "point_id": str(point_id),
+            "object_id": str(object_id),
+            "object_label": object_names[object_id].value if object_id in object_names else None,
+            "point_label": label,
+            "panel": ({"panel_key": panel.panel_key, "name": panel.display_name,
+                       "face": panel.face, "number": panel.panel_number} if panel else None),
+            "location_path": list(reversed(location_path)),
+            "cardinality": point.cardinality,
+            "members": [{"index": index, "designation": designations.get(point_id, {}).get(index, str(index))}
+                        for index in range(1, point.cardinality + 1)],
+        }
+    return addresses

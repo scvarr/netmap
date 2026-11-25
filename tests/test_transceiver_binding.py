@@ -8,7 +8,7 @@ from sqlalchemy import delete, text
 
 from app.database import SessionLocal
 from app.errors import ModelError
-from app.models import InterfacePhysicalBinding, L2Binding, L2ForwardingContext
+from app.models import InterfacePhysicalBinding, L2Binding, L2ForwardingContext, Location, PhysicalObject
 from app.module_installation_deletion import ModuleInstallationDeletionCatalog
 from app.physical_connections import ConnectionPointEndpoint, PhysicalConnectionCatalog
 from app.repository import CanonicalRepository, ConnectionMemberInput
@@ -121,6 +121,14 @@ def test_opposite_transceiver_modes_allow_cable_and_workspace_roundtrip(hardware
     reason(client.post("/v1/topology/physical-connections", json=data), 422, "CONNECTION_POINT_MEMBER_OCCUPIED")
     reason(client.delete(f"/v1/topology/physical-objects/{object_id}"), 409, "PHYSICAL_OBJECT_IN_USE")
     snapshot = package()
+    cable, = assert_cable_blockers(object_id, a, {1})
+    assert cable["label"] is None
+    assert cable["cable_id"] == connected["cable_ref"]["entity_id"]
+    assert cable["local"]["point_label"] == "Board / socket / Optical"
+    assert cable["remote"]["point_label"] == f"{hardware[2]['display_name']} / Optical"
+    assert cable["remote"]["point_id"] == b["connection_point_id"]
+    assert (cable["local"]["cardinality"], cable["remote"]["cardinality"]) == (1, 1)
+    assert package() == snapshot
     assert snapshot["format_version"] == 17
     assert client.delete("/v1/workspace/dataset").status_code == 204
     empty = package()
@@ -184,9 +192,13 @@ def test_duplex_wiring_preserves_installed_bindings_and_workspace_roundtrip(hard
     point_id = point["connection_point_id"]
     created(install(object_id, optic, "socket", board["id"]))
     _, peer = create_object_with_point(client, "Peer")
-    _, other = create_object_with_point(client, "Other")
+    other_id, other_board, _ = create_installation(hardware)
+    other = created(install(other_id, optic, "socket", other_board["id"]))["nested_installations"][0]["endpoints"][0]
     url = "/v1/topology/physical-connections"
-    connected = created(post_confirmed_physical(client, url, json={"source": point_end(peer), "target": point_end(other)}))
+    connected = created(post_confirmed_physical(client, url, json={
+        "source": point_end(peer), "target": {**point_end(other["connection_point_id"]), "member_index": 2},
+        "cable_label": "Patch 12",
+    }))
     reconnect = f"/v1/cables/{connected['cable_ref']['entity_id']}/reconnect"
     reconnect_request = {"side": "A", "new_point_id": point_id, "expected": client.get(reconnect).json()["expected"]}
     pair = {
@@ -201,13 +213,17 @@ def test_duplex_wiring_preserves_installed_bindings_and_workspace_roundtrip(hard
         response = client.post(path, json=body)
         assert response.status_code == 422, response.text
     assert package() == snapshot
-    _, free_peer = create_object_with_point(client, "Free peer")
+    free_owner, free_peer = create_object_with_point(client, "Free peer")
+    with SessionLocal.begin() as session:
+        campus = Location(name="Campus")
+        room = Location(name="Room 42", parent=campus)
+        session.get(PhysicalObject, uuid.UUID(free_owner)).location = room
     (wired,) = created(post_confirmed_physical(client, f"{url}/bulk", json={"pairs": [{
         "source": {**point_end(point_id), "member_index": 2}, "target": point_end(free_peer),
     }]}))["created"]
     assert wired["source_member_index"] == 2
     before = package()
-    assert_cable_blockers(object_id, installation, {2})
+    assert_cable_blockers(object_id, point, {2})
     assert package() == before
     moved = post_confirmed_physical(client, reconnect, json={**reconnect_request, "new_member_index": 1})
     assert moved.status_code == 204, moved.text
@@ -220,7 +236,25 @@ def test_duplex_wiring_preserves_installed_bindings_and_workspace_roundtrip(hard
         if row["id"] == expected["connection_member_id"]:
             row["point_a_member"] = 1
     assert after == before
-    assert_cable_blockers(object_id, installation, {1, 2})
+    cables = assert_cable_blockers(object_id, point, {1, 2})
+    by_member = {cable["local"]["member_index"]: cable for cable in cables}
+    for index, expected_name in ((1, "Alpha"), (2, "Beta")):
+        assert by_member[index]["local"]["members"][index - 1] == {"index": index, "designation": expected_name}
+        assert by_member[index]["local"]["point_label"] == f"{direct['display_name']} / Optical"
+    remote_optic = by_member[1]["remote"]
+    assert remote_optic["object_id"] == other_id
+    assert remote_optic["object_label"] == "Server"
+    assert remote_optic["point_label"] == "Board / socket / Optical"
+    assert remote_optic["panel"]["name"] == "Панель"
+    assert remote_optic["member_index"] == 2
+    assert remote_optic["members"][1]["designation"] == "Beta"
+    assert by_member[1]["label"] == "Patch 12"
+    assert by_member[2]["label"] is None
+    remote = by_member[2]["remote"]
+    assert remote["object_label"] == "Free peer"
+    assert remote["point_label"] == "p1"
+    assert remote["object_id"] == free_owner
+    assert [part["name"] for part in remote["location_path"]] == ["Campus", "Room 42"]
     assert package() == after
     detail = client.get(f"/v1/topology/physical-objects/{object_id}").json()
     endpoint = next(row for row in detail["connection_points"] if row["connection_point_ref"]["entity_id"] == point_id)
@@ -269,13 +303,44 @@ def test_duplex_wiring_preserves_installed_bindings_and_workspace_roundtrip(hard
     assert disconnected["authoring"] == snapshot["authoring"]
 
 
-def assert_cable_blockers(object_id, installation, members):
-    response = uninstall(object_id, installation["id"])
+def assert_cable_blockers(object_id, endpoint, members):
+    response = uninstall(object_id, endpoint["installation_id"])
     reason(response, 409, "MODULE_INSTALLATION_IN_USE")
     cables = response.json()["error"]["details"]["blocking_cables"]
-    assert {cable["member_index"] for cable in cables} == members
+    assert {cable["local"]["member_index"] for cable in cables} == members
     assert len({cable["cable_id"] for cable in cables}) == len(members)
-    assert all(cable["connection_id"] and cable["point_id"] == installation["endpoints"][0]["connection_point_id"] for cable in cables)
+    assert all(cable["connection_id"] and cable["connection_member_id"] for cable in cables)
+    assert all(cable["local"]["point_id"] == endpoint["connection_point_id"] for cable in cables)
+    return cables
+
+
+def test_blocking_cable_address_for_board_on_rear_panel(hardware):
+    object_id, _, _ = create_installation(hardware)
+    definition = physical_transceiver(hardware[-1])
+    optic = created(client.post("/v1/library/module-templates", json=definition))
+    local = created(install(object_id, optic, "direct"))["bays"][1]["installation"]["endpoints"][0]
+
+    mount = {"mount_kind": "MODULE_BAY", "module_bay_type_id": hardware[1]["module_bay_type_id"]}
+    payload = base_payload()
+    panel = payload["panels"][0]
+    panel.update(face="REAR", display_name="Rear patch panel")
+    payload["bays"] = [{**mount, "bay_key": "card", "display_name": "Uplink slot",
+                        "panel_key": panel["panel_key"], "kind": "LOGICAL"}]
+    base, _ = create_base(payload)
+    other_id = create_object(base)["physical_object_ref"]["entity_id"]
+    card = created(client.post("/v1/library/module-templates", json={
+        **mount, "name": "Uplink card", "geometry": definition["geometry"],
+        "endpoints": [{**definition["endpoints"][0], "display_name": "LC uplink"}],
+    }))
+    remote = created(install(other_id, card, "card"))["bays"][0]["installation"]["endpoints"][0]
+    created(post_confirmed_physical(client, "/v1/topology/physical-connections", json={
+        "source": point_end(remote["connection_point_id"]), "target": point_end(local["connection_point_id"]),
+    }))
+    cable, = assert_cable_blockers(object_id, local, {1})
+    address = cable["remote"]
+    assert address["point_label"] == "Uplink slot / LC uplink"
+    assert address["panel"]["name"] == "Rear patch panel"
+    assert address["panel"]["face"] == "REAR"
 
 
 @pytest.mark.parametrize("blocker", ["CONNECTION", "INTERFACE_PHYSICAL_BINDING"])

@@ -147,10 +147,25 @@ export interface HardwareModuleDataSource {
   loadConfiguration(objectId: string): Promise<HardwareConfiguration>;
   installModule(objectId: string, input: { module_template_id: string; bay_key: string; parent_installation_id?: string; orientation: 'HORIZONTAL' | 'VERTICAL' }): Promise<HardwareConfiguration>;
 }
+export interface BlockingModuleCableEndpoint {
+  point_id: string;
+  object_id: string;
+  object_label: string | null;
+  point_label: string | null;
+  panel: { panel_key: string; name: string; face: 'FRONT' | 'REAR' | null; number: number } | null;
+  location_path: { location_id: string; name: string }[];
+  cardinality: number;
+  member_index: number | null;
+  members: { index: number; designation: string }[];
+}
+
 export interface BlockingModuleCable {
   cable_id: string;
   label: string | null;
-  member_index: number | null;
+  connection_id: string;
+  connection_member_id: string | null;
+  local: BlockingModuleCableEndpoint;
+  remote: BlockingModuleCableEndpoint;
 }
 
 export class HardwareModuleError extends Error {

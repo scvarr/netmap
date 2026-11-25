@@ -6,7 +6,7 @@ import { CableReconnectError, type CableEnd, type CableReconnectDataSource, type
 import type { ConnectionPointDetails, PhysicalObjectDetailsDataSource, PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
 import { displayPointLabel, sortedConnectionPoints } from './PhysicalObjectDetailsSection';
 import { PhysicalMemberSelect } from './PhysicalMemberSelect';
-import { isAvailablePhysicalPort, physicalMemberLabel, selectedPhysicalMember } from '../topology/physicalPortAvailability';
+import { isAvailablePhysicalPort, physicalEndpointAddress, selectedPhysicalMember } from '../topology/physicalPortAvailability';
 
 interface Props {
   cableId: string;
@@ -51,11 +51,11 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
     return options;
   };
 
-  const endpoint = (document: PhysicalObjectDetailsDocument, point: ConnectionPointDetails, index: number) => [
+  const endpoint = (document: PhysicalObjectDetailsDocument, point: ConnectionPointDetails, index: number) => physicalEndpointAddress(
     document.physical_object.label,
     panels(document).find(item => item.key === panelKey(point))?.label ?? point.panel_context?.panel_name ?? t('physical.unassignedPanel'),
-    physicalMemberLabel(point, displayPointLabel(point, t('physical.port')), index, true),
-  ].join(' / ');
+    displayPointLabel(point, t('physical.port')), point, index, true,
+  );
 
   useEffect(() => {
     let active = true;
