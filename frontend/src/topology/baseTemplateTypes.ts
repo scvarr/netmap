@@ -107,6 +107,7 @@ export interface BaseTemplateInstantiationDocument {
 export interface BaseTemplateDataSource {
   loadDraft?(templateId: string): Promise<BaseTemplateDraftDocument>;
   saveDraft?(templateId: string, definition: CreateBaseTemplateRequest, generation: number): Promise<BaseTemplateDraftDocument>;
+  restoreDraftSource?(templateId: string, generation: number): Promise<BaseTemplateDraftDocument>;
   checkDraft?(templateId: string, generation: number): Promise<BaseTemplateDraftDocument>;
   publishCandidate?(templateId: string, candidateId: string): Promise<{ candidate_id: string; revision_id: string; version_number: number }>;
   reconcileObjects?(templateId: string): Promise<BaseTemplateReconciliationResult>;

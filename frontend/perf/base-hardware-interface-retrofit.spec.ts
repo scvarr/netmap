@@ -73,7 +73,15 @@ test('assign interfaces to published SFP sockets, reconcile an existing object, 
   const all = page.getByRole('button', { name: 'Назначить интерфейсы всем гнёздам' });
   await all.click();
   await expect(all).toBeDisabled();
+  const draftUrl = `/api/v1/library/base-templates/${templateId}/draft`;
+  const saved = page.waitForResponse(response => response.request().method() === 'PUT' && new URL(response.url()).pathname === draftUrl);
   await page.getByRole('button', { name: 'Сохранить черновик', exact: true }).click();
+  const savedResponse = await saved;
+  expect(savedResponse.ok(), await savedResponse.text()).toBe(true);
+  const { generation } = await savedResponse.json();
+  const restore = await request.post(`${draftUrl}/restore-source?expected_generation=${generation}`);
+  expect(restore.status()).toBe(409);
+  expect((await restore.json()).error.details.reason).toBe('DRAFT_RESTORE_NOT_REQUIRED');
   await page.getByRole('button', { name: 'Проверить изменения', exact: true }).click();
   await page.getByRole('button', { name: 'Опубликовать', exact: true }).click();
   await expect(page.getByText(/Публикация завершена/)).toBeVisible();

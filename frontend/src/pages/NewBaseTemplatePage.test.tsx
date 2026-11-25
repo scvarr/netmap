@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { I18nProvider } from '../i18n';
 import { NewBaseTemplatePage } from './NewBaseTemplatePage';
@@ -33,6 +33,68 @@ it('copies the pinned complete definition locally, restores it and creates only 
  expect(api.createBaseTemplate).toHaveBeenCalledWith({...createBlueprintRequest(draft).request});
  expect(document).toEqual(original); expect(localStorage.getItem(localDraftKey())).toBeNull();
 });
+it('authors logical groups in a copy and preserves retained keys when changing capacity', async () => {
+ const { document, api } = fixture();
+ const originalBays = structuredClone(document.bays!);
+ vi.stubGlobal('fetch', vi.fn(async url => Response.json(String(url).endsWith('/module-bay-types')
+   ? [{ id: 'ocp', name: 'OCP', is_active: true }, { id: 'archived', name: 'Archived', is_active: false }] : [{ id: 'archived', name: 'Test endpoint type', is_active: true }])));
+ const view = mount(api);
+ fireEvent.click(await screen.findByText('Логические отсеки · 0'));
+ const creator = within(screen.getByRole('group', { name: 'Создать группу' }));
+ await creator.findByRole('option', { name: 'OCP' });
+ expect(creator.queryByRole('option', { name: 'Archived' })).toBeNull();
+ const create = (count: string, panel = document.panels[0].panel_key) => {
+   fireEvent.change(creator.getByLabelText('Панель'), { target: { value: panel } });
+   fireEvent.change(creator.getByLabelText('Тип модульного отсека'), { target: { value: 'ocp' } });
+   fireEvent.change(creator.getByLabelText('Количество мест'), { target: { value: count } });
+   fireEvent.click(creator.getByRole('button', { name: 'Создать группу' }));
+ };
+ create('0');
+ expect(screen.getByRole('alert')).toHaveTextContent('от 1');
+ create('1025');
+ expect(screen.getByRole('alert')).toHaveTextContent('не более 1024');
+ create('2');
+ create('1', document.panels[1].panel_key);
+ create('3');
+ expect(screen.getByRole('alert')).toHaveTextContent('уже существует');
+ expect(screen.getByText('Логические отсеки · 2')).toBeVisible();
+ view.unmount();
+ const created = readLocalDraft(localDraftKey()).draft!.state.bays!;
+ const group = created.filter(bay => bay.kind === 'LOGICAL' && bay.mount_kind === 'MODULE_BAY'
+   && bay.panel_key === document.panels[0].panel_key);
+ expect(group).toHaveLength(2);
+ expect(group.every(bay => bay.x === null && bay.y === null)).toBe(true);
+ mount(api);
+ fireEvent.click(await screen.findByRole('button', { name: 'Продолжить редактирование' }));
+ fireEvent.click(screen.getByText('Логические отсеки · 2'));
+ const firstGroup = within(await screen.findByRole('group', { name: /^1 · .*Модульный отсек · OCP$/ }));
+ const apply = (count: string) => {
+   fireEvent.change(firstGroup.getByLabelText('Количество мест'), { target: { value: count } });
+   fireEvent.click(firstGroup.getByRole('button', { name: 'Применить количество' }));
+ };
+ for (const value of ['', '-1', '1.5', '1025']) {
+   apply(value);
+   expect(screen.getByRole('alert')).toBeVisible();
+ }
+ apply('1024');
+ expect(firstGroup.getByLabelText('Количество мест')).toHaveValue('1024');
+ await waitFor(() => expect(readLocalDraft(localDraftKey()).draft!.state.bays!.length).toBe(created.length + 1022));
+ const grown = readLocalDraft(localDraftKey()).draft!.state.bays!;
+ expect(grown.slice(0, created.length)).toEqual(created);
+ expect(new Set(grown.map(bay => bay.bay_key)).size).toBe(grown.length);
+ const retainedKey = grown.filter(bay => bay.kind === 'LOGICAL' && bay.mount_kind === 'MODULE_BAY'
+   && bay.panel_key === document.panels[0].panel_key).map(bay => bay.bay_key).sort()[0];
+ apply('1');
+ await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Сохранить шаблон' })); });
+ const final = vi.mocked(api.createBaseTemplate).mock.calls[0][0].bays!;
+ const front = final.filter(bay => bay.kind === 'LOGICAL' && bay.mount_kind === 'MODULE_BAY'
+   && bay.panel_key === document.panels[0].panel_key);
+ expect(front.map(bay => bay.bay_key)).toEqual([retainedKey]);
+ expect(final).toContainEqual(created.at(-1));
+ expect(final.slice(0, originalBays.length)).toEqual(originalBays);
+ expect(document.bays).toEqual(originalBays);
+});
+
 it('preserves an existing draft across an unresolved choice and rejected deletion', async () => {
  const {api} = fixture(); const old = newBlueprintEditorState(); old.name='Previous';
  const raw=JSON.stringify({version:1,generation:null,state:old});localStorage.setItem(localDraftKey(),raw);

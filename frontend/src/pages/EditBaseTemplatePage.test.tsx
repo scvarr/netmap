@@ -3,6 +3,8 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
+import { BaseTemplateApiError } from '../topology/apiBaseTemplateDataSource';
+import { localDraftKey } from '../blueprints/localDraft';
 import { EditBaseTemplatePage } from './EditBaseTemplatePage';
 import type { BaseTemplateDataSource, BaseTemplateDraftDocument, BaseTemplateReconciliationResult } from '../topology/baseTemplateTypes';
 
@@ -42,6 +44,10 @@ function setup(document = draft()) {
       // Server schema serialization normalizes field order on newly created endpoints.
       definition = { ...definition, slots: definition.slots.map((s: BaseTemplateDraftDocument['definition']['slots'][number]) => ({ key: s.key, display_name: s.display_name, kind: s.kind, port_type_id: s.port_type_id, panel_key: s.panel_key, rendered_position: s.rendered_position })) };
       persisted = { ...persisted, definition, generation: generation + 1, review: persisted.review ? { ...persisted.review, current: false } : null }; return structuredClone(persisted);
+    }),
+    restoreDraftSource: vi.fn(async (_id: string, generation: number) => {
+      persisted = { ...draft(), generation: generation + 1 };
+      return structuredClone(persisted);
     }),
     checkDraft: vi.fn(async () => { persisted = withReview(persisted); return structuredClone(persisted); }),
     publishCandidate: vi.fn(async () => {
@@ -89,6 +95,37 @@ it('keeps published member mappings visible and physical controls locked', async
   expect(within(dialog).getByRole('cell', { name: 'Rear input · Канал 23 · Front' })).toBeVisible();
   expect(within(dialog).getByRole('cell', { name: 'Front output · Front' })).toBeVisible();
   expect(within(dialog).queryByRole('button', { name: 'Удалить' })).toBeNull();
+});
+
+it('reloads the source only after confirming, and preserves local edits if the restore fails', async () => {
+  const rejected = draft();
+  rejected.definition.name = 'Incompatible draft';
+  rejected.definition.slots.push({ ...rejected.definition.slots[0], key: 'added' });
+  const { mount, source } = setup(rejected);
+  source.checkDraft.mockRejectedValueOnce(new BaseTemplateApiError('Incompatible', 'PHYSICAL_STRUCTURE_IMMUTABLE'));
+  source.restoreDraftSource.mockRejectedValueOnce(new BaseTemplateApiError('Draft changed', 'DRAFT_CONFLICT'));
+  mount();
+  await screen.findByDisplayValue('Incompatible draft');
+  const check = screen.getByRole('button', { name: 'Проверить изменения' });
+  await waitFor(() => expect(check).toBeEnabled());
+  fireEvent.click(check);
+  const restore = await screen.findByRole('button', { name: 'Восстановить опубликованное определение' });
+  fireEvent.change(screen.getByLabelText('Название шаблона'), { target: { value: 'Local unsaved work' } });
+  const dialog = () => screen.getByRole('dialog', { name: 'Восстановить опубликованное определение' });
+  fireEvent.click(restore);
+  fireEvent.click(within(dialog()).getByRole('button', { name: 'Отмена' }));
+  expect(source.restoreDraftSource).not.toHaveBeenCalled();
+  expect(screen.getByLabelText('Название шаблона')).toHaveValue('Local unsaved work');
+  fireEvent.click(restore);
+  fireEvent.click(within(dialog()).getByRole('button', { name: /^Восстановить$/ }));
+  expect(await screen.findByText(/Draft changed/)).toBeVisible();
+  expect(screen.getByLabelText('Название шаблона')).toHaveValue('Local unsaved work');
+  fireEvent.click(restore);
+  fireEvent.click(within(dialog()).getByRole('button', { name: /^Восстановить$/ }));
+  expect(await screen.findByDisplayValue('Сохранённый черновик')).toBeVisible();
+  expect(source.restoreDraftSource).toHaveBeenLastCalledWith('base', 2);
+  expect(localStorage.getItem(localDraftKey('base'))).toBeNull();
+  await waitFor(() => expect(check).toBeEnabled());
 });
 
 describe('persisted base template review', () => {

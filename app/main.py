@@ -881,6 +881,13 @@ def save_base_template_draft(template_id: uuid.UUID, query: CreateBaseTemplateRe
         return BaseTemplateReview(session).save(template_id, query.model_dump(mode="json"), expected_generation)
 
 
+@app.post("/v1/library/base-templates/{template_id}/draft/restore-source")
+def restore_base_template_draft_source(template_id: uuid.UUID, expected_generation: int,
+                                       session: Session = Depends(get_session)):
+    with session.begin():
+        return BaseTemplateReview(session).restore_source(template_id, expected_generation)
+
+
 @app.post("/v1/library/base-templates/{template_id}/draft/check")
 def check_base_template_draft(template_id: uuid.UUID, expected_generation: int,
                               session: Session = Depends(get_session)):

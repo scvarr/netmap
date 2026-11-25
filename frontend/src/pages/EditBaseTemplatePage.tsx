@@ -1,11 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { createBlueprintRequest, hydrateBlueprintEditorState, type BlueprintEditorState } from '../blueprints/editorModel';
-import { LocalBaseTemplateEditor as BaseTemplateEditor } from './LocalBaseTemplateEditor';
+import { LocalBaseTemplateEditor as BaseTemplateEditor, type LocalBaseTemplateDraftHandle } from './LocalBaseTemplateEditor';
 import { PageShell } from '../components/PageChrome';
 import { useI18n } from '../i18n';
 import type { BaseTemplateDataSource, BaseTemplateDraftDocument, BaseTemplateReconciliationResult, CreateBaseTemplateRequest } from '../topology/baseTemplateTypes';
 import { BaseTemplateChangeInspector, reconciliationCounts, reviewCounts } from './BaseTemplateChangeInspector';
+
+import { DestructiveConfirmationDialog } from '../components/DestructiveConfirmationDialog';
+import { BaseTemplateApiError } from '../topology/apiBaseTemplateDataSource';
+
+const hydrateDraft = (doc: BaseTemplateDraftDocument) => hydrateBlueprintEditorState({
+  ...doc.definition, schema_version: '2.0',
+  blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: doc.template_id },
+  version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: doc.source_revision_id },
+  version_number: 1,
+  next_panel_number: Math.max(...doc.definition.panels.map(panel => panel.panel_number)) + 1,
+});
 
 const signature = (d?: CreateBaseTemplateRequest) => d ? JSON.stringify(
   [d.name, d.default_physical_object_class ?? null, d.body, d.panels, d.slots, d.internal_links, d.bays ?? []],
@@ -20,6 +31,11 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [checking, setChecking] = useState(false);
   const inspectorTrigger = useRef<HTMLButtonElement>(null);
+  const [incompatibleGeneration, setIncompatibleGeneration] = useState<number>();
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [editorVersion, setEditorVersion] = useState(0);
+  const draftHandle = useRef<LocalBaseTemplateDraftHandle>(null);
+  const checkButton = useRef<HTMLButtonElement>(null);
   const [initial, setInitial] = useState<BlueprintEditorState>();
   const [saved, setSaved] = useState(''); const [editing, setEditing] = useState('');
   const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false);
@@ -35,11 +51,7 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
     void dataSource.loadDraft!(templateId).then(doc => {
       if (!active) return;
       accept(doc);
-      const definition = doc.definition;
-      setInitial(hydrateBlueprintEditorState({ ...definition, schema_version: '2.0',
-        blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: doc.template_id },
-        version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: doc.source_revision_id },
-        version_number: 1, next_panel_number: Math.max(...definition.panels.map(p => p.panel_number)) + 1 }));
+      setInitial(hydrateDraft(doc));
     }).catch(e => { if (active) setError(String(e)); });
     return () => { active = false; };
   }, [dataSource, templateId, accept]);
@@ -64,6 +76,31 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
   }, [generation, busy, refresh]);
   const changed = useCallback((state: BlueprintEditorState) => { setEditing(signature(createBlueprintRequest(state).request)); setNotice(''); }, []);
   const dirty = editing !== saved;
+  const canRestore = document !== undefined && incompatibleGeneration === generation && !!dataSource.restoreDraftSource;
+  const restore = async () => {
+    if (!canRestore || busy || revalidating) return;
+    setRestoreOpen(false);
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const restored = await dataSource.restoreDraftSource!(templateId, document.generation);
+      // Only disarm the old editor after the server has committed the restore.
+      try { draftHandle.current?.discardAfterRestore(); }
+      catch { setError(t('localDraft.error')); }
+      setInitial(hydrateDraft(restored));
+      setEditorVersion(version => version + 1);
+      setIncompatibleGeneration(undefined);
+      accept(restored);
+    } catch (error) {
+      setError(String(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const restoredNotice = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (editorVersion) setNotice(t('review.sourceRestored'));
+  }, [editorVersion, t]);
+  useEffect(() => { if (notice === t('review.sourceRestored')) restoredNotice.current?.focus(); }, [notice, t]);
   const review = document?.review;
   const current = review?.current && !review.published_revision_id && review.draft_generation === generation && !dirty && !busy && !revalidating && !error;
   const { safe, intervention } = reviewCounts(review?.result.objects ?? []);
@@ -93,9 +130,15 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
     {error && <p role="alert">{error}</p>}
     {document && <section className="base-template-review" aria-label={t('review.impacts')}>
       <div className="base-template-review__actions">
-      <button className="primary-action" type="button" disabled={busy || dirty || revalidating} onClick={() => {
+      <button ref={checkButton} className="primary-action" type="button" disabled={busy || dirty || revalidating} onClick={() => {
         setBusy(true); setChecking(true); setError('');
-        void dataSource.checkDraft!(templateId, document.generation).then(accept).catch(e => setError(String(e))).finally(() => { setBusy(false); setChecking(false); });
+        void dataSource.checkDraft!(templateId, document.generation).then(doc => {
+          setIncompatibleGeneration(undefined);
+          accept(doc);
+        }).catch(error => {
+          if (error instanceof BaseTemplateApiError && error.reason === 'PHYSICAL_STRUCTURE_IMMUTABLE') setIncompatibleGeneration(document.generation);
+          setError(String(error));
+        }).finally(() => { setBusy(false); setChecking(false); });
       }}>{t('review.check')}</button>
       <button className="primary-action" type="button" disabled={busy || !current || !dataSource.publishCandidate} onClick={() => {
         if (!review || !current || busy) return;
@@ -105,6 +148,8 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
           accept(await dataSource.loadDraft!(templateId));
         }).catch(e => setError(String(e))).finally(() => setBusy(false));
       }}>{t('publication.publish')}</button>
+      {canRestore && <button className="secondary-action" type="button" disabled={busy || revalidating}
+        onClick={() => setRestoreOpen(true)}>{t('review.restoreSource')}</button>}
       {dirty && <p>{t('review.unsaved')}</p>}
       </div>
       <div className="base-template-review__status">
@@ -120,7 +165,14 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
         setInspectorOpen(false);
         inspectorTrigger.current?.focus();
       }} />}
-    {initial && document && <BaseTemplateEditor physicalReadOnly key={templateId} templateId={templateId} generation={document.generation} initialState={initial} title={t('review.edit')} description={t('review.description')} saveLabel={t('review.save')} saveDisabled={busy || revalidating} onStateChange={changed} onSave={async state => {
+    {restoreOpen && <DestructiveConfirmationDialog
+      title={t('review.restoreSource')}
+      description={t('review.restoreSourceConfirm')}
+      action={t('review.restoreSourceAction')}
+      fallbackFocus={() => checkButton.current}
+      onCancel={() => setRestoreOpen(false)}
+      onConfirm={() => void restore()} />}
+    {initial && document && <BaseTemplateEditor physicalReadOnly draftHandle={draftHandle} key={`${templateId}:${editorVersion}`} templateId={templateId} generation={document.generation} initialState={initial} title={t('review.edit')} description={t('review.description')} saveLabel={t('review.save')} saveDisabled={busy || revalidating} onStateChange={changed} onSave={async state => {
       if (busy || revalidating) return;
       const result = createBlueprintRequest(state); if (!result.request) throw new Error(result.errors.join(' '));
       setBusy(true); setError(''); setNotice('');
@@ -128,7 +180,7 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
       catch (e) { setError(String(e)); throw e; }
       finally { setBusy(false); }
     }} />}
-    {notice && <p role="status">{notice}</p>}
+    <p ref={restoredNotice} hidden={!notice} tabIndex={-1} role="status">{notice}</p>
 
   </PageShell>;
 }

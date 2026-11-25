@@ -134,8 +134,14 @@ export const parseBaseTemplateInstantiationDocument = (value: unknown): BaseTemp
   return { schema_version: '2.0', blueprint_ref: parseRef(document.blueprint_ref, 'blueprint_ref', 'BaseTemplate'), version_ref: parseRef(document.version_ref, 'version_ref', 'BaseTemplateRevision'), physical_object_ref: parseCanonicalRef(document.physical_object_ref, 'physical_object_ref', 'PhysicalObject'), slots: slots.map((value, index) => { const slot = requireObject(value, `slots[${index}]`); return { slot_key: requireString(slot.slot_key, `slots[${index}].slot_key`), connection_point_ref: parseCanonicalRef(slot.connection_point_ref, `slots[${index}].connection_point_ref`, 'ConnectionPoint'), network_interface_ref: slot.network_interface_ref == null ? slot.network_interface_ref as null | undefined : parseCanonicalRef(slot.network_interface_ref, `slots[${index}].network_interface_ref`, 'NetworkInterface') }; }) };
 };
 
+export class BaseTemplateApiError extends Error {
+  constructor(message: string, readonly reason?: string) {
+    super(message);
+  }
+}
+
 const backendError = async (response: Response): Promise<Error> => {
-  try { const body: unknown = await response.json(); if (isObject(body) && isObject(body.error) && typeof body.error.code === 'string' && typeof body.error.message === 'string') return new Error(`${body.error.code}: ${body.error.message}`); } catch { /* generic below */ }
+  try { const body: unknown = await response.json(); if (isObject(body) && isObject(body.error) && typeof body.error.code === 'string' && typeof body.error.message === 'string') return new BaseTemplateApiError(`${body.error.code}: ${body.error.message}`, isObject(body.error.details) && typeof body.error.details.reason === 'string' ? body.error.details.reason : undefined); } catch { /* generic below */ }
   return new Error(`HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''} while loading object blueprints.`);
 };
 
@@ -148,6 +154,7 @@ export class ApiBaseTemplateDataSource implements BaseTemplateDataSource {
   }
   loadDraft(id: string) { return this.draftRequest(id, 'GET'); }
   saveDraft(id: string, definition: CreateBaseTemplateRequest, generation: number) { return this.draftRequest(id, 'PUT', `?expected_generation=${generation}`, definition); }
+  restoreDraftSource(id: string, generation: number) { return this.draftRequest(id, 'POST', `/restore-source?expected_generation=${generation}`); }
   checkDraft(id: string, generation: number) { return this.draftRequest(id, 'POST', `/check?expected_generation=${generation}`); }
   async publishCandidate(id: string, candidateId: string) {
     const response = await fetch(`${this.endpoint}/${encodeURIComponent(id)}/candidates/${encodeURIComponent(candidateId)}/publish`, { method: 'POST' });

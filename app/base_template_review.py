@@ -345,6 +345,18 @@ class BaseTemplateReview:
         self.session.flush()
         return self.document(draft, self._latest_candidate(draft))
 
+    def restore_source(self, template_id, expected_generation):
+        draft = self._draft(template_id)
+        if draft.generation != expected_generation:
+            raise ModelError("Draft changed in another session; reopen before restoring", {"reason": "DRAFT_CONFLICT"})
+        published = published_definition(self.session, template_id, draft.source_revision_id)
+        if added_hardware_interfaces(published, draft.definition) is not None:
+            raise ModelError("Draft is compatible with its source revision", {"reason": "DRAFT_RESTORE_NOT_REQUIRED"})
+        draft.definition = published
+        draft.generation += 1
+        self.session.flush()
+        return self.document(draft, self._latest_candidate(draft))
+
     def check(self, template_id, expected_generation):
         draft = self._draft(template_id, lock=False)
         # Serialize only this draft against saves. If it changed since our MVCC

@@ -9,6 +9,11 @@ import { addEndpoints, addModulePlaces, addPanel, createBlueprintRequest, hydrat
 import type { BaseTemplateRevisionDocument } from '../topology/baseTemplateTypes';
 import { newBlueprintEditorState, BaseTemplateEditor } from './BaseTemplateEditor';
 
+beforeEach(() => {
+  HTMLDialogElement.prototype.showModal ??= function () { this.open = true; };
+  HTMLDialogElement.prototype.close ??= function () { this.open = false; };
+});
+
 const catalog = [
   { id: 'test-type', name: 'Copper', color: '#336699', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, compatibility_mode: 'UNDEFINED' },
   { id: 'fiber', name: 'Fiber', color: '#FFAA00', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, compatibility_mode: 'UNDEFINED' },
@@ -311,9 +316,11 @@ describe('copy selection controls', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     fireEvent.pointerDown(copiedNode); fireEvent.pointerUp(canvas);
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Renamed copy' } });
-    const confirmDeletion = vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.keyDown(document, { key: 'Delete' });
-    confirmDeletion.mockRestore();
+    if (continuity) {
+      const confirmation = within(screen.getByRole('dialog', { name: 'Удалить окончания с разводкой' }));
+      await userEvent.click(confirmation.getByRole('button', { name: 'Удалить' }));
+    }
     expect(document.querySelector(`[data-slot-key="${copies[0].key}"]`)).toBeNull();
     view.unmount();
     const reopened = hydrateBlueprintEditorState({ ...request, schema_version: '2.0', next_panel_number: 3, version_number: 1,
@@ -542,12 +549,16 @@ describe('minimal direct endpoint editor', () => {
     expect(request.slots[0].display_name).toBe('Management');
     expect(request.slots[0].rendered_position).toEqual({ x: .5, y: .5 });
     expect(request.internal_links).toHaveLength(1);
-    const confirmDeletion = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
     const remove = screen.getAllByRole('button', { name: 'Удалить' }).at(-1)!;
+    const dialog = () => screen.getByRole('dialog', { name: 'Удалить окончания с разводкой' });
     await userEvent.click(remove);
+    expect(dialog()).toHaveAccessibleDescription(/окончания \(1\).*пары каналов \(1\)/);
+    expect(within(dialog()).getByRole('button', { name: 'Отмена' })).toHaveFocus();
+    await userEvent.click(within(dialog()).getByRole('button', { name: 'Отмена' }));
+    expect(remove).toHaveFocus();
     expect(document.querySelectorAll('[data-slot-key]')).toHaveLength(2);
     await userEvent.click(remove);
-    confirmDeletion.mockRestore();
+    await userEvent.click(within(dialog()).getByRole('button', { name: 'Удалить' }));
     expect(document.querySelectorAll('[data-slot-key]')).toHaveLength(1);
   });
 
@@ -639,9 +650,10 @@ describe('minimal direct endpoint editor', () => {
     expect(after[1] - before[1]).toBeCloseTo(100);
     expect(after[2]).toBeCloseTo(before[2]);
     fireEvent.contextMenu(nodes[0]);
-    const confirmDeletion = vi.spyOn(window, 'confirm').mockReturnValue(true);
     await userEvent.click(screen.getByRole('menuitem', { name: 'Удалить выбранные' }));
-    confirmDeletion.mockRestore();
+    const dialog = screen.getByRole('dialog', { name: 'Удалить окончания с разводкой' });
+    expect(dialog).toHaveAccessibleDescription(/окончания \(2\).*пары каналов \(1\)/);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Удалить' }));
     expect(document.querySelectorAll('[data-slot-key]')).toHaveLength(1);
     expect(screen.queryByRole('menu')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));

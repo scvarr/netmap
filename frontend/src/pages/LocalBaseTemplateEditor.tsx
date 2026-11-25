@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type ComponentProps, type Ref } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BaseTemplateEditor } from './BaseTemplateEditor';
 import { useI18n } from '../i18n';
 import { readLocalDraft, localDraftKey } from '../blueprints/localDraft';
 import type { BlueprintEditorState } from '../blueprints/editorModel';
 
-type Props = ComponentProps<typeof BaseTemplateEditor> & { templateId?: string; generation?: number; seeded?: boolean; onResume?: () => void };
-export function LocalBaseTemplateEditor({ templateId, generation, seeded, onSave, onStateChange, ...props }: Props) {
+export interface LocalBaseTemplateDraftHandle { discardAfterRestore: () => void }
+
+type Props = ComponentProps<typeof BaseTemplateEditor> & { templateId?: string; generation?: number; seeded?: boolean; onResume?: () => void; draftHandle?: Ref<LocalBaseTemplateDraftHandle> };
+export function LocalBaseTemplateEditor({ templateId, generation, seeded, onSave, onStateChange, draftHandle, ...props }: Props) {
   const navigate = useNavigate();
   const { t } = useI18n();
   const key = localDraftKey(templateId);
@@ -20,6 +22,12 @@ export function LocalBaseTemplateEditor({ templateId, generation, seeded, onSave
   const baseline = useRef(seeded ? '' : JSON.stringify(props.initialState));
   const persisted = useRef(loaded.draft ? JSON.stringify(loaded.draft.state) : '');
   const enabled = useRef(!pending);
+  useImperativeHandle(draftHandle, () => ({
+    discardAfterRestore: () => {
+      enabled.current = false;
+      localStorage.removeItem(key);
+    },
+  }), [key]);
   const currentGeneration = useRef(generation ?? null);
   currentGeneration.current = generation ?? null;
   const flush = () => {

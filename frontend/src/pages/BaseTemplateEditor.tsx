@@ -2,6 +2,7 @@ import { moduleMount, mountTypeId, type ModuleMount } from '../topology/hardware
 import { MountTypeSelect, useMountTypes } from '../components/ModulePortTypeSelect';
 import { HardwareInterfaceCheckbox } from '../components/HardwareInterfaceCheckbox';
 import { HardwareInterfaceActions } from '../components/HardwareInterfaceActions';
+import { DestructiveConfirmationDialog } from '../components/DestructiveConfirmationDialog';
 import { EndpointLinkWorkspace } from '../components/EndpointLinkWorkspace';
 import { TemplateElementCreator } from '../components/TemplateElementKindSelect';
 import { LogicalModulePlacesEditor } from '../components/LogicalModulePlacesEditor';
@@ -107,15 +108,19 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     }
     setPositionDraft(undefined);
   };
+  const [pendingDeletion, setPendingDeletion] = useState<{ keys: ReadonlySet<string>; mappings: number }>();
+  const removeSelection = (keys: ReadonlySet<string>) => {
+    setEditor(old => removeEndpoints(old, keys));
+    setSelected(new Set());
+    setPositionDraft(undefined);
+    setMenu(undefined);
+  };
   const deleteSelected = () => {
     if (physicalReadOnly) return;
     const count = editor.individualLinks.filter(link => selected.has(link.from_slot_key) || selected.has(link.to_slot_key))
       .reduce((total, link) => total + linkMemberPairs(link).length, 0);
-    if (count && !window.confirm(t('blueprint.deleteWired', { count }))) return;
-    setEditor(old => removeEndpoints(old, selected));
-    setSelected(new Set());
-    setPositionDraft(undefined);
-    setMenu(undefined);
+    if (count) setPendingDeletion({ keys: selected, mappings: count });
+    else removeSelection(selected);
   };
   const clearPanelUi = () => { setSelected(new Set()); setPositionDraft(undefined); setMenu(undefined); setDistributionAxis(undefined); setDistributionPercent('50'); setDistributionFull(false); setCopyDestination(''); setCreateContinuity(false); };
   const copySelected = () => {
@@ -141,6 +146,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
       if (menu && (!(event.target instanceof Element) || !event.target.closest('.blueprint-composer__context-menu'))) setMenu(undefined);
     };
     const onKeyDown = (event: KeyboardEvent) => {
+      if (pendingDeletion) return;
       if (linksOpen) {
         if (event.key === 'Escape') { event.preventDefault(); closeLinks(); }
         return;
@@ -158,7 +164,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
     return () => { document.removeEventListener('pointerdown', onPointerDown); document.removeEventListener('keydown', onKeyDown); };
-  }, [menu, selected, linksOpen, physicalReadOnly, editor.individualLinks, t]);
+  }, [menu, selected, linksOpen, pendingDeletion, physicalReadOnly, editor.individualLinks]);
   const normalizedPixels = (axis: 'x' | 'y', pixels: number) => {
     const rect = canvasWrap.current?.querySelector('svg')?.getBoundingClientRect();
     const viewHeight = 1000 * bounds.height / bounds.width;
@@ -355,6 +361,13 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
 
       </section>
     </div></div>
+    {pendingDeletion && <DestructiveConfirmationDialog
+      title={t('blueprint.deleteWiredTitle')}
+      description={t('blueprint.deleteWired', { endings: pendingDeletion.keys.size, mappings: pendingDeletion.mappings })}
+      action={t('blueprint.composition.remove')}
+      fallbackFocus={() => linksEntry.current}
+      onCancel={() => setPendingDeletion(undefined)}
+      onConfirm={() => { removeSelection(pendingDeletion.keys); setPendingDeletion(undefined); }} />}
     {linksOpen && <EndpointLinkWorkspace wiringReadOnly={physicalReadOnly} portTypes={catalog.types} initialSelectedKeys={workspaceSelection} state={editor} onChange={setEditor} onClose={closeLinks} />}
   </>;
 }
