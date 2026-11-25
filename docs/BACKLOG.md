@@ -129,9 +129,15 @@ member сохраняет внутреннюю continuity. Проверить к
 Workspace roundtrip.
 [Контракт](L1_CONNECTIVITY.md#c-cap-mod-01--passive-moduletemplate-continuity).
 
-Цель — редактировать явные mappings и проверять exact trace канала и полноту
-группы. Остаток — графический authoring из C-CAP-01-03,
-пользовательский exact member trace и групповая трассировка из C-CAP-01-04.
+**IMPLEMENTED · C-CAP-01-03A.** Графическое задание точных member mappings
+в BaseTemplate, предпросмотр, внутренняя занятость и сохранение разводки
+при копировании опубликованной версии.
+[Контракт](L1_CONNECTIVITY.md#c-cap-01-03a--basetemplate-member-mappings-authoring).
+
+**OPEN · C-CAP-01-03B.** Графический authoring явных member mappings
+в ModuleTemplate.
+
+**OPEN · C-CAP-01-04.** Пользовательский exact member trace и групповая трассировка.
 Для сквозной проверки нужны конструкция этапа 2 и внешний lifecycle этапа 3.
 Обязательно для G1.
 Завершение — exact point/member, Connection, ConnectionMember и внешний Cable

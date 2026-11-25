@@ -2,6 +2,8 @@ import { isModulePlaceMarker, moduleMount, mountTypeId, type ModuleMount } from 
 import type { BaseInternalLink, BlueprintSlot, BlueprintSlotKind, CreateBaseTemplateRequest, BaseTemplateRevisionDocument, PresentationPanel } from '../topology/baseTemplateTypes';
 import { isPlacedBay, moduleBayMarkers, positionModulePort, type BlueprintMarker } from '../topology/hardwareModules';
 
+import { internalOccupancy, memberAddressKey, memberPairKey, validateMemberPairs, type MemberPair, type MemberPairError } from './memberMappings';
+
 export interface EndpointNamingSide {
   panel: string; mode: 'name' | 'spatial' | 'manual'; order: string[];
   horizontal: 'ltr' | 'rtl'; vertical: 'ttb' | 'btt';
@@ -14,29 +16,72 @@ export interface BlueprintEditorState {
   panels: PresentationPanel[]; slots: BlueprintSlot[]; individualLinks: BaseInternalLink[];
   activePanelKey: string; nextPanelNumber: number; nextLocalNumberByPanel: Record<string, number>;
 }
-export type BlueprintValidationError = 'nameRequired' | 'panelNameRequired' | 'dimensionsPositive' | 'colorFormat' | 'duplicateSlotKeys' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink';
+export type BlueprintValidationError = 'nameRequired' | 'panelNameRequired' | 'dimensionsPositive' | 'colorFormat' | 'duplicateSlotKeys' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink' | 'invalidMember' | 'invalidRole' | 'occupied';
 export const internalLinkPairKey = (first: string, second: string) => [first, second].sort().join('\u0000');
-export type PairwiseContinuityError = 'empty' | 'countMismatch' | 'missingEndpoint' | 'duplicateKey' | 'selfLink' | 'duplicatePair' | 'existingLink';
-export interface PairwiseContinuityPreview { pairs: BaseInternalLink[]; error?: PairwiseContinuityError }
-/** Captured order is authoritative; preflight validates the entire undirected batch. */
-export const pairwiseContinuityPreview = (state: BlueprintEditorState, a: readonly string[], b: readonly string[], reverseB: boolean): PairwiseContinuityPreview => {
-  if (!a.length || !b.length) return { pairs: [], error: 'empty' };
-  if (a.length !== b.length) return { pairs: [], error: 'countMismatch' };
-  const keys = new Set(state.slots.map((slot) => slot.key));
-  if ([...a, ...b].some((key) => !keys.has(key))) return { pairs: [], error: 'missingEndpoint' };
-  if (new Set(a).size !== a.length || new Set(b).size !== b.length) return { pairs: [], error: 'duplicateKey' };
-  const pairs = a.map((key, index) => ({ from_slot_key: key, to_slot_key: b[reverseB ? b.length - 1 - index : index] }));
-  if (pairs.some((pair) => pair.from_slot_key === pair.to_slot_key)) return { pairs, error: 'selfLink' };
-  const pairKeys = pairs.map((pair) => internalLinkPairKey(pair.from_slot_key, pair.to_slot_key));
-  if (new Set(pairKeys).size !== pairKeys.length) return { pairs, error: 'duplicatePair' };
-  const existing = new Set(state.individualLinks.map((link) => internalLinkPairKey(link.from_slot_key, link.to_slot_key)));
-  if (pairKeys.some((key) => existing.has(key))) return { pairs, error: 'existingLink' };
-  return { pairs };
-};
-export const applyPairwiseContinuity = (state: BlueprintEditorState, a: readonly string[], b: readonly string[], reverseB: boolean): BlueprintEditorState => {
-  const preview = pairwiseContinuityPreview(state, a, b, reverseB);
-  return preview.error ? state : { ...state, individualLinks: [...state.individualLinks, ...preview.pairs] };
-};
+const singleMemberMapping = { from_member_index: 1, to_member_index: 1 };
+
+export function linkMemberPairs(link: BaseInternalLink): MemberPair[] {
+  return (link.member_mappings ?? [singleMemberMapping]).map(mapping => ({
+    a: { endpointKey: link.from_slot_key, memberIndex: mapping.from_member_index },
+    b: { endpointKey: link.to_slot_key, memberIndex: mapping.to_member_index },
+  }));
+}
+
+const baseMemberEndpoints = (slots: readonly BlueprintSlot[]) => slots.map(slot => ({
+  key: slot.key,
+  cardinality: slot.cardinality ?? 1,
+  allowsInternalLink: slot.kind === 'CONNECTION_POINT' || slot.kind === 'NETWORK_PORT' && (slot.cardinality ?? 1) === 1,
+}));
+
+export const blueprintInternalOccupancy = (state: BlueprintEditorState) => internalOccupancy(state.individualLinks.flatMap(linkMemberPairs));
+
+export function validateBlueprintMemberPairs(
+  state: BlueprintEditorState, pairs: readonly MemberPair[], occupied = blueprintInternalOccupancy(state),
+): MemberPairError | undefined {
+  return validateMemberPairs(baseMemberEndpoints(state.slots), pairs, occupied);
+}
+
+export function applyMemberMappings(state: BlueprintEditorState, pairs: readonly MemberPair[]): BlueprintEditorState {
+  if (!pairs.length || validateBlueprintMemberPairs(state, pairs)) return state;
+  const links = new Map(state.individualLinks.map(link => [internalLinkPairKey(link.from_slot_key, link.to_slot_key), link]));
+  for (const { a, b } of pairs) {
+    const key = internalLinkPairKey(a.endpointKey, b.endpointKey);
+    const link = links.get(key) ?? { from_slot_key: a.endpointKey, to_slot_key: b.endpointKey, member_mappings: [] };
+    const [from, to] = link.from_slot_key === a.endpointKey ? [a, b] : [b, a];
+    links.set(key, { ...link, member_mappings: [...link.member_mappings ?? [singleMemberMapping], {
+      from_member_index: from.memberIndex, to_member_index: to.memberIndex,
+    }] });
+  }
+  return { ...state, individualLinks: [...links.values()] };
+}
+
+export function removeMemberMappings(state: BlueprintEditorState, keys: ReadonlySet<string>): BlueprintEditorState {
+  const individualLinks = state.individualLinks.flatMap(link => {
+    const retained = linkMemberPairs(link).map(pair => !keys.has(memberPairKey(pair)));
+    if (retained.every(Boolean)) return [link];
+    const member_mappings = link.member_mappings?.filter((_, index) => retained[index]);
+    return member_mappings?.length ? [{ ...link, member_mappings }] : [];
+  });
+  return { ...state, individualLinks };
+}
+
+export function blueprintWiringError(state: BlueprintEditorState): BlueprintValidationError | undefined {
+  const slots = new Map(state.slots.map(slot => [slot.key, slot]));
+  const pairs = new Set<string>();
+  for (const link of state.individualLinks) {
+    const { from_slot_key: a, to_slot_key: b, member_mappings: mappings } = link;
+    if (a === b) return 'individualSelfLink';
+    if (!slots.has(a) || !slots.has(b)) return 'individualMissingPort';
+    const key = internalLinkPairKey(a, b);
+    if (pairs.has(key)) return 'duplicateIndividualLink';
+    pairs.add(key);
+    if (mappings?.length === 0 || mappings === undefined && [a, b].some(k => (slots.get(k)?.cardinality ?? 1) !== 1)) return 'invalidMember';
+  }
+  const error = validateMemberPairs(baseMemberEndpoints(state.slots), state.individualLinks.flatMap(linkMemberPairs));
+  if (error === 'missingEndpoint') return 'individualMissingPort';
+  if (error === 'selfLink') return 'individualSelfLink';
+  return error;
+}
 export const cleanupLinks = (links: BaseInternalLink[], removed: Set<string>) => links.filter((link) => !removed.has(link.from_slot_key) && !removed.has(link.to_slot_key));
 export const removeEndpoints = (state: BlueprintEditorState, keys: ReadonlySet<string>): BlueprintEditorState => {
   const slots = state.slots.filter((slot) => !keys.has(slot.key));
@@ -305,7 +350,15 @@ const nextEndpointNumber = (state: BlueprintEditorState, panel: PresentationPane
   return Math.max(state.nextLocalNumberByPanel[panel.panel_key] ?? 1, maximum + 1);
 };
 
-export type CopySelectionError = 'invalidSelection' | 'invalidDestination' | 'capacity' | 'placedBoardBay';
+export type CopyContinuityError = 'multichannelContinuity' | 'occupiedContinuity';
+export function copyContinuityError(state: BlueprintEditorState, keys: ReadonlySet<string>): CopyContinuityError | undefined {
+  const slots = state.slots.filter(slot => keys.has(slot.key));
+  if (slots.some(slot => (slot.cardinality ?? 1) !== 1)) return 'multichannelContinuity';
+  const occupancy = blueprintInternalOccupancy(state);
+  if (slots.some(slot => occupancy.has(memberAddressKey({ endpointKey: slot.key, memberIndex: 1 })))) return 'occupiedContinuity';
+}
+
+export type CopySelectionError = 'invalidSelection' | 'invalidDestination' | 'capacity' | 'placedBoardBay' | CopyContinuityError;
 export const copySelectionError = (state: BlueprintEditorState, keys: ReadonlySet<string>, destinationPanelKey: string): CopySelectionError | undefined => {
   if (destinationPanelKey === state.activePanelKey || !state.panels.some((panel) => panel.panel_key === destinationPanelKey)) return 'invalidDestination';
   const sources = selectedSlots(state, keys).filter(slot => slot.panel_key === state.activePanelKey);
@@ -316,7 +369,7 @@ export const copySelectionError = (state: BlueprintEditorState, keys: ReadonlySe
 export interface CopySelectionResult { state: BlueprintEditorState; copiedKeys: string[]; error?: CopySelectionError }
 /** Correspondence exists only in this operation; the result contains ordinary slots and links. */
 export const copySelectionToPanel = (state: BlueprintEditorState, keys: ReadonlySet<string>, destinationPanelKey: string, createContinuity: boolean): CopySelectionResult => {
-  const error = copySelectionError(state, keys, destinationPanelKey);
+  const error = copySelectionError(state, keys, destinationPanelKey) ?? (createContinuity ? copyContinuityError(state, keys) : undefined);
   if (error) return { state, copiedKeys: [], error };
   const panel = state.panels.find((item) => item.panel_key === destinationPanelKey)!;
   const next = nextEndpointNumber(state, panel);
@@ -332,7 +385,7 @@ export const copySelectionToPanel = (state: BlueprintEditorState, keys: Readonly
         ...moduleMount(original.mount_kind, mountTypeId(original)), ...source.rendered_position });
     } else {
       slots.push({ ...source, key, display_name, panel_key: destinationPanelKey, rendered_position: { ...source.rendered_position } });
-      if (createContinuity) links.push({ from_slot_key: source.key, to_slot_key: key });
+      if (createContinuity) links.push({ from_slot_key: source.key, to_slot_key: key, member_mappings: [{ ...singleMemberMapping }] });
     }
     return key;
   });
@@ -390,7 +443,9 @@ export const hydrateBlueprintEditorState = (version: BaseTemplateRevisionDocumen
   height: version.body.height, fillColor: version.body.fill_color ?? '',
   panels: version.panels.map((panel) => ({ ...panel })),
   slots: version.slots.map((slot) => ({ ...slot, rendered_position: { ...slot.rendered_position } })),
-  individualLinks: version.internal_links.map((link) => ({ ...link })),
+  individualLinks: version.internal_links.map(link => ({
+    ...link, ...(link.member_mappings && { member_mappings: link.member_mappings.map(mapping => ({ ...mapping })) }),
+  })),
   activePanelKey: [...version.panels].sort((a, b) => a.panel_number - b.panel_number)[0].panel_key,
   nextPanelNumber: version.next_panel_number,
   nextLocalNumberByPanel: Object.fromEntries(version.panels.map((panel) => [panel.panel_key, Math.max(1, ...version.slots.filter((slot) => slot.panel_key === panel.panel_key).map((slot) => new RegExp(`^${panel.panel_number}-(\\d+)$`).exec(slot.display_name)).filter((match): match is RegExpExecArray => Boolean(match)).map((match) => Number(match[1]) + 1))])),
@@ -404,12 +459,8 @@ export const createBlueprintRequest = (state: BlueprintEditorState): { request?:
   if (state.fillColor && !/^#[0-9A-Fa-f]{6}$/.test(state.fillColor)) errors.push('colorFormat');
   const keys = new Set(state.slots.map((slot) => slot.key));
   if (keys.size !== state.slots.length) errors.push('duplicateSlotKeys');
-  const pairs = new Set<string>();
-  for (const link of state.individualLinks) {
-    if (link.from_slot_key === link.to_slot_key) errors.push('individualSelfLink');
-    else if (!keys.has(link.from_slot_key) || !keys.has(link.to_slot_key)) errors.push('individualMissingPort');
-    else { const pair = internalLinkPairKey(link.from_slot_key, link.to_slot_key); if (pairs.has(pair)) errors.push('duplicateIndividualLink'); pairs.add(pair); }
-  }
+  const wiringError = blueprintWiringError(state);
+  if (wiringError) errors.push(wiringError);
   if (errors.length) return { errors };
   return { errors, request: {
     name: state.name, ...(state.defaultClass.trim() ? { default_physical_object_class: state.defaultClass.trim() } : {}),

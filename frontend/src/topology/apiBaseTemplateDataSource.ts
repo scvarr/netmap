@@ -41,11 +41,15 @@ const parseBody = (value: unknown, path: string): BlueprintBody => {
   return { kind: 'RECTANGLE', width: body.width as number, height: body.height as number, fill_color: body.fill_color as string | null | undefined };
 };
 
+const validMemberIndex = (value: unknown): value is number => Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 2147483647;
+
 const parseSlot = (value: unknown, path: string): BlueprintSlot => {
   const slot = requireObject(value, path); const rendered = requireObject(slot.rendered_position, `${path}.rendered_position`);
   if (slot.kind !== 'CONNECTION_POINT' && slot.kind !== 'NETWORK_PORT') malformed(`${path}.kind is unsupported.`);
   if (typeof rendered.x !== 'number' || typeof rendered.y !== 'number' || !Number.isFinite(rendered.x) || !Number.isFinite(rendered.y) || rendered.x < 0 || rendered.x > 1 || rendered.y < 0 || rendered.y > 1) malformed(`${path}.rendered_position is invalid.`);
-  return { key: requireString(slot.key, `${path}.key`), display_name: requireString(slot.display_name, `${path}.display_name`), kind: slot.kind as BlueprintSlotKind, port_type_id: requireString(slot.port_type_id, `${path}.port_type_id`), panel_key: requireString(slot.panel_key, `${path}.panel_key`), rendered_position: { x: rendered.x as number, y: rendered.y as number } };
+  const { cardinality } = slot;
+  if (cardinality !== undefined && (!validMemberIndex(cardinality) || slot.kind === 'NETWORK_PORT' && cardinality !== 1)) malformed(`${path}.cardinality is invalid.`);
+  return { ...(cardinality === undefined ? {} : { cardinality: cardinality as number }), key: requireString(slot.key, `${path}.key`), display_name: requireString(slot.display_name, `${path}.display_name`), kind: slot.kind as BlueprintSlotKind, port_type_id: requireString(slot.port_type_id, `${path}.port_type_id`), panel_key: requireString(slot.panel_key, `${path}.panel_key`), rendered_position: { x: rendered.x as number, y: rendered.y as number } };
 };
 
 const parsePanel = (value: unknown, path: string): PresentationPanel => {
@@ -60,7 +64,15 @@ const parsePanel = (value: unknown, path: string): PresentationPanel => {
 
 const parseLink = (value: unknown, path: string): BaseInternalLink => {
   const link = requireObject(value, path);
-  return { from_slot_key: requireString(link.from_slot_key, `${path}.from_slot_key`), to_slot_key: requireString(link.to_slot_key, `${path}.to_slot_key`) };
+  const { member_mappings: mappings } = link;
+  if (mappings !== undefined && (!Array.isArray(mappings) || !mappings.length)) return malformed(`${path}.member_mappings must contain at least one mapping.`);
+  const member_mappings = mappings?.map((value, index) => {
+    const mapping = requireObject(value, `${path}.member_mappings[${index}]`);
+    if (!validMemberIndex(mapping.from_member_index) || !validMemberIndex(mapping.to_member_index)) return malformed(`${path}.member_mappings[${index}] has an invalid index.`);
+    return { from_member_index: mapping.from_member_index, to_member_index: mapping.to_member_index };
+  });
+  return { from_slot_key: requireString(link.from_slot_key, `${path}.from_slot_key`), to_slot_key: requireString(link.to_slot_key, `${path}.to_slot_key`),
+    ...(member_mappings && { member_mappings }) };
 };
 
 const parseBay = (value: unknown, path: string): import('./hardwareModules').ModuleBay => {

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { applyPairwiseContinuity, pairwiseContinuityPreview, applyBulkNames, bulkNamePreview, spatialOrderedKeys, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, panelGestureGeometry, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, snapSelectionTranslation, translateSelection, type BlueprintEditorState, type PanelHandle } from './editorModel';
+import { applyMemberMappings, linkMemberPairs, removeMemberMappings, validateBlueprintMemberPairs, applyBulkNames, bulkNamePreview, spatialOrderedKeys, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, panelGestureGeometry, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, snapSelectionTranslation, translateSelection, type BlueprintEditorState, type PanelHandle } from './editorModel';
 import { newBlueprintEditorState } from '../pages/BaseTemplateEditor';
 import type { BaseTemplateRevisionDocument } from '../topology/baseTemplateTypes';
+import { memberPairKey } from './memberMappings';
 
 describe('selected-slot copy to panel', () => {
   const fixture = () => {
@@ -13,7 +14,7 @@ describe('selected-slot copy to panel', () => {
     const destination = addPanel(source, 'right');
     destination.panels[1] = { ...destination.panels[1], width: 25, height: 190 };
     const populated = addEndpoints(destination, 'CONNECTION_POINT', 2, destination.activePanelKey, 'test-type');
-    return { ...populated, activePanelKey: source.activePanelKey, individualLinks: [{ from_slot_key: source.slots[0].key, to_slot_key: source.slots[2].key }] };
+    return { ...populated, activePanelKey: source.activePanelKey, individualLinks: [{ from_slot_key: populated.slots[3].key, to_slot_key: populated.slots[4].key }] };
   };
   it.each([1, 3])('copies %i sources with independent keys, destination defaults and exact geometry', (count) => {
     const state = fixture(); const before = structuredClone(state);
@@ -49,7 +50,7 @@ describe('selected-slot copy to panel', () => {
   it('adds exactly one ordinary source-to-copy link per source and preserves unrelated links', () => {
     const state = fixture(); const sources = state.slots.slice(0, 3);
     const result = copySelectionToPanel(state, new Set(sources.map((slot) => slot.key)), state.panels[1].panel_key, true);
-    expect(result.state.individualLinks).toEqual([...state.individualLinks, ...sources.map((slot, index) => ({ from_slot_key: slot.key, to_slot_key: result.copiedKeys[index] }))]);
+    expect(result.state.individualLinks).toEqual([...state.individualLinks, ...sources.map((slot, index) => ({ from_slot_key: slot.key, to_slot_key: result.copiedKeys[index], member_mappings: [{ from_member_index: 1, to_member_index: 1 }] }))]);
     expect(createBlueprintRequest(result.state).errors).toEqual([]);
   });
   it.each([false, true])('leaves the entire state unchanged on overflow (continuity %s)', (continuity) => {
@@ -473,46 +474,61 @@ describe('ordered bulk naming pure operations', () => {
 });
 
 
-describe('general pairwise continuity', () => {
+const address = (endpointKey: string, memberIndex = 1) => ({ endpointKey, memberIndex });
+const mapping = (a: string, b: string, from = 1, to = 1) => ({ a: address(a, from), b: address(b, to) });
+
+describe('explicit internal member mappings', () => {
   const fixture = () => {
-    const initial = newBlueprintEditorState(); initial.name = 'Patch';
-    return { ...initial, slots: ['a', 'b', 'c', 'd'].map((key) => ({ key, display_name: key, port_type_id: 'test-type', kind: 'CONNECTION_POINT' as const, panel_key: initial.activePanelKey, rendered_position: { x: .5, y: .5 } })) };
+    const initial = newBlueprintEditorState();
+    initial.name = 'Patch';
+    return addEndpoints(initial, 'CONNECTION_POINT', 3, initial.activePanelKey, 'multi', 24);
   };
-  it.each([false, true])('uses exact captured order, reverse B=%s, preserving everything except links', (reverse) => {
-    const state = fixture(); state.individualLinks = [{ from_slot_key: 'a', to_slot_key: 'b' }];
-    const before = structuredClone(state); const a = ['b', 'a']; const b = ['d', 'c'];
-    const expected = reverse ? [{ from_slot_key: 'b', to_slot_key: 'c' }, { from_slot_key: 'a', to_slot_key: 'd' }] : [{ from_slot_key: 'b', to_slot_key: 'd' }, { from_slot_key: 'a', to_slot_key: 'c' }];
-    expect(pairwiseContinuityPreview(state, a, b, reverse)).toEqual({ pairs: expected });
-    const next = applyPairwiseContinuity(state, a, b, reverse);
-    expect(next.individualLinks).toEqual([...state.individualLinks, ...expected]);
-    expect(next.individualLinks).toHaveLength(3);
-    for (const key of Object.keys(state) as (keyof BlueprintEditorState)[]) if (key !== 'individualLinks') expect(next[key]).toBe(state[key]);
-    expect(state).toEqual(before); expect(a).toEqual(['b', 'a']); expect(b).toEqual(['d', 'c']);
-    expect(Object.keys(next).sort()).toEqual(Object.keys(state).sort());
-    expect(createBlueprintRequest(next).request!.internal_links).toEqual(next.individualLinks);
-  });
-  it('pairs A=[a,b], B=[c,d] and permits overlap when generated pairs are valid', () => {
+
+  it('merges mappings in either orientation and removes only the addressed member pair', () => {
     const state = fixture();
-    expect(pairwiseContinuityPreview(state, ['a', 'b'], ['c', 'd'], false).pairs).toEqual([{ from_slot_key: 'a', to_slot_key: 'c' }, { from_slot_key: 'b', to_slot_key: 'd' }]);
-    expect(applyPairwiseContinuity(state, ['a', 'b'], ['b', 'c'], false).individualLinks).toEqual([{ from_slot_key: 'a', to_slot_key: 'b' }, { from_slot_key: 'b', to_slot_key: 'c' }]);
+    const [a, b] = state.slots.map(slot => slot.key);
+    const first = mapping(a, b, 24, 1);
+    const second = mapping(b, a, 5, 3);
+    const linked = applyMemberMappings(applyMemberMappings(state, [first]), [second]);
+    expect(linked.individualLinks).toEqual([{
+      from_slot_key: a, to_slot_key: b,
+      member_mappings: [{ from_member_index: 24, to_member_index: 1 }, { from_member_index: 3, to_member_index: 5 }],
+    }]);
+    expect(createBlueprintRequest(linked).request?.internal_links).toEqual(linked.individualLinks);
+    const reduced = removeMemberMappings(linked, new Set([memberPairKey(first)]));
+    expect(reduced.individualLinks.flatMap(linkMemberPairs)).toEqual([mapping(a, b, 3, 5)]);
+    expect(removeMemberMappings(reduced, new Set([memberPairKey(second)])).individualLinks).toEqual([]);
   });
-  it.each([
-    [[], ['c'], 'empty'], [['a'], [], 'empty'], [['a', 'b'], ['c'], 'countMismatch'],
-    [['missing', 'b'], ['c', 'd'], 'missingEndpoint'], [['a', 'b'], ['c', 'missing'], 'missingEndpoint'],
-    [['a', 'a'], ['c', 'd'], 'duplicateKey'], [['a', 'b'], ['c', 'c'], 'duplicateKey'],
-    [['a', 'b'], ['a', 'c'], 'selfLink'], [['a', 'b'], ['b', 'a'], 'duplicatePair'],
-  ] as const)('rejects A=%j B=%j: %s without partial changes', (a, b, error) => {
-    const state = fixture(); const before = structuredClone(state);
-    expect(pairwiseContinuityPreview(state, a, b, false).error).toBe(error);
-    expect(applyPairwiseContinuity(state, a, b, false)).toBe(state);
-    expect(state).toEqual(before);
+
+  it('blocks intra- and inter-link conflicts, self links, invalid addresses and roles atomically', () => {
+    const state = fixture();
+    const [a, b, c] = state.slots.map(slot => slot.key);
+    const linked = applyMemberMappings(state, [mapping(a, b, 1, 2)]);
+    expect(validateBlueprintMemberPairs(linked, [mapping(c, a, 2, 1)])).toBe('occupied');
+    expect(validateBlueprintMemberPairs(linked, [mapping(c, a, 2, 3), mapping(c, b, 2, 4)])).toBe('occupied');
+    expect(validateBlueprintMemberPairs(linked, [mapping(a, b, 1, 3)])).toBe('occupied');
+    expect(validateBlueprintMemberPairs(linked, [mapping(a, a, 3, 4)])).toBe('selfLink');
+    expect(validateBlueprintMemberPairs(linked, [mapping(a, b, 25, 3)])).toBe('invalidMember');
+    expect(validateBlueprintMemberPairs(linked, [mapping(a, b, 1.5, 3)])).toBe('invalidMember');
+    expect(validateBlueprintMemberPairs(linked, [mapping(a, 'bay', 3)])).toBe('missingEndpoint');
+    expect(applyMemberMappings(linked, [mapping(a, b, 3, 4), mapping(b, c, 2, 3)])).toBe(linked);
+    const invalid = { ...linked, slots: linked.slots.map(slot => slot.key === c ? { ...slot, kind: 'NETWORK_PORT' as const } : slot) };
+    expect(validateBlueprintMemberPairs(invalid, [mapping(a, c, 3, 1)])).toBe('invalidRole');
+    expect(linked.individualLinks.flatMap(linkMemberPairs)).toEqual([mapping(a, b, 1, 2)]);
   });
-  it('rejects the whole batch when any link already exists in opposite direction', () => {
-    const state = fixture(); state.individualLinks = [{ from_slot_key: 'd', to_slot_key: 'b' }];
-    const links = state.individualLinks;
-    expect(pairwiseContinuityPreview(state, ['a', 'b'], ['c', 'd'], false).error).toBe('existingLink');
-    expect(applyPairwiseContinuity(state, ['a', 'b'], ['c', 'd'], false)).toBe(state);
-    expect(state.individualLinks).toBe(links); expect(links).toHaveLength(1);
+
+  it('copies a multichannel endpoint without wiring and blocks implicit or occupied continuity', () => {
+    const initial = fixture();
+    const state = { ...addPanel(initial, 'right'), activePanelKey: initial.activePanelKey };
+    const target = state.panels[1].panel_key;
+    const [a, b] = state.slots.map(slot => slot.key);
+    expect(copySelectionToPanel(state, new Set([a]), target, true)).toMatchObject({ state, error: 'multichannelContinuity' });
+    const copied = copySelectionToPanel(state, new Set([a]), target, false);
+    expect(copied.state.slots.at(-1)).toMatchObject({ cardinality: 24, panel_key: target });
+    expect(copied.state.individualLinks).toEqual([]);
+    const single = { ...state, slots: state.slots.map(slot => ({ ...slot, cardinality: 1 })) };
+    const occupied = applyMemberMappings(single, [mapping(a, b)]);
+    expect(copySelectionToPanel(occupied, new Set([a]), target, true)).toMatchObject({ state: occupied, error: 'occupiedContinuity' });
   });
 });
 

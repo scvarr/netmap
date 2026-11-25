@@ -616,8 +616,10 @@ Connection и ConnectionMember. Операция атомарна, а при н�
 
 C-CAP-01-01 доступен в BaseTemplate. MOD-03B-2A покрывает одиночный выбор
 внешних members с проверкой occupancy, создание и отключение.
-C-CAP-01-02/03/04 остаются OPEN до завершения внешнего lifecycle, редактора
-mappings, пользовательского exact member trace и групповой приёмки.
+Внешний lifecycle остаётся в C-CAP-01-02. Графическая разводка BaseTemplate
+реализована в C-CAP-01-03A. Графическая разводка ModuleTemplate остаётся
+в C-CAP-01-03B, пользовательский exact member trace и групповая приёмка —
+в C-CAP-01-04.
 Отдельный implementation contract определяет role validation, stable member
 addressing/provenance, concurrency, DTO, схемы и миграции для каждого этапа.
 ModuleTemplate continuity реализована отдельным контрактом C-CAP-MOD-01.
@@ -639,14 +641,30 @@ Draft check и publish независимо отклоняют изменени�
 с `PHYSICAL_STRUCTURE_IMMUTABLE`, даже без экземпляров:
 endpoint keys/kind/cardinality/port_type_id, internal mappings и module place keys/kind/
 module_port_type_id. Геометрия, цвет и подписи не входят в сигнатуру. API и archive
-roundtrip сохраняют multichannel definitions, графический edit/copy блокируется
-с объяснением. Reconcile сохраняет retained IDs и разводку, без provenance
+roundtrip сохраняют multichannel definitions. Reconcile сохраняет retained IDs
+и разводку, без provenance
 не удаляет существующие Connections и не переписывает capacity, допустимые
 добавления internal links ограничены 1:1. ModuleTemplate materialization
 берёт cardinality точки из PortType, а NETWORK_PORT получает прежний binding
 к member 1. Review и publish ModuleTemplate отклоняют смену PortType у
 сохранённого endpoint. Reconcile сравнивает PortType с закреплённой ревизией.
 [Materialization](../app/hardware_catalog.py) · [Reconcile](../app/object_reconciliation.py).
+
+## C-CAP-01-03A — BaseTemplate member mappings authoring
+
+**IMPLEMENTED.** В «Порты и внутренние связи» BaseTemplate две панели выбора
+A/B подготавливают точные пары «стабильный ключ окончания + индекс канала».
+Один internal link содержит все пары между этими окончаниями. Внутренняя
+занятость проверяется по каждому адресу во всей конструкции. Применение
+обновляет черновик целиком, а удаление последней пары убирает определение link.
+
+В новом шаблоне и копии опубликованной ревизии доступны точечное и массовое
+сопоставление, подмножества и перестановки. Локальный draft, серверный draft
+и опубликованная ревизия сохраняют точные пары. В опубликованной конструкции
+разводка доступна для просмотра, а допустимые изменения оформления проходят
+обычные этапы save, review и publish. Для изменения разводки создаётся копия.
+
+[Управление парами и ограничения операций](UX_IA_CONTRACT.md#разводка-каналов-basetemplate).
 
 ## C-CAP-MOD-01 — Passive ModuleTemplate continuity
 

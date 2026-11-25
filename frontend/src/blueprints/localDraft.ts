@@ -1,5 +1,5 @@
 import { parseMount } from '../topology/hardwareModules';
-import type { BlueprintEditorState } from './editorModel';
+import { blueprintWiringError, type BlueprintEditorState } from './editorModel';
 export const localDraftKey = (id?: string) => `netmap.baseTemplate.localDraft.${id ?? 'new'}`;
 interface LocalDraft { version: 1; generation: number | null; state: BlueprintEditorState }
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -35,12 +35,12 @@ export function readLocalDraft(key: string): { draft?: LocalDraft; error?: 'corr
     if (!Number.isFinite(Math.max(...state.panels.map(p => p.x + p.width)) - left) || !Number.isFinite(Math.max(...state.panels.map(p => p.y + p.height)) - top)) throw Error();
     if (state.panels.some(p => !Object.hasOwn(state.nextLocalNumberByPanel, p.panel_key)) || Object.entries(state.nextLocalNumberByPanel).some(([key, n]) => !panels.has(key) || !positiveInteger(n))) throw Error();
     if (state.slots.some(p => !keyValid(p.key) || !unit(p.rendered_position.x) || !unit(p.rendered_position.y))) throw Error();
-    const pairs = new Set<string>();
-    for (const link of state.individualLinks) {
-      const pair = JSON.stringify([link.from_slot_key, link.to_slot_key].sort());
-      if (link.from_slot_key === link.to_slot_key || pairs.has(pair)) throw Error();
-      pairs.add(pair);
+    if (state.slots.some(slot => slot.cardinality !== undefined && (!positiveInteger(slot.cardinality) || slot.cardinality > 2147483647 || slot.kind === 'NETWORK_PORT' && slot.cardinality !== 1))) throw Error();
+    for (const { member_mappings: mappings } of state.individualLinks) {
+      if (mappings !== undefined && (!Array.isArray(mappings) || !mappings.every(mapping =>
+        object(mapping) && numbers(mapping, ['from_member_index', 'to_member_index'])))) throw Error();
     }
+    if (blueprintWiringError(state)) throw Error();
     if (state.bays) {
       if (new Set(state.bays.map(b => b.bay_key)).size !== state.bays.length) throw Error();
       for (const bay of state.bays) {

@@ -847,6 +847,19 @@ a { color: inherit; }
 .endpoint-workspace input[type="checkbox"] { flex: 0 0 14px; width: 14px; height: 14px; margin: 0; padding: 0; }
 .endpoint-workspace .endpoint-workspace__row button { width: 26px; height: 26px; padding: 0; }
 .endpoint-workspace__preview { max-height: 22vh; overflow: auto; margin: 10px 0; font-size: 12px; }
+.blueprint-physical-controls { border: 0; padding: 0; margin: 0; min-width: 0; }
+.endpoint-workspace__list, .endpoint-workspace__preview { overscroll-behavior: contain; }
+.endpoint-workspace__members { padding: 4px 8px 8px; border-bottom: 1px solid #294145; }
+.endpoint-workspace__members summary { cursor: pointer; padding: 4px 0; }
+.endpoint-workspace .endpoint-workspace__member { display: flex; flex-direction: row; align-items: center; gap: 8px; padding: 5px 0; overflow-wrap: anywhere; }
+.endpoint-workspace__member span:last-child { color: #a4c1bf; }
+.endpoint-workspace__preview-table { table-layout: fixed; width: 100%; }
+.endpoint-workspace__preview-table th { position: sticky; top: 0; z-index: 1; }
+.endpoint-workspace__preview-table th:last-child { width: 100px; }
+.endpoint-workspace__preview-table td { padding-block: 4px; }
+.endpoint-workspace__preview-table select { width: 100%; min-width: 0; }
+.endpoint-workspace[data-tab="links"] .endpoint-workspace__link-table:not(:has(th:nth-child(3))) th { width: 50%; text-align: left; }
+.endpoint-workspace[data-tab="links"] .endpoint-workspace__link-table:not(:has(th:nth-child(3))) td { text-align: left; overflow-wrap: anywhere; }
 .endpoint-workspace__preview label { display: inline-flex; align-items: center; }
 .endpoint-workspace button, .blueprint-order-dialog button { padding: 7px 10px; border: 1px solid #35575b; border-radius: 6px; color: #cfe1de; background: #102326; cursor: pointer; }
 .endpoint-workspace button:hover, .endpoint-workspace button:focus-visible, .blueprint-order-dialog button:hover, .blueprint-order-dialog button:focus-visible { border-color: #55e5b5; outline: 2px solid #35575b; }

@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { afterEach, describe, it, expect } from 'vitest';
 import { I18nProvider, localeStorageKey } from '../i18n';
 import { newBlueprintEditorState } from '../pages/BaseTemplateEditor';
-import { addEndpoints, addModulePlaces, addPanel, internalLinkPairKey, type BlueprintEditorState } from '../blueprints/editorModel';
+import { addEndpoints, addModulePlaces, addPanel, linkMemberPairs, type BlueprintEditorState } from '../blueprints/editorModel';
+import { memberPairKey } from '../blueprints/memberMappings';
 import { EndpointLinkWorkspace } from './EndpointLinkWorkspace';
 
 afterEach(() => localStorage.removeItem(localeStorageKey));
@@ -116,7 +117,7 @@ describe('unified endpoint workspace', () => {
     expect(rows()).toHaveLength(48);
     rows().forEach((row, index) => {
       const pair = s.initial.individualLinks[47 - index];
-      expect(row).toHaveAttribute('data-link-row', internalLinkPairKey(pair.from_slot_key, pair.to_slot_key));
+      expect(row).toHaveAttribute('data-link-row', memberPairKey(linkMemberPairs(pair)[0]));
       expect(within(row).getAllByRole('cell').slice(1, 3).map(cell => cell.textContent)).toEqual([
         `F-${index + 1} · Front`, `R-${index + 1} · Rear`,
       ]);
@@ -183,7 +184,7 @@ describe('unified endpoint workspace', () => {
     fireEvent.click(screen.getByRole('button',{name:'Выбрать все'}));
     fireEvent.click(screen.getByRole('button',{name:/Удалить выбранные/})); expect(s.latest().individualLinks).toHaveLength(0);
   });
-  it('allows same-panel single links and multiple different links per endpoint; blocks self and duplicates', () => {
+  it('allows same-panel single links and blocks self links and reused members', () => {
     const s = setup();
     fireEvent.change(s.side('B').getByRole('combobox',{name:'B'}),{target:{value:s.initial.activePanelKey}});
     const checksA = s.side('A').getAllByRole('checkbox'); const checksB = s.side('B').getAllByRole('checkbox');
@@ -192,7 +193,7 @@ describe('unified endpoint workspace', () => {
     fireEvent.click(checksB[0]); fireEvent.click(checksB[1]); fireEvent.click(screen.getByRole('button',{name:'Добавить связь'}));
     expect(s.latest().individualLinks).toHaveLength(1); expect(screen.getByRole('button',{name:'Добавить связь'})).toBeDisabled();
     fireEvent.change(s.side('B').getByRole('combobox',{name:'B'}),{target:{value:s.initial.panels[1].panel_key}});
-    fireEvent.click(s.side('B').getAllByRole('checkbox')[0]); fireEvent.click(screen.getByRole('button',{name:'Добавить связь'})); expect(s.latest().individualLinks).toHaveLength(2);
+    fireEvent.click(s.side('B').getAllByRole('checkbox')[0]); expect(screen.getByRole('button',{name:'Добавить связь'})).toBeDisabled(); expect(s.latest().individualLinks).toHaveLength(1);
   });
 });
 

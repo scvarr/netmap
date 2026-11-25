@@ -120,7 +120,7 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
         setInspectorOpen(false);
         inspectorTrigger.current?.focus();
       }} />}
-    {initial && document && <BaseTemplateEditor key={templateId} templateId={templateId} generation={document.generation} initialState={initial} title={t('review.edit')} description={t('review.description')} saveLabel={t('review.save')} saveDisabled={busy || revalidating} onStateChange={changed} onSave={async state => {
+    {initial && document && <BaseTemplateEditor physicalReadOnly key={templateId} templateId={templateId} generation={document.generation} initialState={initial} title={t('review.edit')} description={t('review.description')} saveLabel={t('review.save')} saveDisabled={busy || revalidating} onStateChange={changed} onSave={async state => {
       if (busy || revalidating) return;
       const result = createBlueprintRequest(state); if (!result.request) throw new Error(result.errors.join(' '));
       setBusy(true); setError(''); setNotice('');

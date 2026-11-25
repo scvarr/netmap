@@ -67,80 +67,28 @@ function setup(document = draft()) {
   return { source, mount };
 }
 
-it('authors exact logical groups and keeps their individual bays through draft review', async () => {
+it('keeps published member mappings visible and physical controls locked', async () => {
   const doc = draft();
-  const placed = doc.definition.bays![0];
-  doc.definition.panels.push({ ...doc.definition.panels[0], panel_key: 'rear', panel_number: 2, display_name: 'Rear', x: 160 });
-  const { mount, source } = setup(doc);
-  const view = mount();
-  fireEvent.click(await screen.findByText('Логические отсеки · 0'));
-  const creation = within(screen.getByRole('group', { name: 'Создать группу' }));
-  await creation.findByRole('option', { name: 'OCP3' });
-  const create = (module_port_type_id: string, count: string, panel = 'panel') => {
-    fireEvent.change(creation.getByLabelText('Панель'), { target: { value: panel } });
-    fireEvent.change(creation.getByLabelText('Тип модульного отсека'), { target: { value: module_port_type_id } });
-    fireEvent.change(creation.getByLabelText('Количество мест'), { target: { value: count } });
-    fireEvent.click(creation.getByRole('button', { name: 'Создать группу' }));
-  };
-  const save = async (calls: number): Promise<NonNullable<BaseTemplateDraftDocument['definition']['bays']>> => {
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
-    await waitFor(() => expect(source.saveDraft).toHaveBeenCalledTimes(calls));
-    return (await source.saveDraft.mock.results[calls - 1].value).definition.bays!;
-  };
-  create('OCP3', '2');
-  create('SFP+', '1');
-  create('QSFP+', '1');
-  create('OCP3', '1', 'rear');
-  create('OCP3', '3');
-  expect(screen.getByRole('alert')).toHaveTextContent('уже существует');
-  create('  ', '1');
-  expect(screen.getByRole('alert')).toHaveTextContent('активный тип');
-  create('new', '0');
-  expect(screen.getByRole('alert')).toHaveTextContent('от 1');
-  create('new', '1025');
-  expect(screen.getByRole('alert')).toHaveTextContent('не более 1024');
-  expect(creation.getByLabelText('Количество мест')).toHaveValue('1025');
-  const first = await save(1);
-  expect(first.map(bay => [bay.panel_key, bay.mount_kind === 'MODULE_BAY' ? bay.module_bay_type_id : bay.module_port_type_id])).toEqual([
-    ['panel', 'OCP3'], ['panel', 'OCP3'], ['panel', 'OCP3'], ['panel', 'SFP+'], ['panel', 'QSFP+'], ['rear', 'OCP3'],
-  ]);
-  expect(first.slice(1).every(bay => bay.kind === 'LOGICAL' && [bay.x, bay.y, bay.width, bay.height].every(value => value === null))).toBe(true);
-  expect(view.container.querySelectorAll('[data-module-port-marker]')).toHaveLength(1);
-  view.unmount();
+  const first = doc.definition.slots[0];
+  doc.definition.slots = [
+    { ...first, kind: 'CONNECTION_POINT', cardinality: 24, display_name: 'Rear input' },
+    { ...first, key: 'front', display_name: 'Front output' },
+  ];
+  doc.definition.internal_links = [{
+    from_slot_key: first.key, to_slot_key: 'front',
+    member_mappings: [{ from_member_index: 23, to_member_index: 1 }],
+  }];
+  const { mount } = setup(doc);
   mount();
-  fireEvent.click(await screen.findByText('Логические отсеки · 4'));
-  const group = within(screen.getByRole('group', { name: '1 · Front / Модульный отсек · OCP3' }));
-  const count = () => group.getByLabelText('Количество мест');
-  const apply = (value: string) => {
-    fireEvent.change(count(), { target: { value } });
-    fireEvent.click(group.getByRole('button', { name: 'Применить количество' }));
-  };
-  expect(count()).toHaveValue('2');
-  for (const invalid of ['', '-1', '1.5']) {
-    apply(invalid);
-    expect(screen.getByRole('alert')).toHaveTextContent('от 0');
-  }
-  expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeEnabled();
-  apply('1025');
-  expect(screen.getByRole('alert')).toHaveTextContent('не более 1024');
-  expect(count()).toHaveValue('1025');
-  expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeEnabled();
-  apply('1024');
-  const grown = await save(2);
-  const grownGroup = grown.filter(bay => bay.kind === 'LOGICAL' && bay.panel_key === 'panel' && bay.module_bay_type_id === 'OCP3');
-  expect(grownGroup).toHaveLength(1024);
-  expect(grown.slice(0, first.length)).toEqual(first);
-  expect(new Set(grown.map(bay => bay.bay_key)).size).toBe(grown.length);
-  const smallest = grownGroup.sort((a, b) => a.bay_key < b.bay_key ? -1 : 1)[0];
-  apply('1');
-  expect(await save(3)).toEqual(grown.filter(bay => !grownGroup.includes(bay) || bay === smallest));
-  fireEvent.click(group.getByRole('button', { name: 'Удалить группу' }));
-  expect(await save(4)).toEqual([placed, ...first.slice(3)]);
-  fireEvent.click(screen.getByRole('button', { name: 'Проверить изменения' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeEnabled());
-  fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
-  await waitFor(() => expect(source.publishCandidate).toHaveBeenCalledWith('base', 'candidate'));
-  expect(source.reconcileObjects).not.toHaveBeenCalled();
+  expect(await screen.findByText(/Физическая структура опубликована/)).toBeVisible();
+  expect(screen.queryByRole('button', { name: /^Добавить$/ })).toBeNull();
+  fireEvent.click(screen.getByText('Логические отсеки · 0'));
+  expect(screen.getByRole('button', { name: 'Создать группу' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: /Порты и внутренние связи · 1/ }));
+  const dialog = screen.getByRole('dialog', { name: 'Порты и внутренние связи' });
+  expect(within(dialog).getByRole('cell', { name: 'Rear input · Канал 23 · Front' })).toBeVisible();
+  expect(within(dialog).getByRole('cell', { name: 'Front output · Front' })).toBeVisible();
+  expect(within(dialog).queryByRole('button', { name: 'Удалить' })).toBeNull();
 });
 
 describe('persisted base template review', () => {
@@ -313,9 +261,6 @@ describe('persisted base template review', () => {
     expect(screen.getByText('Проверка ещё не выполнена')).toBeVisible();
     expect(screen.getAllByText('OCP bay').length).toBeGreaterThan(0);
     fireEvent.change(screen.getByDisplayValue('Сохранённый черновик'), { target: { value: 'Changed draft' } });
-    await screen.findAllByRole('option', { name: 'Copper · #336699' });
-    await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
-    fireEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
     expect(await screen.findByText('Черновик сохранён')).toBeInTheDocument();

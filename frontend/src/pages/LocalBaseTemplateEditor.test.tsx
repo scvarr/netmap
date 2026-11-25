@@ -81,11 +81,19 @@ it.each([undefined, 'existing'])('cancels only local work for %s, with refusal a
  remove.mockRestore(); fireEvent.click(screen.getByText('Отмена')); view.unmount(); expect(localStorage.getItem(localDraftKey(id))).toBeNull();
 });
 
-it('blocks multichannel editing and copying without changing data', () => {
- const s = state(); s.slots[0] = {...s.slots[0], kind:'CONNECTION_POINT', cardinality:4};
- const save = vi.fn();
- render(<I18nProvider><MemoryRouter><LocalBaseTemplateEditor initialState={s} title="Editor" description="" saveLabel="Save" onSave={save} /></MemoryRouter></I18nProvider>);
- expect(screen.getByRole('alert')).toHaveTextContent('многоканальных');
- expect(screen.queryByLabelText('Название шаблона')).toBeNull();
- expect(s.slots[0].cardinality).toBe(4); expect(save).not.toHaveBeenCalled();
+it('restores exact multichannel mappings from local storage and saves them', async () => {
+ const initial = state();
+ const first = initial.slots[0];
+ initial.slots[0] = { ...first, kind: 'CONNECTION_POINT', cardinality: 4 };
+ initial.slots.push({ ...first, key: 'rear', kind: 'CONNECTION_POINT', cardinality: 4 });
+ initial.individualLinks = [{ from_slot_key: first.key, to_slot_key: 'rear', member_mappings: [
+   { from_member_index: 4, to_member_index: 2 }, { from_member_index: 1, to_member_index: 3 },
+ ] }];
+ localStorage.setItem(localDraftKey(), JSON.stringify({ version: 1, generation: null, state: initial }));
+ const save = vi.fn(async () => {});
+ render(<I18nProvider><MemoryRouter><LocalBaseTemplateEditor initialState={state()} title="Editor" description="" saveLabel="Save" onSave={save} /></MemoryRouter></I18nProvider>);
+ fireEvent.click(screen.getByRole('button', { name: /Продолжить/ }));
+ fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+ await act(async () => {});
+ expect(save).toHaveBeenCalledWith(expect.objectContaining({ individualLinks: initial.individualLinks }));
 });

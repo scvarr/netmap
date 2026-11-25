@@ -285,7 +285,7 @@ describe('copy selection controls', () => {
     expect(copies.map((slot) => slot.display_name)).toEqual(['2-1', '2-2', '2-3']);
     expect(copies[0].rendered_position).toEqual({ x: .25, y: .75 });
     expect(request.slots.slice(0, 3)).toEqual(initial.slots);
-    expect(request.internal_links).toEqual(continuity ? initial.slots.map((slot, index) => ({ from_slot_key: slot.key, to_slot_key: copies[index].key })) : []);
+    expect(request.internal_links).toEqual(continuity ? initial.slots.map((slot, index) => ({ from_slot_key: slot.key, to_slot_key: copies[index].key, member_mappings: [{ from_member_index: 1, to_member_index: 1 }] })) : []);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.getByRole('button', { name: `Порты и внутренние связи · ${continuity ? 3 : 0}` })).toBeInTheDocument();
     if (continuity) {
@@ -311,7 +311,9 @@ describe('copy selection controls', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     fireEvent.pointerDown(copiedNode); fireEvent.pointerUp(canvas);
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Renamed copy' } });
+    const confirmDeletion = vi.spyOn(window, 'confirm').mockReturnValue(true);
     fireEvent.keyDown(document, { key: 'Delete' });
+    confirmDeletion.mockRestore();
     expect(document.querySelector(`[data-slot-key="${copies[0].key}"]`)).toBeNull();
     view.unmount();
     const reopened = hydrateBlueprintEditorState({ ...request, schema_version: '2.0', next_panel_number: 3, version_number: 1,
@@ -540,7 +542,12 @@ describe('minimal direct endpoint editor', () => {
     expect(request.slots[0].display_name).toBe('Management');
     expect(request.slots[0].rendered_position).toEqual({ x: .5, y: .5 });
     expect(request.internal_links).toHaveLength(1);
-    await userEvent.click(screen.getAllByRole('button', { name: 'Удалить' }).at(-1)!);
+    const confirmDeletion = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const remove = screen.getAllByRole('button', { name: 'Удалить' }).at(-1)!;
+    await userEvent.click(remove);
+    expect(document.querySelectorAll('[data-slot-key]')).toHaveLength(2);
+    await userEvent.click(remove);
+    confirmDeletion.mockRestore();
     expect(document.querySelectorAll('[data-slot-key]')).toHaveLength(1);
   });
 
@@ -632,7 +639,9 @@ describe('minimal direct endpoint editor', () => {
     expect(after[1] - before[1]).toBeCloseTo(100);
     expect(after[2]).toBeCloseTo(before[2]);
     fireEvent.contextMenu(nodes[0]);
+    const confirmDeletion = vi.spyOn(window, 'confirm').mockReturnValue(true);
     await userEvent.click(screen.getByRole('menuitem', { name: 'Удалить выбранные' }));
+    confirmDeletion.mockRestore();
     expect(document.querySelectorAll('[data-slot-key]')).toHaveLength(1);
     expect(screen.queryByRole('menu')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
