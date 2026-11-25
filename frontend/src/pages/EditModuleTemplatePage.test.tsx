@@ -43,6 +43,24 @@ function setup(initial = draft()) {
 }
 afterEach(() => { vi.useRealTimers(); });
 describe('module persisted draft and review', () => {
+  it('keeps definitions with internal wiring out of the geometry editor', async () => {
+    const doc = draft();
+    doc.definition.endpoints[0].kind = 'CONNECTION_POINT';
+    doc.definition.internal_links = [{
+      from_endpoint_key: 'first', to_endpoint_key: 'second',
+      member_mappings: [{ from_member_index: 1, to_member_index: 2 }],
+    }];
+    const { source, mount } = setup(doc);
+    mount();
+    await screen.findByText(/У модуля есть внутренняя разводка/);
+    expect(screen.queryByRole('button', { name: 'Сохранить черновик' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Проверить изменения' }));
+    await screen.findByText('Потенциально безопасное автоматическое обновление');
+    expect(source.saveDraft).not.toHaveBeenCalled();
+    expect(source.checkDraft).toHaveBeenCalledWith('module', 3);
+  });
+
   it('restores, renames, reorders and adds endpoints preserving keys and exact type matching', async () => {
     const { source, mount } = setup();
     let view = mount();

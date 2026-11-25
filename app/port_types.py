@@ -109,7 +109,7 @@ def validate_port_type_assignments(session, endpoints, previous=(), *, transceiv
     retained = {(endpoint["key"], endpoint["port_type_id"]) for endpoint in previous}
     ids = {uuid.UUID(endpoint["port_type_id"]) for endpoint in endpoints}
     if not ids:
-        return
+        return {}
     # This lock also covers the structural check and holds until commit.
     types = {item.id: item for item in session.scalars(
         select(PortType).where(PortType.id.in_(ids)).order_by(PortType.id)
@@ -133,6 +133,7 @@ def validate_port_type_assignments(session, endpoints, previous=(), *, transceiv
             raise ValidationError("NETWORK_PORT requires a single-member port type")
         if "cardinality" in endpoint and endpoint["cardinality"] != item.cardinality:
             raise ValidationError("Endpoint cardinality must match its port type")
+    return {str(identifier): item.cardinality for identifier, item in types.items()}
 
 
 def _port_type_usage(item_id):

@@ -44,10 +44,11 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
     return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', validate); };
   }, [dataSource, templateId, document?.generation, busy, t]);
   const dirty = !!document && !!definition && signature(document.definition) !== signature(definition);
+  const hasInternalLinks = Boolean(document?.definition.internal_links?.length);
   const current = document?.review?.current && !dirty && !busy && !revalidating && !error;
   const change = (value: ModuleTemplateInput) => { value = { ...value, geometry: { ...value.geometry, endpoints: moduleEndpointPositions(value.endpoints, value.geometry.endpoints) } }; setDefinition(value); setNotice(''); };
   const run = async (check: boolean) => {
-    if (!document || !definition || busy || revalidating) return;
+    if (!document || !definition || busy || revalidating || (!check && hasInternalLinks)) return;
     setBusy(true); setError(''); setNotice('');
     try {
       const doc = check ? await dataSource.checkDraft(templateId, document.generation)
@@ -90,7 +91,8 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
     <PageHeader title={title} />
     <p>{t('review.description')}</p>
     {error && <p role="alert">{error}</p>}
-    {definition && <form className="module-template-form" onSubmit={e => { e.preventDefault(); void run(false); }}>
+    {hasInternalLinks && <p role="status">{t('moduleReview.internalLinksReadOnly')}</p>}
+    {definition && !hasInternalLinks && <form className="module-template-form" onSubmit={e => { e.preventDefault(); void run(false); }}>
       {transceiver ? <TransceiverTemplateForm value={definition} onChange={change} disabled={busy} />
         : <ModuleTemplateEditor value={definition} onChange={change} disabled={busy} />}
         <button type="submit" className="primary-action" disabled={busy || revalidating || !definition.name.trim() || !mountTypeId(definition) || definition.endpoints.some(e => !e.display_name.trim()) || definition.module_places?.some(port => !port.display_name.trim() || !mountTypeId(port))}>{t('review.save')}</button>

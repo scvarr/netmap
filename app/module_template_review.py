@@ -11,6 +11,10 @@ from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.errors import ModelError, ValidationError
 from app.hardware_catalog import HardwareCatalog
 from app.hardware_interfaces import preserves_associations
+from app.module_continuity import (
+    installation_internal_connections, preserves_internal_links,
+    require_unchanged_internal_links, validate_member_capacity,
+)
 from app.port_types import validate_port_type_assignments
 from app.module_placement_reconciliation import configuration_installations, plan_module_placements
 from app.module_port_types import (
@@ -27,7 +31,7 @@ def validate_definition(value):
 def published_definition(session, template_id, revision_id):
     document = HardwareCatalog(session).module_document(
         session.get(m.ModuleTemplate, template_id), session.get(m.ModuleTemplateRevision, revision_id))
-    return validate_definition({k: document[k] for k in ("name", "endpoints", "module_places", "geometry", "transceiver", *MOUNT_FIELDS) if k in document})
+    return validate_definition({k: document[k] for k in ("name", "endpoints", "module_places", "geometry", "transceiver", "internal_links", *MOUNT_FIELDS) if k in document})
 
 
 def structural_changes(before, after):
@@ -83,6 +87,12 @@ def analyze_installation(session, installation, candidate, placement_plan=None):
                                                 configuration_installations(session, config.id))
     _, placement_reasons = placement_plan
     reasons = list(placement_reasons)
+    if not preserves_internal_links(before, candidate):
+        reasons.append({"code": "PHYSICAL_STRUCTURE_IMMUTABLE"})
+    if installation_internal_connections(
+        session, revision.internal_links, {key: row.connection_point_id for key, row in mappings.items()},
+    ) is None:
+        reasons.append({"code": "INVALID_ENDPOINT_MAPPING"})
     if not preserves_associations(session, config.id, installation.id, before.get("module_places", ()),
                                   candidate.get("module_places", ()), place_key="key"):
         reasons.append({"code": "HARDWARE_INTERFACE_ASSOCIATION_CHANGE"})
@@ -185,8 +195,9 @@ class ModuleTemplateReview:
         updated = validate_definition(definition)
         validate_module_authoring(updated)
         validate_transceiver_authoring(updated, published_definition(self.session, template_id, draft.source_revision_id))
-        validate_port_type_assignments(self.session, updated["endpoints"], draft.definition["endpoints"],
-                                       transceiver=updated.get("transceiver"))
+        capacities = validate_port_type_assignments(self.session, updated["endpoints"], draft.definition["endpoints"],
+                                                   transceiver=updated.get("transceiver"))
+        validate_member_capacity(updated, capacities)
         validate_mount_types(self.session, module_assignments(updated), module_assignments(draft.definition))
         draft.definition = updated
         draft.generation += 1
@@ -203,9 +214,11 @@ class ModuleTemplateReview:
         validate_module_authoring(definition)
         validate_transceiver_authoring(definition, published)
         _require_retained_port_types(published, definition)
-        if definition.get("transceiver") is not None:
+        require_unchanged_internal_links(published, definition)
+        if definition.get("transceiver") is not None or definition.get("internal_links"):
             endpoints = definition["endpoints"]
-            validate_port_type_assignments(self.session, endpoints, endpoints, transceiver=definition["transceiver"])
+            capacities = validate_port_type_assignments(self.session, endpoints, endpoints, transceiver=definition.get("transceiver"))
+            validate_member_capacity(definition, capacities)
         fingerprint = self._inputs()
         installations = self.session.scalars(select(m.ModuleInstallation).join(m.ModuleTemplateRevision,
             m.ModuleInstallation.module_revision_id == m.ModuleTemplateRevision.id).where(
@@ -270,9 +283,11 @@ class ModuleTemplateReview:
         published = published_definition(self.session, template_id, latest.id)
         validate_transceiver_authoring(candidate.definition, published)
         _require_retained_port_types(published, candidate.definition)
-        if candidate.definition.get("transceiver") is not None:
+        require_unchanged_internal_links(published, candidate.definition)
+        if candidate.definition.get("transceiver") is not None or candidate.definition.get("internal_links"):
             endpoints = candidate.definition["endpoints"]
-            validate_port_type_assignments(self.session, endpoints, endpoints, transceiver=candidate.definition["transceiver"])
+            capacities = validate_port_type_assignments(self.session, endpoints, endpoints, transceiver=candidate.definition.get("transceiver"))
+            validate_member_capacity(candidate.definition, capacities)
         revision = HardwareCatalog(self.session)._create_module_revision(template_id, latest.version_number + 1, query)
         self.session.get(m.ModuleTemplate, template_id).name = query.name
         receipt = m.ModuleTemplatePublication(id=candidate.id, revision_id=revision.id)

@@ -15,6 +15,7 @@ from app.module_layout import compose_layout, initial_layout, nested_place, vali
 from app.hardware_interfaces import declared_interfaces, associations
 from app.device_catalog import DISPLAY_ALIAS_KEY, PHYSICAL_OBJECT_CLASS_KEY
 from app.errors import ModelError, ValidationError
+from app.module_continuity import validate_member_capacity
 from app.models import (
     BuiltInEndpointDefinition,
     ObjectConfiguration,
@@ -366,11 +367,11 @@ class HardwareCatalog:
             materialized[slot.id] = MaterializedSlot(slot.slot_key, point.id, interface_id)
         internal_connection_ids: list[uuid.UUID] = []
         for link in links:
-            connection, _ = repository.add_connection(
+            connection = self._materialize_internal_link(
+                repository,
                 materialized[link.slot_a_id].connection_point_id,
                 materialized[link.slot_b_id].connection_point_id,
-                cardinality=len(link.member_mappings),
-                members=[ConnectionMemberInput(index=i, point_a_member=m["from_member_index"], point_b_member=m["to_member_index"]) for i, m in enumerate(link.member_mappings, 1)],
+                link.member_mappings,
             )
             internal_connection_ids.append(connection.id)
         self.session.flush()
@@ -382,11 +383,20 @@ class HardwareCatalog:
             internal_connection_ids=tuple(internal_connection_ids),
         )
 
+    @staticmethod
+    def _materialize_internal_link(repository, left, right, mappings):
+        members = [ConnectionMemberInput(index=i, point_a_member=m["from_member_index"],
+                                         point_b_member=m["to_member_index"])
+                   for i, m in enumerate(mappings, 1)]
+        connection, _ = repository.add_connection(left, right, len(members), members)
+        return connection
+
     def create_module(self, query):
         definition = query.model_dump(mode="json")
         validate_module_authoring(definition)
         validate_transceiver_authoring(definition)
-        validate_port_type_assignments(self.session, definition["endpoints"], transceiver=definition.get("transceiver"))
+        capacities = validate_port_type_assignments(self.session, definition["endpoints"], transceiver=definition.get("transceiver"))
+        validate_member_capacity(definition, capacities)
         validate_mount_types(self.session, module_assignments(definition))
         template = ModuleTemplate(name=query.name)
         self.session.add(template)
@@ -399,6 +409,7 @@ class HardwareCatalog:
             transceiver=query.transceiver.model_dump(mode="json", exclude_defaults=True) if query.transceiver is not None else None,
             **{key: getattr(query, key) for key in MOUNT_FIELDS})
         revision.module_places = [port.model_dump(mode="json", exclude_none=True) for port in query.module_places]
+        revision.internal_links = [link.model_dump(mode="json") for link in query.internal_links]
         self.session.add(revision)
         self.session.flush()
         for index, endpoint in enumerate(query.endpoints):
@@ -414,6 +425,8 @@ class HardwareCatalog:
         document = {"template_id": str(template.id), "revision_id": str(revision.id), "name": revision.name, **row_mount(revision), "geometry": revision.geometry, "module_places": revision.module_places, "endpoints": [{"key": e.definition_key, "display_name": e.display_name, "kind": e.kind, "port_type_id": str(e.port_type_id)} for e in self.session.scalars(select(ModuleEndpointDefinition).where(ModuleEndpointDefinition.module_revision_id == revision.id).order_by(ModuleEndpointDefinition.order_index))]}
         if revision.transceiver is not None:
             document["transceiver"] = revision.transceiver
+        if revision.internal_links:
+            document["internal_links"] = revision.internal_links
         return document
 
     def list_modules(self):
@@ -533,9 +546,11 @@ class HardwareCatalog:
         self.session.flush()
         self._materialize_hardware_interfaces(config, installation.id, revision.module_places, place_key="key")
         repository = CanonicalRepository(self.session)
+        points_by_key = {}
         for definition, port_type in definitions:
             capacity = port_type.cardinality
             point = repository.add_connection_point(object_id, cardinality=capacity)
+            points_by_key[definition.definition_key] = point.id
             self._metadata(connection_point_id=point.id, key=DISPLAY_ALIAS_KEY, value=definition.display_name)
             interface_id = None
             if definition.kind == "NETWORK_PORT":
@@ -548,6 +563,11 @@ class HardwareCatalog:
                 for member in range(1, capacity + 1):
                     repository.add_interface_physical_binding(transceiver_interface, point.id, point_member=member)
             self.session.add(ModuleEndpointMapping(installation_id=installation.id, definition_id=definition.id, connection_point_id=point.id, network_interface_id=interface_id))
+        for link in revision.internal_links:
+            self._materialize_internal_link(
+                repository, points_by_key[link["from_endpoint_key"]], points_by_key[link["to_endpoint_key"]],
+                link["member_mappings"],
+            )
         self.session.flush()
 
     def _materialize_hardware_interfaces(self, config, parent_id, places, *, place_key):

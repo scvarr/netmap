@@ -19,6 +19,8 @@ from sqlalchemy.sql.sqltypes import JSON
 
 from app.database import Base
 from app import models
+from app.errors import ValidationError as ModelValidationError
+from app.module_continuity import expected_links, matching_connections, preserves_internal_links, validate_member_capacity
 from app.port_types import MountTypeInput, PortTypeInput, supports_transceiver_termination
 from app.module_port_types import MOUNT_CATALOGS, MOUNT_FIELDS, mount_identity, result_mounts
 from app.schemas import ModuleBayRequest, ModuleMount, AutomaticLocationLayout
@@ -81,7 +83,7 @@ ENTITIES = (
     ("authoring", "ModuleBay", "ModuleBay", "id base_revision_id bay_key display_name mount_kind module_port_type_id module_bay_type_id panel_key kind x y width height hardware_interface_key"),
     ("authoring", "ModuleTemplate", "ModuleTemplate", "id name"),
     ("authoring", "ModuleTemplatePublication", "ModuleTemplatePublication", "id revision_id"),
-    ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number name mount_kind module_port_type_id module_bay_type_id geometry module_places transceiver"),
+    ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number name mount_kind module_port_type_id module_bay_type_id geometry module_places internal_links transceiver"),
     ("authoring", "ModuleTemplateDraft", "ModuleTemplateDraft", "id template_id source_revision_id generation definition"),
     ("authoring", "ModuleTemplateCandidate", "ModuleTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
     ("authoring", "ModuleEndpointDefinition", "ModuleEndpointDefinition", "id module_revision_id definition_key order_index display_name kind port_type_id"),
@@ -135,7 +137,9 @@ def export_package(session: Session) -> dict:
         rows = session.scalars(select(model).order_by(*model.__table__.primary_key.columns)).all()
         package[section][name] = [
             {field: _json_value(getattr(row, field)) for field in fields
-             if model is not models.ModuleTemplateRevision or field != "transceiver" or row.transceiver is not None}
+             if model is not models.ModuleTemplateRevision
+             or (field != "transceiver" or row.transceiver is not None)
+             and (field != "internal_links" or row.internal_links)}
             for row in rows
         ]
     return package
@@ -204,10 +208,12 @@ def validate_package(package: object) -> dict:
         ids = set()
         required_fields = expected_fields = set(fields)
         if model is models.ModuleTemplateRevision:
-            required_fields = expected_fields - {"transceiver"}
+            required_fields = expected_fields - {"transceiver", "internal_links"}
         for record in records:
             if not isinstance(record, dict) or not required_fields <= record.keys() <= expected_fields:
                 raise PackageError(f"{name} has incomplete or unknown fields")
+            if model is models.ModuleTemplateRevision and "internal_links" not in record:
+                record = {**record, "internal_links": []}
             row = {field: _decode(record.get(field), columns[field], f"{name}.{field}") for field in fields}
             if model is models.MapPresentationVariant and row["automatic_layout"] is not None:
                 try:
@@ -349,12 +355,14 @@ def _validate_module_template_reviews(rows):
     if len(published) != len(set(published)) or set(published) != {r["id"] for r in revisions.values() if r["version_number"] > 1}:
         raise PackageError("Every noninitial module revision requires one publication receipt")
     definitions = {}
+    capacities = {str(row["id"]): len(row["members"]) for row in rows["port_types"]}
     for revision in revisions.values():
         try:
-            definition = validate_definition({**{k: revision[k] for k in ("name", "geometry", "module_places", "transceiver", *MOUNT_FIELDS)}, "endpoints": [
+            definition = validate_definition({**{k: revision[k] for k in ("name", "geometry", "module_places", "transceiver", "internal_links", *MOUNT_FIELDS)}, "endpoints": [
                 {"key": e["definition_key"], "display_name": e["display_name"], "kind": e["kind"], "port_type_id": str(e["port_type_id"])}
                 for e in sorted(rows["module_endpoint_definitions"], key=lambda e: e["order_index"]) if e["module_revision_id"] == revision["id"]]})
-        except (SchemaError, TypeError) as exc:
+            validate_member_capacity(definition, capacities)
+        except (SchemaError, TypeError, ModelValidationError) as exc:
             raise PackageError("Invalid module revision definition") from exc
         definitions[revision["id"]] = definition
     for receipt in receipts:
@@ -363,7 +371,8 @@ def _validate_module_template_reviews(rows):
         source = revisions[candidate["source_revision_id"]]
         actual = definitions[revision["id"]]
         if (revision["template_id"] != candidate["template_id"] or source["template_id"] != candidate["template_id"]
-                or revision["version_number"] != source["version_number"] + 1 or actual != candidate["definition"]):
+                or revision["version_number"] != source["version_number"] + 1 or actual != candidate["definition"]
+                or not preserves_internal_links(definitions[source["id"]], actual)):
             raise PackageError("Module publication differs from candidate ownership, source or definition")
     for template in rows["module_templates"]:
         latest = max((r for r in revisions.values() if r["template_id"] == template["id"]), key=lambda r: r["version_number"], default=None)
@@ -379,10 +388,13 @@ def _validate_module_template_reviews(rows):
                     raise PackageError("Duplicate module template draft")
                 templates.add(row["template_id"])
             try:
-                validate_definition(row["definition"])
+                definition = validate_definition(row["definition"])
+                validate_member_capacity(definition, capacities)
                 if table == "module_template_candidates":
                     ModuleTemplateImpactResult.model_validate(row["result"])
-            except (SchemaError, TypeError) as exc:
+                    if not preserves_internal_links(definitions[row["source_revision_id"]], definition):
+                        raise PackageError("Module candidate changes immutable internal links")
+            except (SchemaError, TypeError, ModelValidationError) as exc:
                 raise PackageError("Invalid module review definition or analysis") from exc
             if table == "module_template_candidates":
                 impacts = row["result"]["installations"]
@@ -583,6 +595,7 @@ def _validate_hardware_configuration(rows):
         raise PackageError("Configuration is missing a built-in endpoint mapping")
     if any((i["id"], d["id"]) not in module_pairs for i in installations.values() for d in module_definitions.values() if i["module_revision_id"] == d["module_revision_id"]):
         raise PackageError("Installation is missing a module endpoint mapping")
+    _validate_module_continuity(rows, installations, revisions, module_definitions, points)
 
     base_keys = defaultdict(dict)
     for bay in declared_bays:
@@ -619,6 +632,40 @@ def _validate_hardware_configuration(rows):
         seen_interfaces.add(interface_id)
     if expected:
         raise PackageError("Configuration is missing a hardware interface association")
+
+
+def _validate_module_continuity(rows, installations, revisions, definitions, points):
+    points_by_installation = defaultdict(dict)
+    point_installations = {}
+    for mapping in rows["module_endpoint_mappings"]:
+        key = definitions[mapping["definition_id"]]["definition_key"]
+        installation_id, point_id = mapping["installation_id"], mapping["connection_point_id"]
+        points_by_installation[installation_id][key] = point_id
+        point_installations[point_id] = installation_id
+    if not point_installations:
+        return
+    expected = {}
+    for identifier, installation in installations.items():
+        expected.update(expected_links(revisions[installation["module_revision_id"]]["internal_links"],
+                                       points_by_installation[identifier]))
+    members = defaultdict(list)
+    for row in rows["connection_members"]:
+        members[row["connection_id"]].append((row["index"], row["point_a_member"], row["point_b_member"]))
+    internal = [(row["id"], row["point_a_id"], row["point_b_id"], row["cardinality"]) for row in rows["connections"]
+                if points[row["point_a_id"]]["physical_object_id"] == points[row["point_b_id"]]["physical_object_id"]]
+    owned = matching_connections(expected, internal, members, {row["connection_id"] for row in rows["cables"]})
+    if owned is None:
+        raise PackageError("Canonical module continuity differs from its pinned revision")
+    occupied = {(point, member) for pair, mappings in expected.items() for mapping in mappings
+                for point, member in zip(pair, mapping)}
+    owned = set(owned)
+    for identifier, left, right, _ in internal:
+        if identifier in owned:
+            continue
+        if left in point_installations and point_installations[left] == point_installations.get(right):
+            raise PackageError("Canonical link within a module installation is missing from its pinned revision")
+        if any((left, a) in occupied or (right, b) in occupied for _, a, b in members[identifier]):
+            raise PackageError("Canonical module member has conflicting internal continuity")
 
 
 def _validate_physical_connections(rows):

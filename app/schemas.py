@@ -787,6 +787,13 @@ class BaseInternalLinkRequest(BaseModel):
     member_mappings: list[BaseInternalMemberMapping] = Field(default_factory=lambda: [BaseInternalMemberMapping(from_member_index=1, to_member_index=1)], min_length=1)
 
 
+class ModuleInternalLinkRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    from_endpoint_key: str = Field(min_length=1, max_length=255)
+    to_endpoint_key: str = Field(min_length=1, max_length=255)
+    member_mappings: list[BaseInternalMemberMapping] = Field(min_length=1)
+
+
 class ModuleMount(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -895,6 +902,7 @@ class CreateModuleTemplateRequest(ModuleMount):
     endpoints: list[ModuleEndpointRequest]
     geometry: ModuleGeometry
     module_places: list[ModulePlaceDefinition] = Field(default_factory=list)
+    internal_links: list[ModuleInternalLinkRequest] = Field(default_factory=list)
     transceiver: TransceiverSpecifications | None = None
 
     @model_validator(mode="after")
@@ -920,6 +928,22 @@ class CreateModuleTemplateRequest(ModuleMount):
                           if place.hardware_interface_key is not None]
         if interface_keys and (self.mount_kind != "MODULE_BAY" or len(set(interface_keys)) != len(interface_keys)):
             raise PydanticCustomError("hardware_validation", "Hardware interface keys must be unique within a board")
+        passive_keys = {e.key for e in self.endpoints
+                        if e.kind == "CONNECTION_POINT" and self.mount_kind == "MODULE_BAY"}
+        occupied = set()
+        pairs = set()
+        for link in self.internal_links:
+            left, right = link.from_endpoint_key, link.to_endpoint_key
+            pair = frozenset((left, right))
+            if left == right or not pair <= passive_keys or pair in pairs:
+                raise PydanticCustomError("hardware_validation", "Internal links require distinct passive module endings and unique endpoint pairs")
+            pairs.add(pair)
+            for mapping in link.member_mappings:
+                for address in ((left, mapping.from_member_index), (right, mapping.to_member_index)):
+                    if address in occupied:
+                        raise PydanticCustomError("hardware_validation", "Internal member is already occupied",
+                                                  {"reason": "INTERNAL_MEMBER_OCCUPANCY"})
+                    occupied.add(address)
         return self
 
 

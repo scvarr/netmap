@@ -654,6 +654,7 @@ class ModuleTemplateRevision(Base):
     )
     geometry: Mapped[dict] = mapped_column(JSONB, nullable=False)
     module_places: Mapped[list[dict]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    internal_links: Mapped[list[dict]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     transceiver: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
 
 

@@ -87,6 +87,11 @@ export interface TransceiverSpecifications {
 export type ModuleTemplateInput = ModuleMount & {
   geometry: ModuleGeometry; name: string; endpoints: ModuleEndpoint[];
   module_places?: ModulePlaceDefinition[]; transceiver?: TransceiverSpecifications;
+  internal_links?: {
+    from_endpoint_key: string;
+    to_endpoint_key: string;
+    member_mappings: { from_member_index: number; to_member_index: number }[];
+  }[];
 };
 export type ModuleTemplate = ModuleTemplateInput & { template_id: string; revision_id: string; publication_state?: ModuleDraftDocument["publication_state"] };
 export interface ModuleDraftDocument {

@@ -112,6 +112,7 @@ const messages = {
     'moduleGeometry.hint': 'Shift / Ctrl + щелчок — выбор нескольких портов. Перетаскивание — перемещение выделенных портов.',
 
     'moduleReview.up': 'Выше', 'moduleReview.down': 'Ниже', 'moduleReview.endpoints': 'Конечные точки модуля',
+    'moduleReview.internalLinksReadOnly': 'У модуля есть внутренняя разводка. Редактирование этого определения доступно через API.',
     'moduleReview.compatibility': 'Совместимость не совпадает с текущим отсеком. Требуется вмешательство.',
     'moduleReview.nestedPortsUnsupported': 'Обновление установки до ревизии с вложенными модульными портами пока не поддерживается.',
     'blueprint.endpoint.modulePort': 'Модульный порт',
@@ -568,6 +569,7 @@ const messages = {
     'moduleGeometry.hint': 'Shift / Ctrl + click to select multiple ports. Drag to move selected ports.',
 
     'moduleReview.up': 'Move up', 'moduleReview.down': 'Move down', 'moduleReview.endpoints': 'Module endpoints',
+    'moduleReview.internalLinksReadOnly': 'This module has internal wiring. Use the API to edit its definition.',
     'moduleReview.compatibility': 'Compatibility does not match the current bay. Intervention is required.',
     'moduleReview.nestedPortsUnsupported': 'Updating an installation to a revision with nested module ports is not yet supported.',
     'blueprint.endpoint.modulePort': 'Module port',

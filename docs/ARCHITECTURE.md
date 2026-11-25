@@ -98,6 +98,13 @@ ConnectionPoint в порядке UUID, затем ConnectionMember, с `NOWAIT`
 совместимость. Одна транзакция меняет point ID и member index выбранной
 стороны. Внутренняя continuity сохраняется и не расходует внешнюю ёмкость.
 
+Пассивная разводка платы хранится в immutable ModuleTemplateRevision.
+Стабильные ключи окончаний и member indices разрешаются в canonical
+Connection и ConnectionMember каждой установки в её транзакции. Демонтаж
+сопоставляет canonical связи с закреплённой разводкой под блокировками
+и проверяет отсутствие Cable и других зависимостей до удаления.
+[C-CAP-MOD-01](L1_CONNECTIVITY.md#c-cap-mod-01--passive-moduletemplate-continuity).
+
 При замене физического трансивера MOD-03C-2 блокировка таблицы ревизий
 сериализует операцию с публикацией. Блокировка целевого шаблона предшествует
 блокировкам объекта, конфигурации и исходной установки, как при reconcile.
@@ -378,6 +385,9 @@ Workspace JSON v17 включает типы физических окончан
 места и UUID-ссылки сохраняются в ревизиях, черновиках, кандидатах и результатах review.
 Исторические snapshots внутри пакета сохраняют
 исходные определения.
+У ревизий ModuleTemplate непустая разводка хранится в `internal_links`.
+Без этого поля разводка пуста. Импорт сверяет authored pairs с canonical
+Connections и members установленной ревизии до записи.
 Не добавлять old/new fallback, shadow models или translation shims ради obsolete
 API. Reset данных — явная destructive операция, не побочный эффект чтения.
 

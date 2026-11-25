@@ -124,8 +124,13 @@ member сохраняет внутреннюю continuity. Проверить к
 
 Следующее инженерное направление — оставшиеся контракты C-CAP-01 этапа 4.
 
+**IMPLEMENTED · C-CAP-MOD-01.** Явная пассивная разводка ModuleTemplate через API,
+атомарная материализация и демонтаж, сохранение связности при reconcile и
+Workspace roundtrip.
+[Контракт](L1_CONNECTIVITY.md#c-cap-mod-01--passive-moduletemplate-continuity).
+
 Цель — редактировать явные mappings и проверять exact trace канала и полноту
-группы. Остаток — ModuleTemplate continuity, внутренний authoring из C-CAP-01-03,
+группы. Остаток — графический authoring из C-CAP-01-03,
 пользовательский exact member trace и групповая трассировка из C-CAP-01-04.
 Для сквозной проверки нужны конструкция этапа 2 и внешний lifecycle этапа 3.
 Обязательно для G1.

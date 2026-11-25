@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.errors import ModelError, ValidationError
+from app.module_continuity import installation_internal_connections
 from app.hardware_catalog import HardwareCatalog
 from app.hardware_interfaces import associations, declared_interfaces
 from app.module_port_types import mount_identity, row_mount
@@ -163,13 +164,26 @@ class ModuleInstallationDeletionCatalog:
         # through preflight/deletion prevents a concurrent dependent row appearing.
         points = tuple(self.session.scalars(select(ConnectionPoint).where(ConnectionPoint.id.in_(point_ids)).order_by(ConnectionPoint.id).with_for_update()))
         tuple(self.session.scalars(select(NetworkInterface.id).where(NetworkInterface.id.in_(interface_ids)).order_by(NetworkInterface.id).with_for_update()))
-        blockers = self._blockers(object_id, installation, mappings, points, point_ids, interface_ids)
+        internal_ids = ()
+        if revision.internal_links:
+            definitions = dict(self.session.execute(select(ModuleEndpointDefinition.id, ModuleEndpointDefinition.definition_key)
+                .where(ModuleEndpointDefinition.module_revision_id == revision.id)).tuples().all())
+            internal_ids = installation_internal_connections(self.session, revision.internal_links, {
+                definitions[row.definition_id]: row.connection_point_id for row in mappings if row.definition_id in definitions
+            }, lock=True)
+            if internal_ids is None:
+                raise ModelError("ModuleInstallation has inconsistent internal continuity",
+                                 {"reason": "INVALID_INTERNAL_CONTINUITY"})
+        blockers = self._blockers(object_id, installation, mappings, points, point_ids, interface_ids,
+                                  internal_ids=internal_ids)
         if blockers:
             raise ModelError("ModuleInstallation cannot be removed because its endpoints are in use", {
                 "reason": "MODULE_INSTALLATION_IN_USE", "installation_id": str(installation_id),
                 "blockers": blockers,
             })
         # All DELETEs are after the complete preflight, in RESTRICT FK order.
+        if internal_ids:
+            self.session.execute(delete(Connection).where(Connection.id.in_(internal_ids)))
         self.session.execute(delete(ModuleEndpointMapping).where(ModuleEndpointMapping.installation_id == installation_id))
         self.session.execute(delete(HardwareInterfaceAssociation).where(
             HardwareInterfaceAssociation.parent_installation_id == installation_id))
@@ -336,10 +350,12 @@ class ModuleInstallationDeletionCatalog:
             "blockers": blockers, "blocking_cables": list(cables),
         })
 
-    def _blockers(self, object_id, installation, mappings, points, point_ids, interface_ids, *, transceiver_bindings=None):
+    def _blockers(self, object_id, installation, mappings, points, point_ids, interface_ids, *,
+                  transceiver_bindings=None, internal_ids=()):
         blockers = Counter()
         queries = {
-            "CONNECTION": (Connection, or_(Connection.point_a_id.in_(point_ids), Connection.point_b_id.in_(point_ids))),
+            "CONNECTION": (Connection, or_(Connection.point_a_id.in_(point_ids), Connection.point_b_id.in_(point_ids))
+                           & Connection.id.not_in(internal_ids)),
             "L2_BINDING": (L2Binding, L2Binding.interface_id.in_(interface_ids)),
             "L3_BINDING": (L3Binding, L3Binding.interface_id.in_(interface_ids)),
             "NETWORK_INTERFACE_REALIZATION": (NetworkInterfaceRealization, or_(NetworkInterfaceRealization.upper_interface_id.in_(interface_ids), NetworkInterfaceRealization.lower_interface_id.in_(interface_ids))),
