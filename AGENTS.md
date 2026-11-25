@@ -45,40 +45,54 @@ Permanent NetMap rules:
   existing databases will not replay an already-recorded revision. This protects
   migration-history integrity, not obsolete application contracts.
 
-Testing workflow contract:
+## Testing workflow
 
-- During implementation and at the final milestone acceptance boundary, make
-  targeted tests for the affected behavioural contract the default. The fact
-  that a milestone has reached its final boundary is not, by itself, a
-  trigger for the full backend/frontend regression suites.
-- Run the full backend/frontend suites only when there is a concrete reason,
-  such as a broad or poorly defined change cone, a cross-domain or integration
-  change, migration/runtime/platform uncertainty, a release or stabilization
-  checkpoint, or a specifically stated acceptance requirement.
-- Preserve behavioural contracts and invariants, not the historical shape or
-  number of test files. Do not duplicate one invariant across test layers
-  without separate value.
-- Use true E2E tests for a small number of end-to-end guarantees; verify local
-  contracts in cheaper layers.
-- First classify a failure outside the current contract as either a regression
-  of the current milestone or unrelated/obsolete test debt.
-- An unrelated failure must not automatically expand the scope of a
-  corrective milestone.
-- Do not automatically restore obsolete development-stage expectations merely
-  to make an old test suite pass.
-- GitNexus `detect_changes` is a separate acceptance/change-inspection check;
-  it does not, by itself, justify running the full suites.
+- Use targeted tests for the affected behavioural contract by default during
+  implementation and at final acceptance. Choose broader checks based on the
+  actual regression surface, risk, and acceptance criteria. Reaching the final
+  boundary or changing several layers within a bounded milestone does not by
+  itself require full backend/frontend suites.
+- For documentation-only work, review the diff, verify links and anchors,
+  and check consistency with current repository documentation.
+- Preserve behavioural contracts and invariants. Duplicate a check only when
+  each instance provides distinct coverage or evidence. Reserve true E2E tests
+  for a small number of end-to-end guarantees and verify local contracts in
+  cheaper layers.
+- Classify failures outside the current contract as milestone regressions or
+  unrelated/obsolete test debt before acting. Keep unrelated failures outside
+  the corrective milestone and avoid restoring obsolete expectations.
+- GitNexus change inspection is separate from test selection.
 
 ## Interface consistency
 
-- Before creating a page or form, inspect comparable existing components.
+- Apply these requirements to new and changed interfaces. Inspect comparable
+  screens and follow the [UX/IA contract](docs/UX_IA_CONTRACT.md).
 - Reuse PageShell, PageHeader, Breadcrumbs, and existing styles for buttons,
-  fields, tables, and messages.
-- Follow the existing typography, control sizes, spacing, colors, and responsive behavior.
-- Reuse an available UI pattern instead of introducing a local styling system.
-  Add CSS classes only for behavior specific to the feature.
-- A general redesign requires a separate contract. Visual consistency with
-  existing screens is part of acceptance.
+  fields, tables, and messages where applicable. Follow existing control sizes,
+  spacing, and colors. Add CSS only for feature-specific behaviour.
+- Check applicable dialogs, responsive layouts, keyboard focus, action
+  hierarchy, confirmations, typography, localization, and control states.
+- For substantial UI changes, provide browser evidence for affected flows
+  and viewport sizes, with screenshots where possible. Report any browser
+  verification that could not be performed.
+- Visual consistency is part of acceptance. Keep general redesign and
+  independent UX defects outside the milestone scope.
+
+## Milestone status and final report
+
+Use **IMPLEMENTED** once the scoped changes are complete. Use **ACCEPTED**
+only after all prescribed acceptance checks and external inspection of the
+final branch diff are complete. Passing automated tests alone does not
+establish acceptance.
+
+Include in the final report:
+
+- Branch, base SHA, and final SHA.
+- Implemented contract and milestone status.
+- Checks performed and their results.
+- Checks omitted, limitations, and deviations.
+- GitNexus result when applicable.
+- Commit, push, and working tree status.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
@@ -97,8 +111,11 @@ change detection.
 - Use targeted GitNexus discovery (`query`, `context`, process resources) in
   preference to broad repository scans. Do not invoke it mechanically when
   the exact target files or symbols are already known.
-- Run `detect_changes` before final acceptance (and before any commit). Treat
-  an incomplete or wrong-worktree result as unresolved, not clean.
+- Run `detect_changes` before the final commit for code changes and ensure the
+  result covers the final diff for acceptance. Run it for intermediate WIP
+  commits as needed. Documentation-only changes require no `detect_changes`.
+- Report unavailable, incomplete, or wrong-worktree analysis as unresolved,
+  together with the alternative checks performed and their results.
 - Use graph-aware rename/refactoring workflows; do not rename symbols with
   blind find-and-replace.
 
