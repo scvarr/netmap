@@ -2,6 +2,7 @@ import { mountTypeId, type MountKind, type ModuleMount, type ModuleBay } from '.
 import { mountTypeName, useMountTypes, type MountCatalogs } from './ModulePortTypeSelect';
 import { modulePortPosition } from '../topology/hardwareModules';
 import { EndpointMarker } from './EndpointMarker';
+import { PhysicalMemberSelect } from './PhysicalMemberSelect';
 import { usePortTypes } from './PortTypeSelect';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { BlueprintPresentation } from '../topology/types';
@@ -9,6 +10,7 @@ import { panelCompositionBounds } from '../topology/blueprintDisplaySize';
 import { useI18n, type MessageKey } from '../i18n';
 import { HardwareModuleError, hardwareModuleDataSource, type BlockingModuleCable, type BlockingModuleCableEndpoint, type HardwareConfiguration, type HardwareModuleDataSource, type ModuleInstallation, type ModuleTemplate, type ReplaceTransceiverInput } from '../topology/hardwareModules';
 import { physicalEndpointAddress } from '../topology/physicalPortAvailability';
+import { compatibilityMessage, type PhysicalCompatibilityPreview } from '../topology/physicalCompatibility';
 
 function compareKeys(a: string, b: string) {
   return a < b ? -1 : a > b ? 1 : 0;
@@ -55,6 +57,11 @@ const operationErrors: Partial<Record<string, MessageKey>> = {
   MODULE_INSTALLATION_IN_USE: 'hardware.error.inUse',
 };
 
+const replacementConflicts = new Set([
+  'REPLACEMENT_CABLES_CHANGED', 'TRANSCEIVER_REPLACEMENT_BUSY',
+  'PHYSICAL_COMPATIBILITY_CONFLICT', 'PHYSICAL_COMPATIBILITY_STALE',
+]);
+
 const placeLabels = {
   MODULE_BAY: { group: 'hardware.boards', place: 'hardware.bay', component: 'hardware.board',
     select: 'hardware.selectBoard', empty: 'hardware.noBoards', remove: 'hardware.removeBoardConfirm' },
@@ -69,6 +76,9 @@ type Replacement = {
   expected: Omit<ReplaceTransceiverInput, 'module_template_id' | 'target_revision_id'>;
   candidates: ModuleTemplate[];
   selected?: ModuleTemplate;
+  cables?: BlockingModuleCable[];
+  assignments?: Record<string, number | undefined>;
+  preview?: PhysicalCompatibilityPreview;
   error?: unknown;
 };
 
@@ -171,12 +181,12 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
     setError(removal && cables.length ? t('hardware.error.transceiverConnected', removal)
       : key ? t(key) : t('hardware.failed', { error: String(error) }));
   };
-  const cableEnd = (endpoint: BlockingModuleCableEndpoint) => {
+  const cableEnd = (endpoint: BlockingModuleCableEndpoint, includeSingle = false) => {
     const panel = endpoint.panel;
     const panelLabel = panel ? [panel.name, panel.face && t(panel.face === 'FRONT' ? 'face.front' : 'face.rear'),
       `#${panel.number}`].filter(Boolean).join(' · ') : '';
     return physicalEndpointAddress(endpoint.object_label ?? t('hardware.unnamedObject'), panelLabel,
-      endpoint.point_label ?? t('physical.port'), endpoint, endpoint.member_index ?? undefined, false,
+      endpoint.point_label ?? t('physical.port'), endpoint, endpoint.member_index ?? undefined, includeSingle,
       endpoint.location_path.map(location => location.name));
   };
   const cableList = (cables: BlockingModuleCable[]) => <ul>{cables.map(cable =>
@@ -212,22 +222,42 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
     catch(e) { showOperationError(e, { name, bay: bay.display_name }); }
     finally { setPending(false); }
   };
-  const replace = async () => {
+  const replace = async (review = false) => {
     if (!replacement?.selected || replacementUnchanged || replacementStale || pending) return;
-    const { source, selected, expected } = replacement;
+    const { source, selected, expected, cables, assignments, preview } = replacement;
+    if (cables?.length && (!assignmentsComplete || (!review && !preview?.token))) return;
+    const input: ReplaceTransceiverInput = {
+      ...expected, module_template_id: selected.template_id, target_revision_id: selected.revision_id,
+      ...(cables?.length && { cable_assignments: cables.map(cable => ({
+        cable_id: cable.cable_id, member_index: assignments![cable.cable_id]!,
+      })) }),
+    };
     setPending(true);
-    setReplacement({ ...replacement, error: undefined });
+    setReplacement({ ...replacement, error: undefined, preview: undefined });
     try {
-      setConfig(await dataSource.replaceTransceiver(objectId, source.id, {
-        ...expected, module_template_id: selected.template_id, target_revision_id: selected.revision_id,
-      }));
+      if (review) {
+        const result = await dataSource.previewTransceiverReplacement(objectId, source.id, input);
+        setReplacement({ ...replacement, error: undefined, cables: result.cables, preview: result.compatibility });
+        return;
+      }
+      if (preview?.token) input.compatibility = { token: preview.token, accept_unknown: preview.verdict === 'UNKNOWN' };
+      setConfig(await dataSource.replaceTransceiver(objectId, source.id, input));
       setReplacement(undefined);
       await refreshAfterModuleChange();
     } catch (error) {
-      setReplacement({ ...replacement, error });
+      const changed = error instanceof HardwareModuleError &&
+        (error.reason === 'REPLACEMENT_CABLES_CHANGED' || error.blockingCables.length > 0);
+      const latest = changed ? error.blockingCables : cables;
+      setReplacement({ ...replacement, preview: undefined, error, cables: latest,
+        assignments: changed && assignments ? Object.fromEntries((latest ?? []).filter(cable =>
+          cables?.some(previous => JSON.stringify(previous) === JSON.stringify(cable)))
+          .map(cable => [cable.cable_id, assignments[cable.cable_id]])) : assignments,
+      });
     } finally { setPending(false); }
   };
   const replacementError = replacement?.error instanceof HardwareModuleError ? replacement.error : undefined;
+  const replacementBlocked = Object.keys(replacementError?.blockers ?? {}).some(reason => reason !== 'CONNECTION');
+  const replacementConflict = replacementConflicts.has(replacementError?.reason ?? '');
   const replacementStale = replacementError?.reason === 'INSTALLATION_CHANGED'
     || replacementError?.reason === 'TARGET_REVISION_CHANGED';
   const replacementUnchanged = replacement?.selected
@@ -236,6 +266,11 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
   const currentEndpoint = replacement?.source.endpoints[0];
   const currentType = portTypes?.find(type => type.id === currentEndpoint?.port_type_id);
   const targetType = portTypes?.find(type => type.id === replacement?.selected?.endpoints[0].port_type_id);
+  const replacementCables = replacement?.cables ?? [];
+  const mapping = replacement?.assignments;
+  const compatibility = replacement?.preview;
+  const hasCapacity = !!targetType && targetType.cardinality >= replacementCables.length;
+  const assignmentsComplete = hasCapacity && replacementCables.every(cable => mapping?.[cable.cable_id] !== undefined);
   const nested = new Map(config?.nested_installations?.map(item => [item.id, item]));
   const header = (kind: MountKind) => <tr>
     <th scope="col">{t(placeLabels[kind].place)}</th>
@@ -434,12 +469,13 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
   </section>
     {replacement && <div className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="replace-transceiver-title"
       onKeyDown={event => { if (event.key === 'Escape' && !pending) setReplacement(undefined); }}>
-      <form className="catalog-dialog__surface" onSubmit={event => { event.preventDefault(); void replace(); }}>
+      <form className={`catalog-dialog__surface${replacementCables.length ? ' transceiver-replacement' : ''}`}
+        onSubmit={event => { event.preventDefault(); void replace(!!mapping && !compatibility && !!replacementCables.length); }}>
         <h2 id="replace-transceiver-title">{t('hardware.replaceTitle')}</h2>
         <p>{t('hardware.replaceCurrent', { name: replacement.source.name, bay: replacement.bay.display_name })}</p>
         <label>{t('hardware.selectTransceiver')}
           <select autoFocus disabled={pending || replacementStale} value={replacement.selected?.revision_id ?? ''}
-            onChange={event => setReplacement({ ...replacement, error: undefined,
+            onChange={event => setReplacement({ ...replacement, error: undefined, assignments: undefined, preview: undefined,
               selected: replacement.candidates.find(module => module.revision_id === event.target.value) })}>
             <option value="">{t('hardware.selectTransceiver')}</option>
             {replacement.candidates.map(module => <option key={module.revision_id} value={module.revision_id}>{module.name}</option>)}
@@ -450,10 +486,32 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
         <p>{t('hardware.replaceChannels', { current: currentEndpoint?.cardinality ?? '—', next: targetType?.cardinality ?? '—' })}</p>
         <p>{t('hardware.replacePreservesInterface')}</p>
         {replacementUnchanged && <p role="status">{t('hardware.replaceUnchanged')}</p>}
+        {replacementCables.length > 0 && <>
+          {!hasCapacity && targetType && <p role="alert">{t('hardware.replaceConnected')}</p>}
+          {mapping && targetType && hasCapacity && !replacementUnchanged
+            ? <ol className="transceiver-replacement__cables">{replacementCables.map(cable =>
+              <li key={cable.cable_id}>
+                {cable.label && <strong>{cable.label}</strong>}
+                <div>{t('map.reconnect.before')} {cableEnd(cable.local, true)} ↔ {cableEnd(cable.remote, true)}</div>
+                <PhysicalMemberSelect requireExplicit
+                  label={t('hardware.replaceNewChannel', { name: replacement.selected!.endpoints[0].display_name })}
+                  point={{ cardinality: targetType.cardinality, members: targetType.members.map((designation, offset) => ({
+                    index: offset + 1, designation,
+                    occupied: replacementCables.some(other => other.cable_id !== cable.cable_id && mapping[other.cable_id] === offset + 1),
+                  })) }}
+                  value={mapping[cable.cable_id]} disabled={pending}
+                  onChange={value => setReplacement({ ...replacement, preview: undefined, error: undefined,
+                    assignments: { ...mapping, [cable.cable_id]: value } })} />
+              </li>)}</ol>
+            : cableList(replacementCables)}
+        </>}
+        {compatibility && <p className="transceiver-replacement__verdict"
+          role={compatibility.verdict === 'ALLOW' ? 'status' : 'alert'}>{compatibilityMessage(compatibility, t)}</p>}
         {!!replacement.error && <div role="alert" className="catalog-dialog__error">
-          {replacementError?.blockingCables.length
-            ? <>{t('hardware.replaceConnected')}{cableList(replacementError.blockingCables)}</>
-            : replacementStale ? t('hardware.replaceStale')
+          {replacementStale ? t('hardware.replaceStale')
+            : replacementConflict ? t('upgrade.conflict')
+            : replacementError?.reason === 'MODULE_INSTALLATION_IN_USE' && !replacementBlocked && !mapping && replacementCables.length
+              ? t('hardware.replaceMappingRequired')
             : replacementError?.reason === 'MODULE_INSTALLATION_IN_USE' ? t('hardware.replaceInUse')
             : replacementError?.reason && operationErrors[replacementError.reason] ? t(operationErrors[replacementError.reason]!)
             : t('hardware.failed', { error: String(replacement.error) })}
@@ -462,7 +520,16 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
           <button type="button" disabled={pending} onClick={() => setReplacement(undefined)}>{t('map.cancel')}</button>
           {replacementStale
             ? <button type="button" onClick={() => { setReplacement(undefined); setRetry(value => value + 1); }}>{t('catalog.retryRefresh')}</button>
-            : <button type="submit" disabled={pending || !targetType || replacementUnchanged}>{t('hardware.replace')}</button>}
+            : replacementCables.length > 0 && !mapping
+              ? <button type="button" disabled={pending || !hasCapacity || replacementUnchanged || replacementBlocked}
+                onClick={() => setReplacement({ ...replacement, assignments: {}, error: undefined })}>{t('map.reconnect.action')}</button>
+              : compatibility?.verdict === 'DENY'
+                ? <button type="button" disabled={pending} onClick={() => void replace(true)}>{t('map.bulk.review')}</button>
+              : <button type="submit" disabled={pending || !targetType || replacementUnchanged
+                  || (replacementCables.length > 0 && (!assignmentsComplete || replacementBlocked))}>
+                {replacementCables.length && !compatibility ? t('map.bulk.review')
+                  : compatibility?.verdict === 'UNKNOWN' ? t('hardware.replaceConfirmUnknown') : t('hardware.replace')}
+              </button>}
         </div>
       </form>
     </div>}

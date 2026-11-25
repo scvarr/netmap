@@ -18,6 +18,8 @@ from app.models import (
     PacketProcessingPlanAttachment, PhysicalObject, PortType, RoutingPolicyRule, SecurityPolicyAttachment,
 )
 from app.port_types import supports_transceiver_termination
+from app.physical_compatibility import verify_compatibility
+from app.physical_connections import PhysicalConnectionCatalog
 from app.physical_object_details_resolver import cable_endpoint_addresses
 from app.schemas import InstallModuleRequest
 
@@ -58,7 +60,7 @@ class ModuleInstallationDeletionCatalog:
         raise ModelError("Конфигурация или опубликованная ревизия изменилась. Обновите данные и повторите выбор.",
                          {"reason": reason})
 
-    def replace_transceiver(self, object_id, installation_id, query):
+    def replace_transceiver(self, object_id, installation_id, query, *, preview=False):
         # Publication takes SHARE ROW EXCLUSIVE even when the template name
         # stays the same. Reconcile locks the target template before the object.
         self.session.execute(text("LOCK TABLE module_template_revisions IN ROW EXCLUSIVE MODE"))
@@ -83,15 +85,54 @@ class ModuleInstallationDeletionCatalog:
         revision = self.session.get(ModuleTemplateRevision, installation.module_revision_id)
         catalog = HardwareCatalog(self.session)
         orientation = installation.orientation
-        self._remove_transceiver(
+        point, moves, cables = self._remove_transceiver(
             object_id, config, installation, revision, self._locked_mappings(installation_id),
             associations(self.session, config.id, installation.id), replacement=query,
         )
-        if revision.id != target.id:
+        if preview and not moves:
+            raise ValidationError("Replacement preview requires connected Cable assignments")
+        if point is not None:
+            # Lock the published target type before materializing its cardinality.
+            list(self.session.scalars(select(PortType.id).join(ModuleEndpointDefinition,
+                ModuleEndpointDefinition.port_type_id == PortType.id).where(
+                ModuleEndpointDefinition.module_revision_id == target.id,
+            ).order_by(PortType.id).with_for_update(read=True, nowait=True, of=PortType)))
             catalog.install_in_locked_configuration(config, InstallModuleRequest(
                 module_template_id=template, bay_key=query.bay_key,
                 parent_installation_id=query.parent_installation_id, orientation=orientation,
             ), transceiver_revision=target)
+            if moves:
+                new_point = self.session.scalar(select(ConnectionPoint).join(
+                    InterfacePhysicalBinding, InterfacePhysicalBinding.point_id == ConnectionPoint.id,
+                ).where(InterfacePhysicalBinding.interface_id == query.interface_id,
+                        InterfacePhysicalBinding.point_member == 1))
+                pairs = []
+                state = []
+                for snapshot, connection, member, remote, local_is_a, index in moves:
+                    if index > new_point.cardinality:
+                        raise ValidationError("Select a member within the new ConnectionPoint cardinality")
+                    pairs.append((new_point, remote) if local_is_a else (remote, new_point))
+                    state.append((snapshot.expected.model_dump(mode="json"), index))
+                expectation = query.model_dump(mode="json", exclude={"compatibility", "cable_assignments"})
+                result = verify_compatibility(
+                    self.session, pairs, intent=["transceiver-replacement", object_id, installation_id,
+                        expectation, orientation, revision.transceiver, target.transceiver,
+                        sorted((str(item.cable_id), item.member_index) for item in query.cable_assignments), state],
+                    preview=preview, confirmation=query.compatibility, require_preview=True,
+                    replacement_point_id=new_point.id,
+                )
+                if preview:
+                    return {"compatibility": result, "cables": cables}
+                for _, connection, member, _, local_is_a, index in moves:
+                    if local_is_a:
+                        connection.point_a_id = new_point.id
+                        member.point_a_member = index
+                    else:
+                        connection.point_b_id = new_point.id
+                        member.point_b_member = index
+                    self.session.flush()
+            self.session.delete(point)
+            self.session.flush()
         return catalog.configuration_document(object_id)
 
     def delete(self, object_id: uuid.UUID, installation_id: uuid.UUID) -> None:
@@ -207,18 +248,61 @@ class ModuleInstallationDeletionCatalog:
         # preserved interface's logical configuration as a dependency of the optic.
         blockers = self._blockers(object_id, installation, mappings, (point,), (point_id,), (),
                                   transceiver_bindings=expected)
+        moves = []
+        cables = []
+        if replacement is not None and replacement.cable_assignments and set(blockers) <= {"CONNECTION"}:
+            if revision.id == replacement.target_revision_id:
+                raise ValidationError("Cable assignments require a different transceiver revision")
+            moves, cables = self._replacement_moves(installation, point, blockers, replacement.cable_assignments)
+            blockers.pop("CONNECTION", None)
         if blockers:
             self._refuse(installation, blockers, self._blocking_cables(point_id))
+        if replacement is not None and replacement.compatibility is not None and not moves:
+            self._replacement_stale("REPLACEMENT_CABLES_CHANGED")
 
         if replacement is not None and revision.id == replacement.target_revision_id:
-            return
+            return None, [], []
         self.session.delete(mapping)
         self.session.execute(delete(InterfacePhysicalBinding).where(InterfacePhysicalBinding.point_id == point_id))
         self.session.execute(delete(EntityMetadata).where(EntityMetadata.connection_point_id == point_id))
         self.session.flush()
-        self.session.delete(point)
         self.session.delete(installation)
+        if replacement is None:
+            self.session.delete(point)
         self.session.flush()
+        return point, moves, cables
+
+    def _replacement_moves(self, installation, point, blockers, assignments):
+        by_cable = {item.cable_id: item.member_index for item in assignments}
+        if len(by_cable) != len(assignments) or len(set(by_cable.values())) != len(assignments):
+            raise ValidationError("Assign each Cable and each new member at most once")
+        cables = self._blocking_cables(point.id)
+        cable_ids = {uuid.UUID(row["cable_id"]) for row in cables}
+        if cable_ids != by_cable.keys():
+            raise ModelError("Cable assignments must cover the current Cable set exactly", {
+                "reason": "REPLACEMENT_CABLES_CHANGED", "blocking_cables": cables,
+            })
+        if len(cables) != len(cable_ids) or blockers.get("CONNECTION", 0) != len(cable_ids):
+            self._refuse(installation, blockers, cables)
+
+        # The source point excludes new attachments. Reconnect/disconnect may
+        # already own Cable/Connection/remote locks, so acquire those NOWAIT.
+        # A successful acquisition is followed by a fresh read of both ends.
+        catalog = PhysicalConnectionCatalog(self.session)
+        moves = []
+        local_members = set()
+        for cable_id, index in sorted(by_cable.items()):
+            snapshot, connection, member, points = catalog.lock_cable_reconnect_snapshot(cable_id)
+            local_is_a = connection.point_a_id == point.id
+            if not local_is_a and connection.point_b_id != point.id:
+                self._replacement_stale("REPLACEMENT_CABLES_CHANGED")
+            local_index = member.point_a_member if local_is_a else member.point_b_member
+            if local_index in local_members:
+                self._refuse(installation, blockers, cables)
+            local_members.add(local_index)
+            remote = points[connection.point_b_id if local_is_a else connection.point_a_id]
+            moves.append((snapshot, connection, member, remote, local_is_a, index))
+        return moves, self._blocking_cables(point.id)
 
     def _blocking_cables(self, point_id):
         rows = self.session.execute(select(Cable, Connection, ConnectionMember)

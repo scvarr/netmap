@@ -143,6 +143,12 @@ export interface ReplaceTransceiverInput {
   parent_installation_id: string | null; parent_revision_id: string | null;
   source_revision_id: string; source_point_id: string; interface_id: string;
   module_template_id: string; target_revision_id: string;
+  cable_assignments?: { cable_id: string; member_index: number }[];
+  compatibility?: import('./physicalCompatibility').PhysicalCompatibilityConfirmation;
+}
+export interface TransceiverReplacementPreview {
+  compatibility: import('./physicalCompatibility').PhysicalCompatibilityPreview;
+  cables: BlockingModuleCable[];
 }
 export interface HardwareModuleDataSource {
   saveLayout?(objectId: string, installationId: string, input: unknown): Promise<HardwareConfiguration>;
@@ -151,6 +157,7 @@ export interface HardwareModuleDataSource {
   deleteModule(templateId: string): Promise<void>;
   uninstallModule(objectId: string, installationId: string): Promise<HardwareConfiguration>;
   replaceTransceiver(objectId: string, installationId: string, input: ReplaceTransceiverInput): Promise<HardwareConfiguration>;
+  previewTransceiverReplacement(objectId: string, installationId: string, input: ReplaceTransceiverInput): Promise<TransceiverReplacementPreview>;
   loadConfiguration(objectId: string): Promise<HardwareConfiguration>;
   installModule(objectId: string, input: { module_template_id: string; bay_key: string; parent_installation_id?: string; orientation: 'HORIZONTAL' | 'VERTICAL' }): Promise<HardwareConfiguration>;
 }
@@ -176,7 +183,8 @@ export interface BlockingModuleCable {
 }
 
 export class HardwareModuleError extends Error {
-  constructor(message: string, readonly reason?: string, readonly blockingCables: BlockingModuleCable[] = []) {
+  constructor(message: string, readonly reason?: string, readonly blockingCables: BlockingModuleCable[] = [],
+    readonly blockers: Record<string, number> = {}) {
     super(message);
   }
 }
@@ -186,7 +194,8 @@ async function request<T>(url: string, input?: unknown, method: 'GET' | 'POST' |
   if (response.status === 204) return undefined as T;
   const document = await response.json();
   if (!response.ok) throw new HardwareModuleError(document.error?.message ?? `HTTP ${response.status}`,
-    document.error?.details?.reason, document.error?.details?.blocking_cables);
+    document.error?.details?.reason ?? document.error?.code, document.error?.details?.blocking_cables,
+    document.error?.details?.blockers);
   return document as T;
 }
 export const hardwareModuleDataSource: HardwareModuleDataSource = {
@@ -196,6 +205,7 @@ export const hardwareModuleDataSource: HardwareModuleDataSource = {
   deleteModule: id => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}`, undefined, 'DELETE'),
   uninstallModule: (id, installationId) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations/${encodeURIComponent(installationId)}`, undefined, 'DELETE'),
   replaceTransceiver: (id, installationId, input) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations/${encodeURIComponent(installationId)}/replacement`, input),
+  previewTransceiverReplacement: (id, installationId, input) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations/${encodeURIComponent(installationId)}/replacement?preview=true`, input),
   loadConfiguration: id => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/configuration`),
   installModule: (id, input) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations`, input),
 };

@@ -1716,11 +1716,15 @@ def delete_module_installation(physical_object_id: uuid.UUID, installation_id: u
 @app.post("/v1/topology/physical-objects/{physical_object_id}/module-installations/{installation_id}/replacement",
           responses={409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}})
 def replace_transceiver(physical_object_id: uuid.UUID, installation_id: uuid.UUID,
-                        query: ReplaceTransceiverRequest, session: Session = Depends(get_session)):
+                        query: ReplaceTransceiverRequest, session: Session = Depends(get_session),
+                        preview: bool = False):
     try:
-        with session.begin():
-            return ModuleInstallationDeletionCatalog(session).replace_transceiver(
-                physical_object_id, installation_id, query)
+        with session.begin() as transaction:
+            result = ModuleInstallationDeletionCatalog(session).replace_transceiver(
+                physical_object_id, installation_id, query, preview=preview)
+            if preview:
+                transaction.rollback()
+            return result
     except OperationalError as error:
         if getattr(error.orig, "sqlstate", None) not in ("40001", "40P01", "55P03"):
             raise

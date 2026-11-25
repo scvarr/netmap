@@ -15,7 +15,7 @@ const occupied: HardwareConfiguration = { ...free, panels: [{ panel_key: 'back',
     local_display_name: 'feth1', contextual_display_name: 'Back / PCIe1 / feth1', connection_point_id: 'point', network_interface_id: 'interface', x: .2, y: .2,
   }],
 } }] };
-const source = (): HardwareModuleDataSource => ({ listModules: vi.fn().mockResolvedValue({ modules: [module] }), loadConfiguration: vi.fn().mockResolvedValue(occupied), createModule: vi.fn(), deleteModule: vi.fn(), installModule: vi.fn().mockResolvedValue(occupied), replaceTransceiver: vi.fn(), uninstallModule: vi.fn().mockResolvedValue(free) });
+const source = (): HardwareModuleDataSource => ({ listModules: vi.fn().mockResolvedValue({ modules: [module] }), loadConfiguration: vi.fn().mockResolvedValue(occupied), createModule: vi.fn(), deleteModule: vi.fn(), installModule: vi.fn().mockResolvedValue(occupied), replaceTransceiver: vi.fn(), previewTransceiverReplacement: vi.fn(), uninstallModule: vi.fn().mockResolvedValue(free) });
 const basePresentation: import('../topology/types').BlueprintPresentation = { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'base' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'base-revision' }, body: { kind: 'RECTANGLE', width: 600, height: 200 }, panels: [{ panel_key: 'back', panel_number: 1, display_name: 'Back', x: 0, y: 0, width: 600, height: 200 }], slots: [] };
 function show(dataSource: HardwareModuleDataSource, onInstalled = vi.fn(), presentation = basePresentation) {
   render(<I18nProvider><ModuleInstallationSection objectId="object" presentation={presentation} dataSource={dataSource} onInstalled={onInstalled} /></I18nProvider>);
@@ -260,10 +260,10 @@ function socketCenters(panel: Element) {
   });
 }
 
-it('confirms a pinned replacement, replaces the marker, and retries refresh without another write', async () => {
+it.each([false, true])('confirms a pinned replacement and retries refresh without another write (connected %s)', async (connected) => {
   vi.stubGlobal('fetch', vi.fn(async (url: string) => Response.json(url.endsWith('/port-types') ? [
-    { id: 'simplex', name: 'LC Simplex', cardinality: 1, medium: 'FIBER' },
-    { id: 'duplex', name: 'LC Duplex', cardinality: 2, medium: 'FIBER' },
+    { id: 'simplex', name: 'LC Simplex', cardinality: 1, medium: 'FIBER', members: ['Tx'] },
+    { id: 'duplex', name: 'LC Duplex', cardinality: 2, medium: 'FIBER', members: ['East', 'West'] },
   ] : [])));
   const data = source();
   const confirm = vi.spyOn(window, 'confirm');
@@ -283,6 +283,21 @@ it('confirms a pinned replacement, replaces the marker, and retries refresh with
   Object.assign(updated.endpoints[0], { connection_point_id: 'new-point', port_type_id: 'duplex', cardinality: 2 });
   vi.mocked(data.loadConfiguration).mockResolvedValue(config);
   vi.mocked(data.replaceTransceiver).mockResolvedValue(confirmed);
+  const endpoint = { point_id: 'point', object_id: 'object', object_label: 'Local equipment',
+    point_label: 'Optic', panel: null, location_path: [], cardinality: 1, member_index: 1,
+    members: [{ index: 1, designation: 'Tx' }] };
+  const cables = [{ cable_id: 'cable', label: 'Patch 12', connection_id: 'connection',
+    connection_member_id: 'member', local: endpoint,
+    remote: { ...endpoint, point_id: 'remote-point', object_id: 'remote', object_label: 'Peer equipment' } }];
+  if (connected) {
+    vi.mocked(data.replaceTransceiver)
+      .mockRejectedValueOnce(new HardwareModuleError('Connected', 'MODULE_INSTALLATION_IN_USE', cables))
+      .mockRejectedValueOnce(new HardwareModuleError('Stale', 'PHYSICAL_COMPATIBILITY_STALE'));
+    vi.mocked(data.previewTransceiverReplacement).mockResolvedValue({
+      cables, compatibility: { verdict: 'UNKNOWN', token: 'replacement-token',
+        pairs: [{ pair: 1, verdict: 'UNKNOWN', reasons: ['PORT_B_TYPE_UNRESOLVED'] }] },
+    });
+  }
   const refresh = vi.fn().mockRejectedValueOnce(new Error('Cannot refresh')).mockResolvedValueOnce(undefined);
   show(data, refresh);
   const open = await screen.findByRole('button', { name: 'Заменить' });
@@ -300,14 +315,42 @@ it('confirms a pinned replacement, replaces the marker, and retries refresh with
   expect(reopened.getByText(/LC Simplex → LC Duplex/)).toBeInTheDocument();
   expect(reopened.getByText(/1 → 2/)).toBeInTheDocument();
   await userEvent.click(reopened.getByRole('button', { name: 'Заменить' }));
-  expect(data.replaceTransceiver).toHaveBeenCalledWith('object', installed.id, {
+  const expected = {
     configuration_id: 'config', base_revision_id: 'base-revision', bay_key: 'bay-key',
     parent_installation_id: null, parent_revision_id: null, source_revision_id: 'v1',
     source_point_id: 'point', interface_id: 'interface', module_template_id: 'optic', target_revision_id: 'v2',
-  });
+  };
+  if (connected) {
+    await userEvent.click(await reopened.findByRole('button', { name: 'Переподключить' }));
+    expect(reopened.getByText('Patch 12')).toBeInTheDocument();
+    expect(reopened.getByText(/Local equipment.*Peer equipment/)).toBeInTheDocument();
+    const member = () => reopened.getByRole('combobox', { name: 'Новый канал · LC' });
+    expect(member()).toHaveValue('');
+    await userEvent.selectOptions(member(), '2');
+    const template = reopened.getByRole('combobox', { name: /Выберите.*трансивер/i });
+    await userEvent.selectOptions(template, 'v1');
+    await userEvent.selectOptions(template, 'v2');
+    await userEvent.click(reopened.getByRole('button', { name: 'Переподключить' }));
+    expect(member()).toHaveValue('');
+    await userEvent.selectOptions(member(), '2');
+    const review = () => reopened.getByRole('button', { name: /Проверить|Предпросмотр/ });
+    const approve = () => reopened.getByRole('button', { name: 'Заменить при неподтверждённой совместимости' });
+    await userEvent.click(review());
+    const cable_assignments = [{ cable_id: 'cable', member_index: 2 }];
+    expect(data.previewTransceiverReplacement).toHaveBeenCalledWith('object', installed.id, { ...expected, cable_assignments });
+    await userEvent.click(approve());
+    expect(member()).toHaveValue('2');
+    expect(reopened.queryByRole('button', { name: 'Заменить при неподтверждённой совместимости' })).toBeNull();
+    await userEvent.click(review());
+    await userEvent.click(approve());
+    expect(data.replaceTransceiver).toHaveBeenLastCalledWith('object', installed.id, { ...expected, cable_assignments,
+      compatibility: { token: 'replacement-token', accept_unknown: true } });
+  } else {
+    expect(data.replaceTransceiver).toHaveBeenCalledWith('object', installed.id, expected);
+  }
   await userEvent.click(within(await screen.findByRole('alert')).getByRole('button', { name: 'Повторить' }));
   expect(refresh).toHaveBeenCalledTimes(2);
-  expect(data.replaceTransceiver).toHaveBeenCalledOnce();
+  expect(data.replaceTransceiver).toHaveBeenCalledTimes(connected ? 3 : 1);
   expect(data.installModule).not.toHaveBeenCalled();
   expect(data.uninstallModule).not.toHaveBeenCalled();
   expect(confirm).not.toHaveBeenCalled();

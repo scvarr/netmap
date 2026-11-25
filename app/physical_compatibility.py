@@ -115,6 +115,7 @@ def verify_compatibility(
     pairs: list[tuple[m.ConnectionPoint | None, m.ConnectionPoint | None]],
     *, intent: object, preview: bool, confirmation: PhysicalCompatibilityConfirmation | None,
     require_preview: bool = False,
+    replacement_point_id: uuid.UUID | None = None,
 ) -> PhysicalCompatibilityPreview:
     try:
         points = {point.id: point for pair in pairs for point in pair if point is not None}
@@ -140,9 +141,14 @@ def verify_compatibility(
             if port is not None and port.cardinality != point.cardinality:
                 port = None
             pair_types.append(port)
+            # Replacement preview materializes the same published definition
+            # in a rolled-back transaction. The new point and mapping UUIDs
+            # are allocated afresh on confirmation.
+            replacing = point is not None and point.id == replacement_point_id
             state.append((
-                (point.id, point.physical_object_id, point.cardinality) if point is not None else None,
-                row,
+                ((None if replacing else point.id), point.physical_object_id, point.cardinality)
+                if point is not None else None,
+                row[1:] if replacing and row else row,
                 (port.medium, port.members, port.compatibility_mode, port.is_active)
                 if port is not None else None,
             ))

@@ -1,15 +1,16 @@
 import { useI18n } from '../i18n';
 import type { PhysicalPortAvailability } from '../topology/physicalPortAvailability';
 
-export function PhysicalMemberSelect({ point, label, value, onChange, disabled }: {
+export function PhysicalMemberSelect({ point, label, value, onChange, disabled, requireExplicit = false }: {
   point: PhysicalPortAvailability;
   label: string;
   value?: number;
   onChange: (index: number | undefined) => void;
   disabled?: boolean;
+  requireExplicit?: boolean;
 }) {
   const { t } = useI18n();
-  if (point.cardinality === 1) return null;
+  if (point.cardinality === 1 && !requireExplicit) return null;
   return <label>
     <span>{label}</span>
     <select value={value ?? ''} disabled={disabled}

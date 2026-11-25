@@ -931,6 +931,12 @@ class InstallModuleRequest(BaseModel):
     orientation: Literal["HORIZONTAL", "VERTICAL"]
 
 
+class TransceiverCableAssignment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    cable_id: uuid.UUID
+    member_index: Annotated[int, Field(strict=True, ge=1)]
+
+
 class ReplaceTransceiverRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     configuration_id: uuid.UUID
@@ -943,6 +949,8 @@ class ReplaceTransceiverRequest(BaseModel):
     interface_id: uuid.UUID
     module_template_id: uuid.UUID
     target_revision_id: uuid.UUID
+    cable_assignments: list[TransceiverCableAssignment] = Field(default_factory=list)
+    compatibility: PhysicalCompatibilityConfirmation | None = None
 
 
 class CreateBaseTemplateRequest(BaseModel):

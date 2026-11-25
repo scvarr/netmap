@@ -395,11 +395,11 @@ class PhysicalConnectionCatalog:
         return cable
 
     def _reconnect_snapshot(
-        self, cable_id: uuid.UUID, new_point_id: uuid.UUID | None = None,
+        self, cable_id: uuid.UUID, new_point_id: uuid.UUID | None = None, *, lock: bool = False,
     ) -> tuple[CableReconnectSnapshot, Connection, ConnectionMember, dict[uuid.UUID, ConnectionPoint]]:
         def read(statement):
             # NOWAIT also covers disconnect, which starts by locking Connection.
-            return statement.with_for_update(nowait=True) if new_point_id is not None else statement
+            return statement.with_for_update(nowait=True) if lock or new_point_id is not None else statement
 
         cable = self.session.scalar(read(select(Cable).where(Cable.id == cable_id)))
         if cable is None:
@@ -446,6 +446,9 @@ class PhysicalConnectionCatalog:
     def preview_cable_reconnect(self, cable_id: uuid.UUID) -> CableReconnectSnapshot:
         snapshot, _, _, _ = self._reconnect_snapshot(cable_id)
         return snapshot
+
+    def lock_cable_reconnect_snapshot(self, cable_id: uuid.UUID):
+        return self._reconnect_snapshot(cable_id, lock=True)
 
     def reconnect_cable(
         self, cable_id: uuid.UUID, request: CableReconnectRequest, *, preview: bool = False,
