@@ -32,7 +32,8 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
   const [checking, setChecking] = useState(false);
   const inspectorTrigger = useRef<HTMLButtonElement>(null);
   const [incompatibleGeneration, setIncompatibleGeneration] = useState<number>();
-  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restorePhase, setRestorePhase] = useState<'confirming' | 'pending'>();
+  const restoreInFlight = useRef(false);
   const [editorVersion, setEditorVersion] = useState(0);
   const draftHandle = useRef<LocalBaseTemplateDraftHandle>(null);
   const checkButton = useRef<HTMLButtonElement>(null);
@@ -78,8 +79,9 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
   const dirty = editing !== saved;
   const canRestore = document !== undefined && incompatibleGeneration === generation && !!dataSource.restoreDraftSource;
   const restore = async () => {
-    if (!canRestore || busy || revalidating) return;
-    setRestoreOpen(false);
+    if (!canRestore || restorePhase !== 'confirming' || restoreInFlight.current || busy || revalidating) return;
+    restoreInFlight.current = true;
+    setRestorePhase('pending');
     setBusy(true); setError(''); setNotice('');
     try {
       const restored = await dataSource.restoreDraftSource!(templateId, document.generation);
@@ -93,6 +95,8 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
     } catch (error) {
       setError(String(error));
     } finally {
+      restoreInFlight.current = false;
+      setRestorePhase(undefined);
       setBusy(false);
     }
   };
@@ -149,7 +153,7 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
         }).catch(e => setError(String(e))).finally(() => setBusy(false));
       }}>{t('publication.publish')}</button>
       {canRestore && <button className="secondary-action" type="button" disabled={busy || revalidating}
-        onClick={() => setRestoreOpen(true)}>{t('review.restoreSource')}</button>}
+        onClick={() => setRestorePhase('confirming')}>{t('review.restoreSource')}</button>}
       {dirty && <p>{t('review.unsaved')}</p>}
       </div>
       <div className="base-template-review__status">
@@ -165,12 +169,13 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
         setInspectorOpen(false);
         inspectorTrigger.current?.focus();
       }} />}
-    {restoreOpen && <DestructiveConfirmationDialog
+    {restorePhase && <DestructiveConfirmationDialog
       title={t('review.restoreSource')}
       description={t('review.restoreSourceConfirm')}
       action={t('review.restoreSourceAction')}
       fallbackFocus={() => checkButton.current}
-      onCancel={() => setRestoreOpen(false)}
+      pendingMessage={restorePhase === 'pending' ? t('review.restoringSource') : undefined}
+      onCancel={() => { if (!restoreInFlight.current) setRestorePhase(undefined); }}
       onConfirm={() => void restore()} />}
     {initial && document && <BaseTemplateEditor physicalReadOnly draftHandle={draftHandle} key={`${templateId}:${editorVersion}`} templateId={templateId} generation={document.generation} initialState={initial} title={t('review.edit')} description={t('review.description')} saveLabel={t('review.save')} saveDisabled={busy || revalidating} onStateChange={changed} onSave={async state => {
       if (busy || revalidating) return;

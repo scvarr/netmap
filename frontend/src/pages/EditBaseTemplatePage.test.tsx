@@ -97,13 +97,14 @@ it('keeps published member mappings visible and physical controls locked', async
   expect(within(dialog).queryByRole('button', { name: 'Удалить' })).toBeNull();
 });
 
-it('reloads the source only after confirming, and preserves local edits if the restore fails', async () => {
+it('keeps the modal open during restore, rejects repeated confirmation, and retains local edits on failure', async () => {
   const rejected = draft();
   rejected.definition.name = 'Incompatible draft';
   rejected.definition.slots.push({ ...rejected.definition.slots[0], key: 'added' });
   const { mount, source } = setup(rejected);
   source.checkDraft.mockRejectedValueOnce(new BaseTemplateApiError('Incompatible', 'PHYSICAL_STRUCTURE_IMMUTABLE'));
-  source.restoreDraftSource.mockRejectedValueOnce(new BaseTemplateApiError('Draft changed', 'DRAFT_CONFLICT'));
+  let rejectRestore!: (error: Error) => void;
+  source.restoreDraftSource.mockImplementationOnce(() => new Promise((_, reject) => { rejectRestore = reject; }));
   mount();
   await screen.findByDisplayValue('Incompatible draft');
   const check = screen.getByRole('button', { name: 'Проверить изменения' });
@@ -117,7 +118,23 @@ it('reloads the source only after confirming, and preserves local edits if the r
   expect(source.restoreDraftSource).not.toHaveBeenCalled();
   expect(screen.getByLabelText('Название шаблона')).toHaveValue('Local unsaved work');
   fireEvent.click(restore);
-  fireEvent.click(within(dialog()).getByRole('button', { name: /^Восстановить$/ }));
+  const confirm = within(dialog()).getByRole('button', { name: /^Восстановить$/ });
+  const cancel = within(dialog()).getByRole('button', { name: 'Отмена' });
+  fireEvent.click(confirm);
+  expect(dialog()).toHaveAttribute('open');
+  expect(within(dialog()).getByRole('status')).toHaveFocus();
+  expect(within(dialog()).getByRole('status')).toHaveTextContent('Восстанавливаем черновик');
+  expect(confirm).toBeDisabled();
+  expect(cancel).toBeDisabled();
+  expect(restore).toBeDisabled();
+  expect(fireEvent(dialog(), new Event('cancel', { cancelable: true }))).toBe(false);
+  fireEvent.click(cancel);
+  fireEvent.click(confirm);
+  fireEvent.click(restore);
+  expect(dialog()).toHaveAttribute('open');
+  expect(source.restoreDraftSource).toHaveBeenCalledTimes(1);
+  await act(async () => rejectRestore(new BaseTemplateApiError('Draft changed', 'DRAFT_CONFLICT')));
+  expect(screen.queryByRole('dialog', { name: 'Восстановить опубликованное определение' })).toBeNull();
   expect(await screen.findByText(/Draft changed/)).toBeVisible();
   expect(screen.getByLabelText('Название шаблона')).toHaveValue('Local unsaved work');
   fireEvent.click(restore);

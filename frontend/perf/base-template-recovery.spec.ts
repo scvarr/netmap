@@ -47,12 +47,43 @@ test('restores a rejected draft from its source and confirms wired deletion in a
   await expect(confirmation).toHaveCount(0);
   await expect(restore).toBeFocused();
   expect((await get()).generation).toBe(saved.generation);
-  await page.getByLabel('Название шаблона').fill('Unsaved local work');
+  const nameField = page.getByLabel('Название шаблона');
+  await nameField.fill('Unsaved local work');
   await expect(page.getByText('Сохранено локально', { exact: true })).toBeVisible();
   await restore.click();
   await page.screenshot({ path: testInfo.outputPath('restore-confirmation.png') });
-  await confirmation.getByRole('button', { name: 'Восстановить', exact: true }).click();
+  let releaseRestore!: () => void;
+  const holdRestore = new Promise<void>(resolve => { releaseRestore = resolve; });
+  let restoreRequests = 0;
+  const restorePath = '**/draft/restore-source?*';
+  await page.route(restorePath, async route => {
+    restoreRequests++;
+    await holdRestore;
+    await route.continue();
+  });
+  try {
+    const confirm = confirmation.getByRole('button', { name: 'Восстановить', exact: true });
+    await confirm.click();
+    const pending = confirmation.getByRole('status');
+    await expect(pending).toHaveText('Восстанавливаем черновик…');
+    await expect(pending).toBeFocused();
+    await expect(confirm).toBeDisabled();
+    await expect(confirmation.getByRole('button', { name: 'Отмена' })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await nameField.evaluate((field: HTMLInputElement) => field.focus());
+    await expect(pending).toBeFocused();
+    await page.keyboard.type('Ignored');
+    await page.keyboard.press('Enter');
+    await expect(nameField).toHaveValue('Unsaved local work');
+    await expect(confirmation).toBeVisible();
+    await expect.poll(() => restoreRequests).toBe(1);
+    await page.screenshot({ path: testInfo.outputPath('restore-pending.png') });
+  } finally {
+    releaseRestore();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
   await expect(page.getByText('Черновик восстановлен из опубликованной ревизии.')).toBeFocused();
+  expect(restoreRequests).toBe(1);
   await expect(page.getByRole('button', { name: 'Проверить изменения' })).toBeEnabled();
   const restored = await get();
   expect(restored.definition).toEqual(source.definition);

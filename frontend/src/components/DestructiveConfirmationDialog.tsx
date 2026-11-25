@@ -1,12 +1,13 @@
 import { useId, useLayoutEffect, useRef } from 'react';
 import { useI18n } from '../i18n';
 
-export function DestructiveConfirmationDialog({ title, description, action, onCancel, onConfirm, fallbackFocus }: {
+export function DestructiveConfirmationDialog({ title, description, action, onCancel, onConfirm, fallbackFocus, pendingMessage }: {
   title: string;
   description: string;
   action: string;
   onCancel: () => void;
   onConfirm: () => void;
+  pendingMessage?: string;
   fallbackFocus?: () => HTMLElement | null;
 }) {
   const { t } = useI18n();
@@ -14,6 +15,7 @@ export function DestructiveConfirmationDialog({ title, description, action, onCa
   const dialog = useRef<HTMLDialogElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
   const fallback = useRef(fallbackFocus);
+  const pendingStatus = useRef<HTMLParagraphElement>(null);
 
   useLayoutEffect(() => {
     const surface = dialog.current!;
@@ -30,15 +32,20 @@ export function DestructiveConfirmationDialog({ title, description, action, onCa
     };
   }, []);
 
+  useLayoutEffect(() => {
+    if (pendingMessage) pendingStatus.current?.focus();
+  }, [pendingMessage]);
+
   return <dialog ref={dialog} className="destructive-confirmation-dialog"
     aria-labelledby={`${id}-title`} aria-describedby={`${id}-description`}
-    onCancel={event => { event.preventDefault(); onCancel(); }}>
+    onCancel={event => { event.preventDefault(); if (!pendingMessage) onCancel(); }}>
     <div className="map-dialog__surface">
       <h2 id={`${id}-title`}>{title}</h2>
       <p id={`${id}-description`}>{description}</p>
+      {pendingMessage && <p ref={pendingStatus} tabIndex={-1} role="status">{pendingMessage}</p>}
       <div className="map-dialog__actions">
-        <button ref={cancel} type="button" className="secondary-action" onClick={onCancel}>{t('map.cancel')}</button>
-        <button type="button" className="danger-action" onClick={onConfirm}>{action}</button>
+        <button ref={cancel} type="button" className="secondary-action" disabled={!!pendingMessage} onClick={onCancel}>{t('map.cancel')}</button>
+        <button type="button" className="danger-action" disabled={!!pendingMessage} onClick={onConfirm}>{action}</button>
       </div>
     </div>
   </dialog>;
