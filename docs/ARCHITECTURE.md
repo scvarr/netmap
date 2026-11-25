@@ -362,6 +362,15 @@ UNKNOWN и сохраняет dereference evidence. Cache — только optim
 view fingerprint и resolver/compiler version входят в ключ; invalidation после
 commit, старый artifact не источник актуальной truth. Query memo не меняет semantics.
 
+Exact L1 trace строится по ConnectionPoint UUID и member index, включая
+свободные members. Внешний переход разрешает Cable через Connection.
+Внутренние mappings ограничены одним объектом и одной установкой модуля.
+Активное окончание завершает обход. Одиночный и групповой API используют
+согласованный снимок canonical topology на запрос. Полнота группы
+определяется явно ожидаемыми парами. Для объектов и интерфейсов достаточно
+одного подтверждённого пути.
+[C-CAP-01-04A](L1_CONNECTIVITY.md#c-cap-01-04a--exact-member-trace-и-групповая-проверка).
+
 L2/L3 backend core существует; полный пользовательский продукт остаётся будущим.
 [L1 PRODUCT COMPLETE](L1_CONNECTIVITY.md#назначение-canonical-truth-и-готовность)
 обязателен до продуктового L2. Продуктовый L3 следует после продуктового L2.

@@ -1,6 +1,20 @@
 from fastapi.testclient import TestClient
 from app.database import SessionLocal
 from app.device_catalog import DeviceCatalog
+from app.models import Cable
+from app.repository import ConnectionMemberInput
+
+
+def connect_trace_points(repository, left, right, cardinality=1, members=None):
+    """Materialize a trace fixture with a Cable for each external line."""
+    if members is None:
+        members = [ConnectionMemberInput(1, 1, 1)]
+    connection, stored_members = repository.add_connection(left.id, right.id, cardinality, members)
+    if left.physical_object_id != right.physical_object_id:
+        assert cardinality == 1
+        repository.session.add(Cable(connection_id=connection.id))
+        repository.session.flush()
+    return connection, stored_members
 
 
 def create_device(client: TestClient, name: str, interface_name: str = "eth0") -> dict:

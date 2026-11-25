@@ -104,7 +104,7 @@ class PhysicalObjectL1Resolver:
                 for step in steps:
                     nodes[self._node_id(step.source)] = self._node(step.source)
                     nodes[self._node_id(step.target)] = self._node(step.target)
-                    edge = self._edge(step.source, step.target, step.edge.connection_member_id, step.edge.connection_id)
+                    edge = l1.evidence_edge(step)
                     edges[edge.id] = edge
                     refs.extend(edge.evidence_refs)
                     state_ids.append(self._node_id(step.target))
@@ -136,10 +136,6 @@ class PhysicalObjectL1Resolver:
     @staticmethod
     def _edge_id(member_id) -> str:
         return f"l1-edge:{member_id}"
-
-    def _edge(self, source: PointMember, target: PointMember, member_id, connection_id) -> EvidenceEdge:
-        refs = [EvidenceRef(entity_type="Connection", entity_id=connection_id), EvidenceRef(entity_type="ConnectionMember", entity_id=member_id)]
-        return EvidenceEdge(id=self._edge_id(member_id), from_node_id=self._node_id(source), to_node_id=self._node_id(target), evidence_refs=refs)
 
     @staticmethod
     def _endpoint_refs(query, sources, targets) -> list[EvidenceRef]:

@@ -11,7 +11,7 @@ from pydantic_core import PydanticCustomError
 
 class PointMemberAddress(BaseModel):
     point_id: uuid.UUID
-    member_index: int = Field(ge=1)
+    member_index: int = Field(ge=1, strict=True)
 
 
 class L1TraceQuery(BaseModel):
@@ -19,6 +19,10 @@ class L1TraceQuery(BaseModel):
 
     from_: PointMemberAddress = Field(alias="from")
     to: PointMemberAddress
+
+
+class L1TraceGroupQuery(BaseModel):
+    expected_pairs: list[L1TraceQuery] = Field(min_length=1)
 
 
 class EvaluationView(BaseModel):
@@ -1491,6 +1495,7 @@ class EvidenceRef(BaseModel):
         "ConnectionPoint",
         "Connection",
         "ConnectionMember",
+        "Cable",
         "NetworkInterface",
         "InterfacePhysicalBinding",
         "NetworkInterfaceRealization",
@@ -1546,17 +1551,37 @@ class TraceGap(BaseModel):
     evidence_refs: list[EvidenceRef]
 
 
+class L1TraceTermination(BaseModel):
+    node_id: str
+    reason: Literal[
+        "EXPECTED_MEMBER",
+        "OTHER_ENDING",
+        "MISSING_EXTERNAL_CABLE",
+        "MISSING_INTERNAL_CONTINUITY",
+        "NO_CONNECTION",
+        "INVALID_CANONICAL_DATA",
+        "CYCLE",
+    ]
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
 class TraceArtifact(BaseModel):
     schema_version: Literal[1] = 1
     query: L1TraceQuery
     evaluation_view: EvaluationView
-    resolver_version: Literal["l1-traversal/1.0"] = "l1-traversal/1.0"
-    verdict: Literal["REACHABLE", "UNREACHABLE", "UNKNOWN"]
+    resolver_version: Literal["l1-traversal/2.0"] = "l1-traversal/2.0"
+    verdict: Literal["REACHABLE", "UNKNOWN"]
     nodes: list[EvidenceNode]
     edges: list[EvidenceEdge]
     evidence_refs: list[EvidenceRef]
     gaps: list[TraceGap]
     warnings: list[dict[str, Any]]
+    terminations: list[L1TraceTermination]
+
+
+class L1TraceGroupArtifact(BaseModel):
+    completeness: Literal["COMPLETE", "PARTIAL", "UNCONFIRMED"]
+    results: list[TraceArtifact]
 
 
 class InterfacePhysicalTraceQuery(BaseModel):

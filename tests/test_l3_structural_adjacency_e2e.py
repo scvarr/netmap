@@ -4,6 +4,7 @@ import httpx
 
 from app.database import SessionLocal
 from app.repository import CanonicalRepository, ConnectionMemberInput
+from tests.l1_builders import connect_trace_points
 
 
 BASE_URL = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8000")
@@ -109,9 +110,8 @@ def test_svi_source_crosses_tagged_physical_hop_to_remote_internal_target():
         remote_object = repository.add_physical_object()
         source_point = repository.add_connection_point(source_object.id, 1)
         remote_point = repository.add_connection_point(remote_object.id, 1)
-        repository.add_connection(
-            source_point.id,
-            remote_point.id,
+        connect_trace_points(
+            repository, source_point, remote_point,
             1,
             [ConnectionMemberInput(1, 1, 1)],
         )
@@ -174,9 +174,8 @@ def test_remote_ingress_binding_can_deliver_internally_through_same_binding():
             repository.add_connection_point(physical_object.id, 1)
             for physical_object in objects
         ]
-        repository.add_connection(
-            points[0].id,
-            points[1].id,
+        connect_trace_points(
+            repository, points[0], points[1],
             1,
             [ConnectionMemberInput(1, 1, 1)],
         )
@@ -311,9 +310,8 @@ def test_internal_path_preserves_realization_and_passive_l1_sections():
             repository.add_connection_point(objects[2].id, 1),
         ]
         for point_a, point_b in zip(points, points[1:]):
-            repository.add_connection(
-                point_a.id,
-                point_b.id,
+            connect_trace_points(
+                repository, point_a, point_b,
                 1,
                 [ConnectionMemberInput(1, 1, 1)],
             )

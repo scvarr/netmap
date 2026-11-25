@@ -92,8 +92,9 @@
 - **CAT-D-05 IMPLEMENTED.** Раздельные справочники типов портов трансиверов
   и отсеков. Установка сверяет вид места и UUID типа.
 - Внешний lifecycle для выбора members, member occupancy, полный member authoring
-  и exact member trace с Cable evidence и проверкой полноты группы
-  (C-CAP-01-02/03/04 OPEN).
+  и пользовательский workflow exact member trace и групповой проверки
+  (C-CAP-01-02/03/04 OPEN). Серверный C-CAP-01-04A реализован.
+  [Контракт API](L1_CONNECTIVITY.md#c-cap-01-04a--exact-member-trace-и-групповая-проверка).
 - Независимые канонические сети карт, persisted NetworkWorkspace, auth,
   ACL, sharing, activity и отдельная переносимость определений.
 - IA-01–IA-06 и PERF-002–005 остаются OPEN.

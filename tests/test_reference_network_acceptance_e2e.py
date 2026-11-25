@@ -4,6 +4,7 @@ import httpx
 
 from app.database import SessionLocal
 from app.repository import CanonicalRepository, ConnectionMemberInput, RouteNextHopInput
+from tests.l1_builders import connect_trace_points
 
 
 BASE_URL = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8000")
@@ -122,9 +123,8 @@ def add_physical_segment(
     right_physical_binding = repository.add_interface_physical_binding(
         right_uplink.id, right_point.id, 1
     )
-    connection, members = repository.add_connection(
-        left_point.id,
-        right_point.id,
+    connection, members = connect_trace_points(
+        repository, left_point, right_point,
         cardinality=1,
         members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
     )

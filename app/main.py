@@ -88,6 +88,8 @@ from app.schemas import (
     EvaluationView,
     InterfacePhysicalTraceArtifact,
     InterfacePhysicalTraceQuery,
+    L1TraceGroupArtifact,
+    L1TraceGroupQuery,
     L1TraceQuery,
     PhysicalObjectL1TraceArtifact,
     PhysicalObjectL1TraceQuery,
@@ -1459,13 +1461,26 @@ def evaluate_packet_flow(
 @app.post(
     "/v1/traces/l1",
     response_model=TraceArtifact,
-    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+    responses={422: {"model": ErrorResponse}},
 )
 def trace_l1(
     query: L1TraceQuery, session: Session = Depends(get_session)
 ) -> TraceArtifact:
+    session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
     repository = CanonicalRepository(session)
     return L1Resolver(repository).resolve(query, EvaluationView())
+
+
+@app.post(
+    "/v1/traces/l1/group",
+    response_model=L1TraceGroupArtifact,
+    responses={422: {"model": ErrorResponse}},
+)
+def trace_l1_group(
+    query: L1TraceGroupQuery, session: Session = Depends(get_session)
+) -> L1TraceGroupArtifact:
+    session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+    return L1Resolver(CanonicalRepository(session)).resolve_group(query, EvaluationView())
 
 
 @app.post(

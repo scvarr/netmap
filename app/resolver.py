@@ -1,12 +1,17 @@
 from dataclasses import dataclass
+from typing import Literal
 
+from app.errors import ModelError, ValidationError
 from app.repository import CanonicalRepository, L1AdjacencyEdge, PointMember
 from app.schemas import (
     EvaluationView,
     EvidenceEdge,
     EvidenceNode,
     EvidenceRef,
+    L1TraceGroupArtifact,
+    L1TraceGroupQuery,
     L1TraceQuery,
+    L1TraceTermination,
     PointMemberAddress,
     TraceArtifact,
     TraceGap,
@@ -21,201 +26,215 @@ class TraversalStep:
 
 
 class L1Resolver:
-    VERSION = "l1-traversal/1.0"
+    VERSION = "l1-traversal/2.0"
 
     def __init__(self, repository: CanonicalRepository) -> None:
         self.repository = repository
 
-    def resolve(
-        self, query: L1TraceQuery, evaluation_view: EvaluationView
-    ) -> TraceArtifact:
+    def resolve(self, query: L1TraceQuery, evaluation_view: EvaluationView) -> TraceArtifact:
         source = PointMember(query.from_.point_id, query.from_.member_index)
         target = PointMember(query.to.point_id, query.to.member_index)
         self.repository.validate_point_member(source)
         self.repository.validate_point_member(target)
-
-        predecessors, discovery_order = self._traverse(source, target)
-        if target == source or target in predecessors:
+        reached, predecessors, closures, terminations = self._traverse(source, target)
+        if reached:
             steps = self._path(source, target, predecessors)
-            return self._artifact(query, evaluation_view, steps, "REACHABLE")
+        else:
+            steps = [*predecessors.values(), *closures]
 
-        exploration_steps = [
-            TraversalStep(parent, state, edge)
-            for state in discovery_order
-            if state != source
-            for parent, edge in [predecessors[state]]
+        states = dict.fromkeys([source, *(step.target for step in steps)])
+        nodes = [
+            EvidenceNode(
+                id=self._node_id(state),
+                payload=PointMemberAddress(point_id=state.point_id, member_index=state.member_index),
+                canonical_refs=[EvidenceRef(entity_type="ConnectionPoint", entity_id=state.point_id)],
+            )
+            for state in states
         ]
-        return self._artifact(
-            query,
-            evaluation_view,
-            exploration_steps,
-            "UNKNOWN",
-            gaps=[
-                TraceGap(
-                    code="L1_TOPOLOGY_INCOMPLETE",
-                    node_id=self._node_id(source),
-                    evidence_refs=[],
-                )
+        edges = [self.evidence_edge(step) for step in steps]
+        refs = {
+            (ref.entity_type, ref.entity_id): ref
+            for ref in [
+                *(ref for node in nodes for ref in node.canonical_refs),
+                *(ref for edge in edges for ref in edge.evidence_refs),
+            ]
+        }
+        return TraceArtifact(
+            query=query,
+            evaluation_view=evaluation_view,
+            verdict="REACHABLE" if reached else "UNKNOWN",
+            nodes=nodes,
+            edges=edges,
+            evidence_refs=list(refs.values()),
+            gaps=[] if reached else [
+                TraceGap(code="L1_TOPOLOGY_INCOMPLETE", node_id=end.node_id, evidence_refs=[])
+                for end in terminations
             ],
+            warnings=[],
+            terminations=terminations,
         )
 
+    def resolve_group(
+        self, query: L1TraceGroupQuery, evaluation_view: EvaluationView
+    ) -> L1TraceGroupArtifact:
+        sources = set()
+        targets = set()
+        for index, pair in enumerate(query.expected_pairs):
+            source = (pair.from_.point_id, pair.from_.member_index)
+            target = (pair.to.point_id, pair.to.member_index)
+            if source == target or source in sources or target in targets:
+                raise ValidationError(
+                    "Expected L1 pairs must map distinct endpoints one-to-one",
+                    {"pair_index": index},
+                )
+            sources.add(source)
+            targets.add(target)
+
+        results = [self.resolve(pair, evaluation_view) for pair in query.expected_pairs]
+        confirmed = sum(result.verdict == "REACHABLE" for result in results)
+        completeness: Literal["COMPLETE", "PARTIAL", "UNCONFIRMED"] = "UNCONFIRMED"
+        if confirmed == len(results):
+            completeness = "COMPLETE"
+        elif confirmed:
+            completeness = "PARTIAL"
+        return L1TraceGroupArtifact(completeness=completeness, results=results)
+
     def _traverse(
-        self, source: PointMember, target: PointMember
+        self, source: PointMember, target: PointMember | None
     ) -> tuple[
-        dict[PointMember, tuple[PointMember, L1AdjacencyEdge]], list[PointMember]
+        bool,
+        dict[PointMember, TraversalStep],
+        list[TraversalStep],
+        list[L1TraceTermination],
     ]:
-        visited = {source}
+        predecessors: dict[PointMember, TraversalStep] = {}
+        traversed_members = set()
+        terminal_members: set[PointMember] = set()
+        closures: list[TraversalStep] = []
+        terminations: list[L1TraceTermination] = []
         frontier = [source]
-        predecessors: dict[PointMember, tuple[PointMember, L1AdjacencyEdge]] = {}
-        discovery_order = [source]
+        for current in frontier:
+            node_id = self._node_id(current)
+            try:
+                active, edges = self.repository.get_l1_member_links(current)
+            except ModelError as error:
+                terminal_members.add(current)
+                terminations.append(L1TraceTermination(
+                    node_id=node_id,
+                    reason="INVALID_CANONICAL_DATA",
+                    details={"message": error.message, **error.details},
+                ))
+                continue
 
-        while frontier:
-            adjacency = self.repository.get_l1_adjacency(frontier)
-            next_frontier: list[PointMember] = []
-            for current in frontier:
-                for edge in adjacency[current]:
-                    peer = PointMember(edge.peer_point_id, edge.peer_member)
-                    if peer in visited:
-                        continue
-                    visited.add(peer)
-                    predecessors[peer] = (current, edge)
-                    discovery_order.append(peer)
-                    if peer == target:
-                        return predecessors, discovery_order
-                    next_frontier.append(peer)
-            frontier = next_frontier
+            if current == target:
+                return True, predecessors, [], [
+                    L1TraceTermination(node_id=node_id, reason="EXPECTED_MEMBER")
+                ]
 
-        return predecessors, discovery_order
+            arrival = predecessors.get(current)
+            if active:
+                terminal_members.add(current)
+            if arrival is not None and active:
+                terminations.append(L1TraceTermination(node_id=node_id, reason="OTHER_ENDING"))
+                continue
+
+            if arrival is not None:
+                edges = [
+                    edge for edge in edges
+                    if (edge.cable_id is None) != (arrival.edge.cable_id is None)
+                ]
+            if not edges:
+                reason: Literal[
+                    "NO_CONNECTION", "MISSING_EXTERNAL_CABLE", "MISSING_INTERNAL_CONTINUITY", "OTHER_ENDING"
+                ] = "NO_CONNECTION"
+                if arrival is not None and target is not None and current.point_id == target.point_id:
+                    reason = "OTHER_ENDING"
+                elif arrival is not None:
+                    reason = (
+                        "MISSING_EXTERNAL_CABLE" if arrival.edge.cable_id is None
+                        else "MISSING_INTERNAL_CONTINUITY"
+                    )
+                terminations.append(L1TraceTermination(node_id=node_id, reason=reason))
+
+            for edge in edges:
+                if edge.connection_member_id in traversed_members:
+                    continue
+                traversed_members.add(edge.connection_member_id)
+                peer = PointMember(edge.peer_point_id, edge.peer_member)
+                step = TraversalStep(current, peer, edge)
+                if peer == source or peer in predecessors:
+                    closures.append(step)
+                    continue
+                predecessors[peer] = step
+                frontier.append(peer)
+
+        cycles = [
+            step for step in closures
+            if all(hop.source not in terminal_members for hop in self._cycle_steps(step, predecessors))
+        ]
+        terminations.extend(
+            L1TraceTermination(node_id=self._node_id(step.target), reason="CYCLE")
+            for step in cycles
+        )
+        return False, predecessors, cycles, terminations
 
     def find_cycles(self, source: PointMember) -> list[list[TraversalStep]]:
-        visited = {source}
-        frontier = [source]
-        predecessors: dict[PointMember, tuple[PointMember, L1AdjacencyEdge]] = {}
-        cycles: list[list[TraversalStep]] = []
-        seen: set[tuple[str, ...]] = set()
-
-        while frontier:
-            adjacency = self.repository.get_l1_adjacency(frontier)
-            next_frontier: list[PointMember] = []
-            for current in frontier:
-                for edge in adjacency[current]:
-                    peer = PointMember(edge.peer_point_id, edge.peer_member)
-                    parent = predecessors.get(current, (None, None))[0]
-                    if peer not in visited:
-                        visited.add(peer)
-                        predecessors[peer] = (current, edge)
-                        next_frontier.append(peer)
-                    elif peer != parent:
-                        steps = self._cycle_steps(current, peer, edge, predecessors)
-                        key = tuple(sorted(str(step.edge.connection_member_id) for step in steps))
-                        if key not in seen:
-                            seen.add(key)
-                            cycles.append(steps)
-            frontier = next_frontier
-        return cycles
+        _, predecessors, closures, _ = self._traverse(source, None)
+        return [self._cycle_steps(step, predecessors) for step in closures]
 
     def _cycle_steps(
         self,
-        current: PointMember,
-        peer: PointMember,
-        edge: L1AdjacencyEdge,
-        predecessors: dict[PointMember, tuple[PointMember, L1AdjacencyEdge]],
+        closing: TraversalStep,
+        predecessors: dict[PointMember, TraversalStep],
     ) -> list[TraversalStep]:
-        current_ancestors = {current}
-        ancestor = current
+        ancestors = {closing.source}
+        ancestor = closing.source
         while ancestor in predecessors:
-            ancestor = predecessors[ancestor][0]
-            current_ancestors.add(ancestor)
-        peer_path = [peer]
-        ancestor = peer
-        while ancestor not in current_ancestors:
-            ancestor = predecessors[ancestor][0]
-            peer_path.append(ancestor)
-        lca = ancestor
-        forward = self._path(lca, current, predecessors)
-        reverse_to_peer = self._path(lca, peer, predecessors)
+            ancestor = predecessors[ancestor].source
+            ancestors.add(ancestor)
+        common = closing.target
+        while common not in ancestors:
+            common = predecessors[common].source
+        forward = self._path(common, closing.source, predecessors)
+        reverse = self._path(common, closing.target, predecessors)
         return [
             *forward,
-            TraversalStep(current, peer, edge),
-            *(TraversalStep(step.target, step.source, step.edge) for step in reversed(reverse_to_peer)),
+            closing,
+            *(TraversalStep(step.target, step.source, step.edge) for step in reversed(reverse)),
         ]
 
     @staticmethod
     def _path(
         source: PointMember,
         target: PointMember,
-        predecessors: dict[PointMember, tuple[PointMember, L1AdjacencyEdge]],
+        predecessors: dict[PointMember, TraversalStep],
     ) -> list[TraversalStep]:
         steps: list[TraversalStep] = []
         current = target
         while current != source:
-            parent, edge = predecessors[current]
-            steps.append(TraversalStep(parent, current, edge))
-            current = parent
+            step = predecessors[current]
+            steps.append(step)
+            current = step.source
         steps.reverse()
         return steps
 
-    def _artifact(
-        self,
-        query: L1TraceQuery,
-        evaluation_view: EvaluationView,
-        steps: list[TraversalStep],
-        verdict: str,
-        gaps: list[TraceGap] | None = None,
-    ) -> TraceArtifact:
-        source = PointMember(query.from_.point_id, query.from_.member_index)
-        states = [source]
-        states.extend(step.target for step in steps)
-
-        nodes = [self._node(state, self._node_id(state)) for state in states]
-        artifact_edges: list[EvidenceEdge] = []
-        evidence_refs: list[EvidenceRef] = []
-        seen_refs: set[tuple[str, str]] = set()
-        for step in steps:
-            refs = [
-                EvidenceRef(entity_type="Connection", entity_id=step.edge.connection_id),
-                EvidenceRef(
-                    entity_type="ConnectionMember",
-                    entity_id=step.edge.connection_member_id,
-                ),
-            ]
-            artifact_edges.append(
-                EvidenceEdge(
-                    id=f"l1-edge:{step.edge.connection_member_id}",
-                    from_node_id=self._node_id(step.source),
-                    to_node_id=self._node_id(step.target),
-                    evidence_refs=refs,
-                )
-            )
-            for ref in refs:
-                key = (ref.entity_type, str(ref.entity_id))
-                if key not in seen_refs:
-                    seen_refs.add(key)
-                    evidence_refs.append(ref)
-
-        return TraceArtifact(
-            query=query,
-            evaluation_view=evaluation_view,
-            verdict=verdict,
-            nodes=nodes,
-            edges=artifact_edges,
-            evidence_refs=evidence_refs,
-            gaps=gaps or [],
-            warnings=[],
+    @classmethod
+    def evidence_edge(cls, step: TraversalStep) -> EvidenceEdge:
+        refs = [
+            EvidenceRef(entity_type="ConnectionPoint", entity_id=step.source.point_id),
+            EvidenceRef(entity_type="ConnectionPoint", entity_id=step.target.point_id),
+            EvidenceRef(entity_type="Connection", entity_id=step.edge.connection_id),
+            EvidenceRef(entity_type="ConnectionMember", entity_id=step.edge.connection_member_id),
+        ]
+        if step.edge.cable_id is not None:
+            refs.append(EvidenceRef(entity_type="Cable", entity_id=step.edge.cable_id))
+        return EvidenceEdge(
+            id=f"l1-edge:{step.edge.connection_member_id}",
+            from_node_id=cls._node_id(step.source),
+            to_node_id=cls._node_id(step.target),
+            evidence_refs=refs,
         )
 
     @staticmethod
     def _node_id(address: PointMember) -> str:
         return f"l1-state:{address.point_id}:{address.member_index}"
-
-    @staticmethod
-    def _node(address: PointMember, node_id: str) -> EvidenceNode:
-        return EvidenceNode(
-            id=node_id,
-            payload=PointMemberAddress(
-                point_id=address.point_id, member_index=address.member_index
-            ),
-            canonical_refs=[
-                EvidenceRef(entity_type="ConnectionPoint", entity_id=address.point_id)
-            ],
-        )

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.errors import ModelError, ValidationError
 from app.models import (
+    Cable,
     Connection,
     ConnectionMember,
     ConnectionPoint,
@@ -31,6 +32,7 @@ from app.models import (
     L2ForwardingContext,
     L2IngressRule,
     L3Binding,
+    ModuleEndpointMapping,
     Route,
     RouteNextHop,
     RoutingContext,
@@ -91,6 +93,8 @@ class L1AdjacencyEdge:
     peer_member: int
     connection_id: uuid.UUID
     connection_member_id: uuid.UUID
+    cable_id: uuid.UUID | None
+    internal_scope_matches: bool
 
 
 @dataclass(frozen=True)
@@ -2427,6 +2431,8 @@ class CanonicalRepository:
 
         point_a = aliased(ConnectionPoint)
         point_b = aliased(ConnectionPoint)
+        module_a = aliased(ModuleEndpointMapping)
+        module_b = aliased(ModuleEndpointMapping)
         member_counts = (
             select(
                 ConnectionMember.connection_id,
@@ -2435,7 +2441,11 @@ class CanonicalRepository:
             .group_by(ConnectionMember.connection_id)
             .subquery()
         )
-        conditions = []
+        point_ids = {address.point_id for address in addresses}
+        conditions = [
+            ConnectionMember.id.is_(None)
+            & or_(Connection.point_a_id.in_(point_ids), Connection.point_b_id.in_(point_ids))
+        ]
         for address in addresses:
             conditions.extend(
                 [
@@ -2450,31 +2460,48 @@ class CanonicalRepository:
             select(
                 Connection,
                 ConnectionMember,
-                point_a.cardinality,
-                point_b.cardinality,
+                point_a.cardinality.label("a_capacity"),
+                point_b.cardinality.label("b_capacity"),
                 member_counts.c.member_count,
+                Cable.id.label("cable_id"),
+                (point_a.physical_object_id == point_b.physical_object_id).label("same_object"),
+                (
+                    (point_a.physical_object_id == point_b.physical_object_id)
+                    & module_a.installation_id.is_not_distinct_from(module_b.installation_id)
+                ).label("internal_scope_matches"),
             )
-            .join(ConnectionMember, ConnectionMember.connection_id == Connection.id)
-            .join(member_counts, member_counts.c.connection_id == Connection.id)
+            .outerjoin(ConnectionMember, ConnectionMember.connection_id == Connection.id)
+            .outerjoin(member_counts, member_counts.c.connection_id == Connection.id)
             .join(point_a, point_a.id == Connection.point_a_id)
             .join(point_b, point_b.id == Connection.point_b_id)
+            .outerjoin(Cable, Cable.connection_id == Connection.id)
+            .outerjoin(module_a, module_a.connection_point_id == point_a.id)
+            .outerjoin(module_b, module_b.connection_point_id == point_b.id)
             .where(or_(*conditions))
+            .order_by(ConnectionMember.id)
+            .execution_options(populate_existing=True)
         ).all()
 
-        for connection, member, cardinality_a, cardinality_b, member_count in rows:
-            if connection.cardinality != member_count:
+        for row in rows:
+            connection, member = row.Connection, row.ConnectionMember
+            if connection.cardinality != row.member_count:
                 raise ModelError(
                     "Connection cardinality does not equal its ConnectionMember count",
                     {
                         "connection_id": str(connection.id),
                         "cardinality": connection.cardinality,
-                        "member_count": member_count,
+                        "member_count": row.member_count or 0,
                     },
                 )
-            if member.point_a_member > cardinality_a or member.point_b_member > cardinality_b:
+            if member.point_a_member > row.a_capacity or member.point_b_member > row.b_capacity:
                 raise ModelError(
                     "ConnectionMember refers to a member above ConnectionPoint cardinality",
                     {"connection_member_id": str(member.id)},
+                )
+            if row.cable_id is not None and (row.same_object or connection.cardinality != 1):
+                raise ModelError(
+                    "Cable must represent one line between distinct PhysicalObjects",
+                    {"cable_id": str(row.cable_id), "connection_id": str(connection.id)},
                 )
             a_address = PointMember(connection.point_a_id, member.point_a_member)
             b_address = PointMember(connection.point_b_id, member.point_b_member)
@@ -2485,6 +2512,8 @@ class CanonicalRepository:
                         b_address.member_index,
                         connection.id,
                         member.id,
+                        row.cable_id,
+                        row.internal_scope_matches,
                     )
                 )
             if b_address in result:
@@ -2494,9 +2523,37 @@ class CanonicalRepository:
                         a_address.member_index,
                         connection.id,
                         member.id,
+                        row.cable_id,
+                        row.internal_scope_matches,
                     )
                 )
         return result
+
+    def get_l1_member_links(
+        self, address: PointMember
+    ) -> tuple[bool, list[L1AdjacencyEdge]]:
+        active = self.session.scalar(
+            select(InterfacePhysicalBinding.id).where(
+                InterfacePhysicalBinding.point_id == address.point_id,
+                InterfacePhysicalBinding.point_member == address.member_index,
+            )
+        ) is not None
+        edges = self.get_l1_adjacency([address])[address]
+        roles: set[bool] = set()
+        for edge in edges:
+            external = edge.cable_id is not None
+            if not external and not edge.internal_scope_matches:
+                raise ModelError(
+                    "Connection without Cable crosses internal continuity scope",
+                    {"connection_id": str(edge.connection_id)},
+                )
+            if external in roles:
+                raise ModelError(
+                    "Multiple Connections occupy the same L1 member role",
+                    {"connection_id": str(edge.connection_id), "role": "EXTERNAL" if external else "INTERNAL"},
+                )
+            roles.add(external)
+        return active, edges
 
     @staticmethod
     def _binding_record(binding: InterfacePhysicalBinding) -> PhysicalBindingRecord:

@@ -140,13 +140,14 @@ Workspace roundtrip.
 [Контракт](L1_CONNECTIVITY.md#c-cap-01-03b--moduletemplate-member-mappings-authoring).
 
 **OPEN · C-CAP-01-04.** Пользовательский exact member trace и групповая трассировка.
-Для сквозной проверки нужны конструкция этапа 2 и внешний lifecycle этапа 3.
 Обязательно для G1.
-Завершение — exact point/member, Connection, ConnectionMember и внешний Cable
-разрешаются в evidence после reload. Малая fixture проверяет задний вход на
-24 member, выбранные пары, перестановку и отсутствие пути к чужим members.
-Пассивное продолжение задаётся явно, разрыв даёт UNKNOWN, активный порт
-завершает trace.
+
+- **IMPLEMENTED · C-CAP-01-04A.** Серверный exact member trace, canonical
+  evidence и полнота относительно явно ожидаемых пар. Fixture rear-24
+  проверяет выверенную перестановку, subset и разрешимость refs после reload.
+  [Контракт API](L1_CONNECTIVITY.md#c-cap-01-04a--exact-member-trace-и-групповая-проверка).
+- **OPEN · C-CAP-01-04B.** Пользовательский выбор member, отображение доказанного
+  пути и группового результата, сквозная пользовательская проверка.
 [Проверочные сценарии L1](L1_CONNECTIVITY.md#обязательные-проверочные-сценарии).
 
 **OPEN · UX трассировки Duplex.** Выбор сетевого порта подсвечивает трассы

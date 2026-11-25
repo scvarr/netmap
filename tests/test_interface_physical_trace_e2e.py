@@ -5,6 +5,7 @@ import httpx
 from app.database import SessionLocal
 from app.models import InterfacePhysicalBinding, NetworkInterfaceRealization
 from app.repository import CanonicalRepository, ConnectionMemberInput
+from tests.l1_builders import connect_trace_points
 
 
 BASE_URL = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8000")
@@ -29,9 +30,8 @@ def test_two_interfaces_directly_connected_through_l1_are_reachable():
             repository.add_connection_point(physical_object.id, cardinality=1)
             for physical_object in objects
         ]
-        connection, members = repository.add_connection(
-            points[0].id,
-            points[1].id,
+        connection, members = connect_trace_points(
+            repository, points[0], points[1],
             cardinality=1,
             members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
         )
@@ -64,7 +64,11 @@ def test_two_interfaces_directly_connected_through_l1_are_reachable():
     assert {
         (ref["entity_type"], ref["entity_id"])
         for ref in artifact["evidence_refs"]
+        if ref["entity_type"] not in {"Cable", "ConnectionPoint"}
     } == expected_refs
+    assert {ref["entity_type"] for ref in artifact["edges"][1]["evidence_refs"]} >= {
+        "Cable", "ConnectionPoint", "Connection", "ConnectionMember",
+    }
 
 
 def test_interfaces_across_passive_pass_through_are_reachable():
@@ -81,9 +85,8 @@ def test_interfaces_across_passive_pass_through_are_reachable():
         ]
         l1_ref_ids = set()
         for point_a, point_b in zip(points, points[1:]):
-            connection, members = repository.add_connection(
-                point_a.id,
-                point_b.id,
+            connection, members = connect_trace_points(
+                repository, point_a, point_b,
                 cardinality=1,
                 members=[
                     ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)
@@ -115,7 +118,10 @@ def test_interfaces_across_passive_pass_through_are_reachable():
         "L1_TRAVERSE",
         "INTERFACE_PHYSICAL_BIND",
     ]
-    assert {ref["entity_id"] for ref in artifact["evidence_refs"]} == expected_ref_ids
+    assert {
+        ref["entity_id"] for ref in artifact["evidence_refs"]
+        if ref["entity_type"] not in {"Cable", "ConnectionPoint"}
+    } == expected_ref_ids
 
 
 def test_interface_without_physical_binding_is_unknown():
@@ -182,9 +188,8 @@ def test_upper_to_lower_realizations_on_both_sides_are_reachable():
         repository = CanonicalRepository(session)
         objects = [repository.add_physical_object() for _ in range(2)]
         points = [repository.add_connection_point(obj.id, 1) for obj in objects]
-        connection, members = repository.add_connection(
-            points[0].id,
-            points[1].id,
+        connection, members = connect_trace_points(
+            repository, points[0], points[1],
             cardinality=1,
             members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
         )
@@ -234,7 +239,10 @@ def test_upper_to_lower_realizations_on_both_sides_are_reachable():
         "INTERFACE_PHYSICAL_BIND",
         "INTERFACE_REALIZATION_UP",
     ]
-    assert {ref["entity_id"] for ref in artifact["evidence_refs"]} == expected_ids
+    assert {
+        ref["entity_id"] for ref in artifact["evidence_refs"]
+        if ref["entity_type"] not in {"Cable", "ConnectionPoint"}
+    } == expected_ids
 
 
 def test_multi_level_realization_resolves_to_physical_binding():
@@ -242,9 +250,8 @@ def test_multi_level_realization_resolves_to_physical_binding():
         repository = CanonicalRepository(session)
         objects = [repository.add_physical_object() for _ in range(2)]
         points = [repository.add_connection_point(obj.id, 1) for obj in objects]
-        repository.add_connection(
-            points[0].id,
-            points[1].id,
+        connect_trace_points(
+            repository, points[0], points[1],
             cardinality=1,
             members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
         )
@@ -281,16 +288,16 @@ def test_branching_realization_preserves_two_candidates_and_reachable_branches()
     with SessionLocal.begin() as session:
         repository = CanonicalRepository(session)
         objects = [repository.add_physical_object() for _ in range(3)]
-        points = [repository.add_connection_point(obj.id, 1) for obj in objects]
+        points = [repository.add_connection_point(obj.id, 1) for obj in objects[:2]]
+        points.append(repository.add_connection_point(objects[2].id, 2))
         connections = []
         members = []
-        for source_point in points[:2]:
-            connection, connection_members = repository.add_connection(
-                source_point.id,
-                points[2].id,
+        for index, source_point in enumerate(points[:2], 1):
+            connection, connection_members = connect_trace_points(
+                repository, source_point, points[2],
                 cardinality=1,
                 members=[
-                    ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)
+                    ConnectionMemberInput(index=1, point_a_member=1, point_b_member=index)
                 ],
             )
             connections.append(connection)
@@ -306,13 +313,16 @@ def test_branching_realization_preserves_two_candidates_and_reachable_branches()
             repository.add_interface_physical_binding(lower.id, points[index].id, 1)
             for index, lower in enumerate(source_lowers)
         ]
-        target_binding = repository.add_interface_physical_binding(target.id, points[2].id, 1)
+        target_bindings = [
+            repository.add_interface_physical_binding(target.id, points[2].id, index)
+            for index in (1, 2)
+        ]
         source_id = source_upper.id
         target_id = target.id
         required_ids = {
             *(str(realization.id) for realization in realizations),
             *(str(binding.id) for binding in source_bindings),
-            str(target_binding.id),
+            *(str(binding.id) for binding in target_bindings),
             *(str(connection.id) for connection in connections),
             *(str(member.id) for member in members),
         }
@@ -323,7 +333,7 @@ def test_branching_realization_preserves_two_candidates_and_reachable_branches()
     artifact = response.json()
     assert artifact["verdict"] == "REACHABLE"
     assert len(artifact["source_binding_candidates"]) == 2
-    assert len(artifact["target_binding_candidates"]) == 1
+    assert len(artifact["target_binding_candidates"]) == 2
     assert len(artifact["branches"]) == 2
     assert {
         branch["source_candidate_id"] for branch in artifact["branches"]

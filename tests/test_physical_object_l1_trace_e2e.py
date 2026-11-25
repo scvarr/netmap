@@ -4,6 +4,7 @@ import httpx
 
 from app.database import SessionLocal
 from app.repository import CanonicalRepository, ConnectionMemberInput
+from tests.l1_builders import connect_trace_points
 
 
 BASE_URL = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8000")
@@ -22,12 +23,7 @@ def trace(source_id, target_id, source_point_id=None, target_point_id=None):
 
 
 def connect(repository, point_a, point_b):
-    return repository.add_connection(
-        point_a.id,
-        point_b.id,
-        cardinality=1,
-        members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
-    )
+    return connect_trace_points(repository, point_a, point_b)
 
 
 def test_physical_objects_direct_l1_path_is_reachable():
@@ -83,9 +79,8 @@ def test_unused_members_of_connection_point_are_excluded_from_object_candidates(
         source, target = (repository.add_physical_object() for _ in range(2))
         source_point = repository.add_connection_point(source.id, 2)
         target_point = repository.add_connection_point(target.id, 1)
-        repository.add_connection(
-            source_point.id,
-            target_point.id,
+        connect_trace_points(
+            repository, source_point, target_point,
             cardinality=1,
             members=[ConnectionMemberInput(index=1, point_a_member=2, point_b_member=1)],
         )
@@ -104,9 +99,8 @@ def test_participating_member_of_exact_connection_point_remains_traceable():
         source, target = (repository.add_physical_object() for _ in range(2))
         source_point = repository.add_connection_point(source.id, 2)
         target_point = repository.add_connection_point(target.id, 1)
-        repository.add_connection(
-            source_point.id,
-            target_point.id,
+        connect_trace_points(
+            repository, source_point, target_point,
             cardinality=1,
             members=[ConnectionMemberInput(index=1, point_a_member=2, point_b_member=1)],
         )
@@ -223,9 +217,9 @@ def test_no_proven_object_path_is_unknown():
 def test_physical_cycle_terminates_and_is_explicitly_reported():
     with SessionLocal.begin() as session:
         repository = CanonicalRepository(session)
-        objects = [repository.add_physical_object() for _ in range(3)]
-        points = [repository.add_connection_point(item.id, 1) for item in objects]
-        for left, right in ((points[0], points[1]), (points[1], points[2]), (points[2], points[0])):
+        objects = [repository.add_physical_object() for _ in range(2)]
+        points = [repository.add_connection_point(item.id, 1) for item in (objects[0], objects[1], objects[1], objects[0])]
+        for left, right in zip(points, points[1:] + points[:1]):
             connect(repository, left, right)
         source_id, target_id = objects[0].id, objects[1].id
 
@@ -233,5 +227,5 @@ def test_physical_cycle_terminates_and_is_explicitly_reported():
 
     assert artifact["verdict"] == "REACHABLE"
     assert len(artifact["cycles"]) == 1
-    assert len(artifact["cycles"][0]["edge_ids"]) == 3
-    assert len(artifact["cycles"][0]["state_node_ids"]) == 4
+    assert len(artifact["cycles"][0]["edge_ids"]) == 4
+    assert len(artifact["cycles"][0]["state_node_ids"]) == 5

@@ -21,9 +21,10 @@ Connection — недирективная continuity между двумя ра�
 окончаний. Connection cardinality равна числу mappings, которое может
 быть меньше capacity любого окончания. Внутри одного Connection уникальны
 индекс mapping и оба endpoint members, поэтому разрешены subset и permutation.
-DB uniqueness ограничена одним Connection. Core допускает повтор member в разных Connections и может найти путь между
-выходами такого графа. Деление мощности, направленность и общая среда требуют
-собственного физического контракта.
+DB uniqueness ограничена одним Connection. Exact trace проверяет, что
+у member не более одного внешнего и одного внутреннего перехода.
+Деление мощности, направленность и общая среда требуют собственного
+физического контракта.
 [Модели](../app/models.py) · [Repository](../app/repository.py).
 
 Cable является отдельной canonical сущностью, связанной с одним Connection
@@ -32,13 +33,11 @@ Cable является отдельной canonical сущностью, связ
 continuity обходится без Cable. IDs Cable и Connection различны. Маркировка
 и CableLabelHistory обслуживают Cable lifecycle отдельно от общего activity.
 
-Resolver обходит canonical adjacency с состоянием (point ID, member index).
-Point trace возвращает один найденный путь с точными Connection и
-ConnectionMember refs. Если подтверждённого пути нет, результат
-UNKNOWN/L1_TOPOLOGY_INCOMPLETE. Object trace сохраняет отдельные ветви и
-циклы, REACHABLE означает наличие пути хотя бы для одной пары. В проверенной
-выборке Cable сопоставлялся из экспорта. Полный пользовательский member
-selection, Cable evidence и групповая приёмка multichannel остаются OPEN.
+Resolver обходит canonical adjacency по точным адресам. Point trace и
+групповая проверка возвращают явные refs к окончаниям, mappings и внешним
+Cable. Object trace сохраняет отдельные ветви и циклы. REACHABLE для объекта
+или интерфейса означает, что найден путь хотя бы для одной пары.
+[Серверный контракт](#c-cap-01-04a--exact-member-trace-и-групповая-проверка).
 [Point resolver](../app/resolver.py) · [Object resolver](../app/physical_object_l1_resolver.py) ·
 [L1-AUDIT-01](audits/L1_READINESS_AUDIT.md).
 
@@ -209,8 +208,37 @@ UUID Cable, Connection и ConnectionMember, маркировка с истори
 линией. При конфликте оператор перечитывает подключение и заново выбирает
 назначение. После успешной записи повтор обновления карты выполняет только чтение.
 
-**OPEN.** Пользовательский exact member trace, групповая трассировка,
-QSFP breakout, смена аппаратного режима и её lifecycle остаются открытыми.
+### C-CAP-01-04A — exact member trace и групповая проверка
+
+**IMPLEMENTED.** Запрос `POST /v1/traces/l1` принимает `from` и `to`.
+Каждый адрес содержит UUID `point_id` и целый `member_index` от 1 до
+cardinality, в том числе для свободных members. Переход содержит refs к обоим
+ConnectionPoint, Connection, ConnectionMember и Cable для внешней линии.
+Внутренний переход читается из materialized mappings внутри одного объекта
+и одной установки, если точки принадлежат модулю. Binding к NetworkInterface
+определяет активное окончание для данного member. Достигнутое активное
+окончание завершает обход.
+
+`POST /v1/traces/l1/group` принимает непустой список `expected_pairs` из
+таких же пар. Источники уникальны среди источников, назначения уникальны
+среди назначений, адреса внутри пары различны. Допускаются subset и
+permutation. `results` сохраняет порядок запроса и возвращает для каждой
+пары ожидаемые адреса, verdict, фактически подтверждённые hops и окончания.
+`completeness` равна COMPLETE для всех доказанных пар, PARTIAL для части
+и UNCONFIRMED при отсутствии доказанных пар. Резерв вне списка не участвует
+в оценке.
+
+Для недоказанной пары возвращаются UNKNOWN, доказанный участок и
+`terminations` с указанием node ID и причины. Причины различают отсутствие
+внешней линии, внутренней continuity или любой коммутации, другое окончание,
+ошибку canonical данных и цикл. Ошибка в пределах обхода одной пары не
+прерывает остальные пары. Невалидные адреса и неоднозначные ожидаемые
+mappings отклоняют запрос с HTTP 422. Evidence читается заново при каждом
+запросе из согласованного snapshot canonical topology и не хранится.
+
+**OPEN · C-CAP-01-04B.** Пользовательский выбор member, показ доказанного пути
+и групповая приёмка. Общий C-CAP-01-04 и G1 остаются OPEN. QSFP breakout,
+смена аппаратного режима и её lifecycle имеют отдельный scope.
 
 ### Справочники и совместимость
 
@@ -618,8 +646,8 @@ C-CAP-01-01 доступен в BaseTemplate. MOD-03B-2A покрывает од
 внешних members с проверкой occupancy, создание и отключение.
 Внешний lifecycle остаётся в C-CAP-01-02. Графическая разводка BaseTemplate
 реализована в C-CAP-01-03A, графическая разводка ModuleTemplate —
-в C-CAP-01-03B. Пользовательский exact member trace и групповая приёмка —
-в C-CAP-01-04.
+в C-CAP-01-03B. Серверный exact member trace и групповая проверка
+реализованы в C-CAP-01-04A. Пользовательский workflow остаётся в C-CAP-01-04B.
 Отдельный implementation contract определяет role validation, stable member
 addressing/provenance, concurrency, DTO, схемы и миграции для каждого этапа.
 ModuleTemplate continuity реализована отдельным контрактом C-CAP-MOD-01.

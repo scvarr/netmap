@@ -6,6 +6,7 @@ import pytest
 from app.database import SessionLocal
 from app.models import L2EgressRule
 from app.repository import CanonicalRepository, ConnectionMemberInput
+from tests.l1_builders import connect_trace_points
 
 
 BASE_URL = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8000")
@@ -281,14 +282,12 @@ def configured_one_hop(
             )
             points = [left]
             if passive:
-                for _ in range(2):
-                    passive_object = repository.add_physical_object()
-                    points.append(repository.add_connection_point(passive_object.id, 1))
+                passive_object = repository.add_physical_object()
+                points.extend(repository.add_connection_point(passive_object.id, 1) for _ in range(2))
             points.append(right)
             for point_a, point_b in zip(points, points[1:]):
-                connection, members = repository.add_connection(
-                    point_a.id,
-                    point_b.id,
+                connection, members = connect_trace_points(
+                    repository, point_a, point_b,
                     cardinality=1,
                     members=[
                         ConnectionMemberInput(
@@ -449,13 +448,12 @@ def add_physical_link(repository, left_interface, right_interface, *, passive=0)
     points = [left]
     for _ in range(passive):
         passive_object = repository.add_physical_object()
-        points.append(repository.add_connection_point(passive_object.id, 1))
+        points.extend(repository.add_connection_point(passive_object.id, 1) for _ in range(2))
     points.append(right)
     connections = []
     for point_a, point_b in zip(points, points[1:]):
-        connection, _ = repository.add_connection(
-            point_a.id,
-            point_b.id,
+        connection, _ = connect_trace_points(
+            repository, point_a, point_b,
             cardinality=1,
             members=[
                 ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)
