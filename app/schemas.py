@@ -931,6 +931,20 @@ class InstallModuleRequest(BaseModel):
     orientation: Literal["HORIZONTAL", "VERTICAL"]
 
 
+class ReplaceTransceiverRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    configuration_id: uuid.UUID
+    base_revision_id: uuid.UUID
+    parent_installation_id: uuid.UUID | None
+    parent_revision_id: uuid.UUID | None
+    bay_key: str = Field(min_length=1, max_length=255)
+    source_revision_id: uuid.UUID
+    source_point_id: uuid.UUID
+    interface_id: uuid.UUID
+    module_template_id: uuid.UUID
+    target_revision_id: uuid.UUID
+
+
 class CreateBaseTemplateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

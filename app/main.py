@@ -60,7 +60,7 @@ from app.schemas import (
     CreateConnectionPointRequest,
     CreateMapPlacementRequest, CreateMapPresentationVariantRequest,
     CreateBaseTemplateRequest,
-    CreateModuleTemplateRequest, InstallModuleRequest,
+    CreateModuleTemplateRequest, InstallModuleRequest, ReplaceTransceiverRequest,
     CreateDeviceInterfaceRequest,
     CreatePhysicalEndpointConnectionRequest,
     CreateBulkPhysicalConnectionsRequest,
@@ -1711,6 +1711,21 @@ def delete_module_installation(physical_object_id: uuid.UUID, installation_id: u
     with session.begin():
         ModuleInstallationDeletionCatalog(session).delete(physical_object_id, installation_id)
         return HardwareCatalog(session).configuration_document(physical_object_id)
+
+
+@app.post("/v1/topology/physical-objects/{physical_object_id}/module-installations/{installation_id}/replacement",
+          responses={409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}})
+def replace_transceiver(physical_object_id: uuid.UUID, installation_id: uuid.UUID,
+                        query: ReplaceTransceiverRequest, session: Session = Depends(get_session)):
+    try:
+        with session.begin():
+            return ModuleInstallationDeletionCatalog(session).replace_transceiver(
+                physical_object_id, installation_id, query)
+    except OperationalError as error:
+        if getattr(error.orig, "sqlstate", None) not in ("40001", "40P01", "55P03"):
+            raise
+        raise ModelError("Конкурирующее изменение конфигурации. Повторите действие.",
+                         {"reason": "TRANSCEIVER_REPLACEMENT_BUSY"}) from error
 
 
 @app.post("/v1/library/module-templates/{template_id}/candidates/{candidate_id}/publish")

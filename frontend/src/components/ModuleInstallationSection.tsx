@@ -7,7 +7,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { BlueprintPresentation } from '../topology/types';
 import { panelCompositionBounds } from '../topology/blueprintDisplaySize';
 import { useI18n, type MessageKey } from '../i18n';
-import { HardwareModuleError, hardwareModuleDataSource, type BlockingModuleCable, type BlockingModuleCableEndpoint, type HardwareConfiguration, type HardwareModuleDataSource, type ModuleInstallation, type ModuleTemplate } from '../topology/hardwareModules';
+import { HardwareModuleError, hardwareModuleDataSource, type BlockingModuleCable, type BlockingModuleCableEndpoint, type HardwareConfiguration, type HardwareModuleDataSource, type ModuleInstallation, type ModuleTemplate, type ReplaceTransceiverInput } from '../topology/hardwareModules';
 import { physicalEndpointAddress } from '../topology/physicalPortAvailability';
 
 function compareKeys(a: string, b: string) {
@@ -63,6 +63,15 @@ const placeLabels = {
 } as const;
 const mountKinds = ['MODULE_BAY', 'MODULE_PORT'] as const;
 
+type Replacement = {
+  source: ModuleInstallation;
+  bay: ModuleBay;
+  expected: Omit<ReplaceTransceiverInput, 'module_template_id' | 'target_revision_id'>;
+  candidates: ModuleTemplate[];
+  selected?: ModuleTemplate;
+  error?: unknown;
+};
+
 function placeChoiceKey(bayKey: string, parentId?: string) {
   return JSON.stringify([parentId ?? null, bayKey]);
 }
@@ -102,6 +111,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
   const [editing, setEditing] = useState(false);
   const [blockingCables, setBlockingCables] = useState<BlockingModuleCable[]>([]);
   const [refreshFailed, setRefreshFailed] = useState(false);
+  const [replacement, setReplacement] = useState<Replacement>();
   const [selected, setSelected] = useState<string>();
   const [draft, setDraft] = useState<ModuleInstallation['layout']>();
   const gesture = useRef<{ x: number; y: number; layout: ModuleInstallation['layout']; resize: boolean } | undefined>(undefined);
@@ -136,7 +146,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
   const installed = selectedBay?.installation;
   const dirty = !!draft && JSON.stringify(draft) !== JSON.stringify(installed?.layout);
   const cancel = () => { setDraft(undefined); setSelected(undefined); setError(''); gesture.current = undefined; };
-  useEffect(() => { setEditing(false); setRefreshFailed(false); setBlockingCables([]); cancel(); }, [objectId]);
+  useEffect(() => { setEditing(false); setRefreshFailed(false); setBlockingCables([]); setReplacement(undefined); cancel(); }, [objectId]);
   const save = async () => {
     if (!installed || !draft || !config || !dataSource.saveLayout || pending) return;
     setPending(true); setError('');
@@ -169,6 +179,11 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
       endpoint.point_label ?? t('physical.port'), endpoint, endpoint.member_index ?? undefined, false,
       endpoint.location_path.map(location => location.name));
   };
+  const cableList = (cables: BlockingModuleCable[]) => <ul>{cables.map(cable =>
+    <li key={`${cable.cable_id}:${cable.connection_member_id}`}>
+      {cable.label && <><strong>{cable.label}</strong> · </>}
+      {cableEnd(cable.local)} ↔ {cableEnd(cable.remote)}
+    </li>)}</ul>;
   const install = async (bay: ModuleBay, parentId?: string) => {
     const choice = choices[placeChoiceKey(bay.bay_key, parentId)];
     if (!choice?.module || pending) return;
@@ -182,7 +197,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
     } catch(e) { showOperationError(e); }
     finally { setPending(false); }
   };
-  const refreshAfterRemoval = async () => {
+  const refreshAfterModuleChange = async () => {
     setRefreshFailed(false);
     try { await onInstalled(); }
     catch { setRefreshFailed(true); }
@@ -192,11 +207,35 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
     setPending(true); setError(''); setBlockingCables([]);
     try {
       setConfig(await dataSource.uninstallModule(objectId, installationId));
-      await refreshAfterRemoval();
+      await refreshAfterModuleChange();
     }
     catch(e) { showOperationError(e, { name, bay: bay.display_name }); }
     finally { setPending(false); }
   };
+  const replace = async () => {
+    if (!replacement?.selected || replacementUnchanged || replacementStale || pending) return;
+    const { source, selected, expected } = replacement;
+    setPending(true);
+    setReplacement({ ...replacement, error: undefined });
+    try {
+      setConfig(await dataSource.replaceTransceiver(objectId, source.id, {
+        ...expected, module_template_id: selected.template_id, target_revision_id: selected.revision_id,
+      }));
+      setReplacement(undefined);
+      await refreshAfterModuleChange();
+    } catch (error) {
+      setReplacement({ ...replacement, error });
+    } finally { setPending(false); }
+  };
+  const replacementError = replacement?.error instanceof HardwareModuleError ? replacement.error : undefined;
+  const replacementStale = replacementError?.reason === 'INSTALLATION_CHANGED'
+    || replacementError?.reason === 'TARGET_REVISION_CHANGED';
+  const replacementUnchanged = replacement?.selected
+    && replacement.selected.template_id === replacement.source.module_template_id
+    && replacement.selected.revision_id === replacement.source.module_revision_id;
+  const currentEndpoint = replacement?.source.endpoints[0];
+  const currentType = portTypes?.find(type => type.id === currentEndpoint?.port_type_id);
+  const targetType = portTypes?.find(type => type.id === replacement?.selected?.endpoints[0].port_type_id);
   const nested = new Map(config?.nested_installations?.map(item => [item.id, item]));
   const header = (kind: MountKind) => <tr>
     <th scope="col">{t(placeLabels[kind].place)}</th>
@@ -210,11 +249,13 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
     const matches = installable ? modules.filter(module =>
       module.mount_kind === bay.mount_kind && mountTypeId(module) === mountTypeId(bay)
     ) : [];
-    const compatible = bay.mount_kind === 'MODULE_PORT' ? matches.filter(({ endpoints }) =>
-      endpoints.length === 0 || (bay.network_interface_id && endpoints.length === 1
+    const physicalCandidates = bay.mount_kind === 'MODULE_PORT' ? matches.filter(({ endpoints }) =>
+      bay.network_interface_id && endpoints.length === 1
         && endpoints[0].kind === 'CONNECTION_POINT'
         && portTypes?.some(type => type.id === endpoints[0].port_type_id
-          && (type.cardinality === 1 || (type.medium === 'FIBER' && type.cardinality === 2))))) : matches;
+          && (type.cardinality === 1 || (type.medium === 'FIBER' && type.cardinality === 2)))) : [];
+    const compatible = bay.mount_kind === 'MODULE_PORT' ? matches.filter(module =>
+      module.endpoints.length === 0 || physicalCandidates.includes(module)) : matches;
     const physicalTransceiver = bay.mount_kind === 'MODULE_PORT'
       && installation?.endpoints.some(endpoint => endpoint.kind === 'CONNECTION_POINT');
     const hasPhysicalChild = installation?.module_places?.some(place =>
@@ -275,11 +316,29 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
       <td>{installation ?
         hasPhysicalChild
           ? <span>{t('hardware.error.children')}</span>
-          : <button type="button" className="text-action" disabled={disabled} onClick={() => void uninstall(installation.id, installation.name, bay)}>{t(physicalTransceiver ? 'hardware.extract' : 'hardware.uninstall')}</button> :
+          : <>
+            <button type="button" className="text-action" disabled={disabled} onClick={() => void uninstall(installation.id, installation.name, bay)}>{t(physicalTransceiver ? 'hardware.extract' : 'hardware.uninstall')}</button>
+            {physicalTransceiver && installable && <button type="button" className="text-action"
+              disabled={disabled || !portTypes || !config?.configuration_id || !config.base_revision_id || !bay.network_interface_id}
+              onClick={() => {
+                const parent = config!.bays.find(row => row.installation?.id === parentId)?.installation;
+                setError('');
+                setReplacement({ source: installation, bay,
+                  candidates: physicalCandidates.filter(module => module.transceiver && !module.module_places?.length),
+                  expected: {
+                    configuration_id: config!.configuration_id!, base_revision_id: config!.base_revision_id!,
+                    bay_key: bay.bay_key, parent_installation_id: parentId ?? null,
+                    parent_revision_id: parent?.module_revision_id ?? null,
+                    source_revision_id: installation.module_revision_id, interface_id: bay.network_interface_id!,
+                    source_point_id: installation.endpoints[0].connection_point_id,
+                  },
+                });
+              }}>{t('hardware.replace')}</button>}
+          </> :
         installable && <button type="button" className="primary-action" disabled={disabled || !compatible.some(m => m.template_id === choice.module)} onClick={() => void install(bay, parentId)}>{t('hardware.install')}</button>}</td>
     </tr>;
   };
-  return <section className="blueprint-editor-controls" aria-label={t('hardware.components')}><h2>{t('hardware.components')}</h2>
+  return <><section className="blueprint-editor-controls" aria-label={t('hardware.components')} inert={!!replacement}><h2>{t('hardware.components')}</h2>
     {hasInstalledBoard && dataSource.saveLayout && <div className="module-installation-toolbar">
       <button className="secondary-action" disabled={pending || dirty || !image} onClick={() => { cancel(); setEditing(!editing); }}>{t(editing ? 'layout.done' : 'layout.edit')}</button>
       {editing && <><span>{t(dirty ? 'layout.unsaved' : 'layout.select')}</span>
@@ -288,13 +347,10 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
         <button className="secondary-action" disabled={pending || !installed?.initial_layout} onClick={() => setDraft(installed!.initial_layout)}>{t('layout.reset')}</button></>}
     </div>}
     {error && <div role="alert">{error} {blockingCables.length > 0
-      ? <ul>{blockingCables.map(cable => <li key={`${cable.cable_id}:${cable.connection_member_id}`}>
-        {cable.label && <><strong>{cable.label}</strong> · </>}
-        {cableEnd(cable.local)} ↔ {cableEnd(cable.remote)}
-      </li>)}</ul>
+      ? cableList(blockingCables)
       : !editing && <button type="button" className="secondary-action" onClick={() => setRetry(v => v + 1)}>{t('action.retry')}</button>}</div>}
     {refreshFailed && <p role="alert">{t('physical.loadFailed')} <button type="button" className="secondary-action"
-      onClick={() => void refreshAfterRemoval()}>{t('action.retry')}</button></p>}
+      onClick={() => void refreshAfterModuleChange()}>{t('action.retry')}</button></p>}
     {!config && !error && <p>{t('create.blueprintsLoading')}</p>}
     <div ref={viewport} style={{ width: '100%', height, minWidth: 0 }}>
     {config && !bounds && <p role="status">{t('layout.presentationUnavailable')}</p>}
@@ -375,5 +431,40 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
         </div>
       </div>;
     })}
-  </section>;
+  </section>
+    {replacement && <div className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="replace-transceiver-title"
+      onKeyDown={event => { if (event.key === 'Escape' && !pending) setReplacement(undefined); }}>
+      <form className="catalog-dialog__surface" onSubmit={event => { event.preventDefault(); void replace(); }}>
+        <h2 id="replace-transceiver-title">{t('hardware.replaceTitle')}</h2>
+        <p>{t('hardware.replaceCurrent', { name: replacement.source.name, bay: replacement.bay.display_name })}</p>
+        <label>{t('hardware.selectTransceiver')}
+          <select autoFocus disabled={pending || replacementStale} value={replacement.selected?.revision_id ?? ''}
+            onChange={event => setReplacement({ ...replacement, error: undefined,
+              selected: replacement.candidates.find(module => module.revision_id === event.target.value) })}>
+            <option value="">{t('hardware.selectTransceiver')}</option>
+            {replacement.candidates.map(module => <option key={module.revision_id} value={module.revision_id}>{module.name}</option>)}
+          </select>
+        </label>
+        {!replacement.candidates.length && <p>{t('hardware.noTransceivers')}</p>}
+        <p>{t('hardware.replaceTypes', { current: currentType?.name ?? currentEndpoint?.port_type_id ?? '—', next: targetType?.name ?? '—' })}</p>
+        <p>{t('hardware.replaceChannels', { current: currentEndpoint?.cardinality ?? '—', next: targetType?.cardinality ?? '—' })}</p>
+        <p>{t('hardware.replacePreservesInterface')}</p>
+        {replacementUnchanged && <p role="status">{t('hardware.replaceUnchanged')}</p>}
+        {!!replacement.error && <div role="alert" className="catalog-dialog__error">
+          {replacementError?.blockingCables.length
+            ? <>{t('hardware.replaceConnected')}{cableList(replacementError.blockingCables)}</>
+            : replacementStale ? t('hardware.replaceStale')
+            : replacementError?.reason === 'MODULE_INSTALLATION_IN_USE' ? t('hardware.replaceInUse')
+            : replacementError?.reason && operationErrors[replacementError.reason] ? t(operationErrors[replacementError.reason]!)
+            : t('hardware.failed', { error: String(replacement.error) })}
+        </div>}
+        <div className="catalog-dialog__actions">
+          <button type="button" disabled={pending} onClick={() => setReplacement(undefined)}>{t('map.cancel')}</button>
+          {replacementStale
+            ? <button type="button" onClick={() => { setReplacement(undefined); setRetry(value => value + 1); }}>{t('catalog.retryRefresh')}</button>
+            : <button type="submit" disabled={pending || !targetType || replacementUnchanged}>{t('hardware.replace')}</button>}
+        </div>
+      </form>
+    </div>}
+  </>;
 }

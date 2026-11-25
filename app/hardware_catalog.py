@@ -451,6 +451,11 @@ class HardwareCatalog:
         config = self.session.scalar(select(ObjectConfiguration).where(ObjectConfiguration.physical_object_id == object_id).with_for_update())
         if config is None:
             raise ValidationError("Object has no base template configuration")
+        self.install_in_locked_configuration(config, query)
+        return self.configuration_document(object_id)
+
+    def install_in_locked_configuration(self, config, query, *, transceiver_revision=None):
+        object_id = config.physical_object_id
         parent_id = query.parent_installation_id
         if parent_id is None:
             bay_rows = self.session.scalars(select(ModuleBay).where(ModuleBay.base_revision_id == config.base_revision_id))
@@ -482,7 +487,7 @@ class HardwareCatalog:
             ModuleInstallation.bay_key == query.bay_key,
         )) is not None:
             raise ModelError("Место уже занято", {"reason": "MODULE_PLACE_OCCUPIED"})
-        revision = self.session.scalar(select(ModuleTemplateRevision).where(
+        revision = transceiver_revision or self.session.scalar(select(ModuleTemplateRevision).where(
             ModuleTemplateRevision.template_id == query.module_template_id
         ).order_by(ModuleTemplateRevision.version_number.desc()).limit(1))
         if revision is None:
@@ -494,12 +499,17 @@ class HardwareCatalog:
             .join(PortType, PortType.id == ModuleEndpointDefinition.port_type_id).where(
             ModuleEndpointDefinition.module_revision_id == revision.id
         ).order_by(ModuleEndpointDefinition.order_index)).all()
+        if transceiver_revision is not None and (
+                revision.mount_kind != "MODULE_PORT" or revision.transceiver is None
+                or revision.module_places or not definitions):
+            raise ModelError("Требуется физический трансивер",
+                             {"reason": "UNSUPPORTED_TRANSCEIVER_TERMINATION"})
         transceiver_interface = None
         if revision.mount_kind == "MODULE_PORT" and definitions:
             key = declared_interfaces([place], place_key="bay_key").get(query.bay_key)
             association = next((row for row in associations(self.session, config.id, parent_id)
                                 if row.bay_key == query.bay_key and row.hardware_interface_key == key
-                                and row.physical_object_id == obj.id), None)
+                                and row.physical_object_id == object_id), None)
             if association is None:
                 raise ModelError("Для гнезда требуется аппаратный интерфейс",
                                  {"reason": "TRANSCEIVER_BINDING_REQUIRED"})
@@ -539,7 +549,6 @@ class HardwareCatalog:
                     repository.add_interface_physical_binding(transceiver_interface, point.id, point_member=member)
             self.session.add(ModuleEndpointMapping(installation_id=installation.id, definition_id=definition.id, connection_point_id=point.id, network_interface_id=interface_id))
         self.session.flush()
-        return self.configuration_document(object_id)
 
     def _materialize_hardware_interfaces(self, config, parent_id, places, *, place_key):
         repository = CanonicalRepository(self.session)

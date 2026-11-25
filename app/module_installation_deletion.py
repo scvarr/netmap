@@ -7,24 +7,26 @@ from sqlalchemy.orm import Session
 
 from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.errors import ModelError, ValidationError
+from app.hardware_catalog import HardwareCatalog
 from app.hardware_interfaces import associations, declared_interfaces
 from app.module_port_types import mount_identity, row_mount
 from app.models import (
     BuiltInEndpointMapping, Cable, Connection, ConnectionMember, ConnectionPoint, EntityMetadata, HardwareInterfaceAssociation,
     InterfacePhysicalBinding, L2Binding, L3Binding, ModuleBay, ModuleEndpointDefinition,
-    ModuleEndpointMapping, ModuleInstallation, ModuleTemplateRevision, NATPolicyAttachment, NetworkInterface,
+    ModuleEndpointMapping, ModuleInstallation, ModuleTemplate, ModuleTemplateRevision, NATPolicyAttachment, NetworkInterface,
     NetworkInterfacePhysicalOwner, NetworkInterfaceRealization, ObjectConfiguration,
     PacketProcessingPlanAttachment, PhysicalObject, PortType, RoutingPolicyRule, SecurityPolicyAttachment,
 )
 from app.port_types import supports_transceiver_termination
 from app.physical_object_details_resolver import cable_endpoint_addresses
+from app.schemas import InstallModuleRequest
 
 
 class ModuleInstallationDeletionCatalog:
     def __init__(self, session: Session):
         self.session = session
 
-    def delete(self, object_id: uuid.UUID, installation_id: uuid.UUID) -> None:
+    def _lock_installation(self, object_id, installation_id, *, replacing=False):
         # Same lock order as install_module: object, configuration, installation.
         object_ = self.session.scalar(select(PhysicalObject).where(PhysicalObject.id == object_id).with_for_update())
         if object_ is None:
@@ -36,15 +38,65 @@ class ModuleInstallationDeletionCatalog:
             ModuleInstallation.id == installation_id, ModuleInstallation.configuration_id == config.id,
         ).with_for_update())
         if installation is None:
+            if replacing:
+                self._replacement_stale("INSTALLATION_CHANGED")
             raise ValidationError("ModuleInstallation does not belong to this object's configuration", {"installation_id": str(installation_id)})
+        return config, installation
+
+    def _locked_mappings(self, installation_id):
         if self.session.scalar(select(ModuleInstallation.id).where(
             ModuleInstallation.parent_installation_id == installation_id,
         ).limit(1)) is not None:
             raise ModelError("Сначала удалите дочерние установки",
                              {"reason": "MODULE_INSTALLATION_HAS_CHILDREN", "installation_id": str(installation_id)})
-        mappings = tuple(self.session.scalars(select(ModuleEndpointMapping).where(
+        return tuple(self.session.scalars(select(ModuleEndpointMapping).where(
             ModuleEndpointMapping.installation_id == installation_id,
         ).order_by(ModuleEndpointMapping.id).with_for_update()))
+
+    @staticmethod
+    def _replacement_stale(reason):
+        raise ModelError("Конфигурация или опубликованная ревизия изменилась. Обновите данные и повторите выбор.",
+                         {"reason": reason})
+
+    def replace_transceiver(self, object_id, installation_id, query):
+        # Publication takes SHARE ROW EXCLUSIVE even when the template name
+        # stays the same. Reconcile locks the target template before the object.
+        self.session.execute(text("LOCK TABLE module_template_revisions IN ROW EXCLUSIVE MODE"))
+        template = self.session.scalar(select(ModuleTemplate.id).where(
+            ModuleTemplate.id == query.module_template_id).with_for_update(read=True))
+        if template is None:
+            self._replacement_stale("TARGET_REVISION_CHANGED")
+        config, installation = self._lock_installation(object_id, installation_id, replacing=True)
+        parent = self.session.get(ModuleInstallation, installation.parent_installation_id) if installation.parent_installation_id else None
+        if (config.id != query.configuration_id or config.base_revision_id != query.base_revision_id
+                or installation.module_revision_id != query.source_revision_id
+                or installation.parent_installation_id != query.parent_installation_id
+                or installation.bay_key != query.bay_key
+                or (parent.module_revision_id if parent else None) != query.parent_revision_id):
+            self._replacement_stale("INSTALLATION_CHANGED")
+
+        target = self.session.scalar(select(ModuleTemplateRevision).where(
+            ModuleTemplateRevision.template_id == template,
+        ).order_by(ModuleTemplateRevision.version_number.desc()).limit(1))
+        if target is None or target.id != query.target_revision_id:
+            self._replacement_stale("TARGET_REVISION_CHANGED")
+        revision = self.session.get(ModuleTemplateRevision, installation.module_revision_id)
+        catalog = HardwareCatalog(self.session)
+        orientation = installation.orientation
+        self._remove_transceiver(
+            object_id, config, installation, revision, self._locked_mappings(installation_id),
+            associations(self.session, config.id, installation.id), replacement=query,
+        )
+        if revision.id != target.id:
+            catalog.install_in_locked_configuration(config, InstallModuleRequest(
+                module_template_id=template, bay_key=query.bay_key,
+                parent_installation_id=query.parent_installation_id, orientation=orientation,
+            ), transceiver_revision=target)
+        return catalog.configuration_document(object_id)
+
+    def delete(self, object_id: uuid.UUID, installation_id: uuid.UUID) -> None:
+        config, installation = self._lock_installation(object_id, installation_id)
+        mappings = self._locked_mappings(installation_id)
         point_ids = tuple(sorted({m.connection_point_id for m in mappings}, key=str))
         hardware = associations(self.session, config.id, installation.id)
         revision = self.session.get(ModuleTemplateRevision, installation.module_revision_id)
@@ -88,7 +140,7 @@ class ModuleInstallationDeletionCatalog:
         self.session.delete(installation)
         self.session.flush()
 
-    def _remove_transceiver(self, object_id, config, installation, revision, mappings, hardware):
+    def _remove_transceiver(self, object_id, config, installation, revision, mappings, hardware, *, replacement=None):
         parent_id = installation.parent_installation_id
         bay_key = installation.bay_key
         if parent_id is None:
@@ -100,12 +152,14 @@ class ModuleInstallationDeletionCatalog:
             parent = self.session.get(ModuleInstallation, parent_id)
             parent_revision = self.session.get(ModuleTemplateRevision, parent.module_revision_id)
             place = None
-            if parent.parent_installation_id is None and parent_revision.mount_kind == "MODULE_BAY":
+            if (parent.configuration_id == config.id and parent.parent_installation_id is None
+                    and parent_revision.mount_kind == "MODULE_BAY"):
                 place = next((p for p in parent_revision.module_places if p["key"] == bay_key), None)
         definitions = tuple(self.session.execute(select(ModuleEndpointDefinition, PortType)
             .join(PortType, PortType.id == ModuleEndpointDefinition.port_type_id)
             .where(ModuleEndpointDefinition.module_revision_id == revision.id)))
-        if (revision.transceiver is None or revision.module_places or hardware or place is None
+        if (revision.mount_kind != "MODULE_PORT" or revision.transceiver is None
+                or revision.module_places or hardware or place is None
                 or mount_identity(place) != mount_identity(row_mount(revision))
                 or len(mappings) != 1 or len(definitions) != 1):
             self._refuse(installation, {"INVALID_ENDPOINT_MAPPING": 1})
@@ -127,13 +181,16 @@ class ModuleInstallationDeletionCatalog:
         if association is None:
             self._refuse(installation, {"INVALID_HARDWARE_INTERFACE_ASSOCIATION": 1})
         interface_id = association.interface_id
+        if replacement is not None and (
+                interface_id != replacement.interface_id or mapping.connection_point_id != replacement.source_point_id):
+            self._replacement_stale("INSTALLATION_CHANGED")
         # Connection creation locks interfaces before points. The interface lock
         # also prevents new bindings on this interface during validation.
         self.session.scalar(select(NetworkInterface.id).where(NetworkInterface.id == interface_id).with_for_update())
         owner = self.session.scalar(select(NetworkInterfacePhysicalOwner).where(
             NetworkInterfacePhysicalOwner.interface_id == interface_id,
             NetworkInterfacePhysicalOwner.physical_object_id == object_id,
-        ))
+        ).with_for_update(read=True))
         if owner is None:
             self._refuse(installation, {"NETWORK_INTERFACE_PHYSICAL_OWNER": 1})
 
@@ -153,6 +210,8 @@ class ModuleInstallationDeletionCatalog:
         if blockers:
             self._refuse(installation, blockers, self._blocking_cables(point_id))
 
+        if replacement is not None and revision.id == replacement.target_revision_id:
+            return
         self.session.delete(mapping)
         self.session.execute(delete(InterfacePhysicalBinding).where(InterfacePhysicalBinding.point_id == point_id))
         self.session.execute(delete(EntityMetadata).where(EntityMetadata.connection_point_id == point_id))

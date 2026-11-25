@@ -138,12 +138,19 @@ export interface ModuleInstallation {
   }>;
 }
 export interface HardwareConfiguration { configuration_id: string | null; base_revision_id?: string; panels?: Array<{ panel_key: string; display_name: string; width: number; height: number }>; bays: Array<ModuleBay & { installation: ModuleInstallation | null; network_interface_id?: string }>; nested_installations?: ModuleInstallation[] }
+export interface ReplaceTransceiverInput {
+  configuration_id: string; base_revision_id: string; bay_key: string;
+  parent_installation_id: string | null; parent_revision_id: string | null;
+  source_revision_id: string; source_point_id: string; interface_id: string;
+  module_template_id: string; target_revision_id: string;
+}
 export interface HardwareModuleDataSource {
   saveLayout?(objectId: string, installationId: string, input: unknown): Promise<HardwareConfiguration>;
   listModules(): Promise<{ modules: ModuleTemplate[] }>;
   createModule(input: ModuleTemplateInput): Promise<ModuleTemplate>;
   deleteModule(templateId: string): Promise<void>;
   uninstallModule(objectId: string, installationId: string): Promise<HardwareConfiguration>;
+  replaceTransceiver(objectId: string, installationId: string, input: ReplaceTransceiverInput): Promise<HardwareConfiguration>;
   loadConfiguration(objectId: string): Promise<HardwareConfiguration>;
   installModule(objectId: string, input: { module_template_id: string; bay_key: string; parent_installation_id?: string; orientation: 'HORIZONTAL' | 'VERTICAL' }): Promise<HardwareConfiguration>;
 }
@@ -188,6 +195,7 @@ export const hardwareModuleDataSource: HardwareModuleDataSource = {
   createModule: input => request('/api/v1/library/module-templates', input),
   deleteModule: id => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}`, undefined, 'DELETE'),
   uninstallModule: (id, installationId) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations/${encodeURIComponent(installationId)}`, undefined, 'DELETE'),
+  replaceTransceiver: (id, installationId, input) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations/${encodeURIComponent(installationId)}/replacement`, input),
   loadConfiguration: id => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/configuration`),
   installModule: (id, input) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations`, input),
 };

@@ -12,7 +12,7 @@ from app.models import InterfacePhysicalBinding, L2Binding, L2ForwardingContext,
 from app.module_installation_deletion import ModuleInstallationDeletionCatalog
 from app.physical_connections import ConnectionPointEndpoint, PhysicalConnectionCatalog
 from app.repository import CanonicalRepository, ConnectionMemberInput
-from app.schemas import CableReconnectRequest, PhysicalCompatibilityConfirmation
+from app.schemas import CableReconnectRequest, PhysicalCompatibilityConfirmation, ReplaceTransceiverRequest
 from tests.l1_builders import confirmed_payload, create_object_with_point, post_confirmed_physical
 from tests.test_hardware_configuration import base_payload, client, create_base, create_object
 from tests.test_module_reconciliation import apply, package, revision
@@ -23,6 +23,116 @@ from tests.test_parent_hardware_interfaces import create_installation, hardware
 
 def point_end(point_id):
     return {"kind": "CONNECTION_POINT", "connection_point_id": point_id, "member_index": 1}
+
+
+def replacement_input(config, socket, installed, target, board=None):
+    return {
+        "configuration_id": config["configuration_id"], "base_revision_id": config["base_revision_id"],
+        "bay_key": socket["bay_key"], "parent_installation_id": board["id"] if board else None,
+        "parent_revision_id": board["module_revision_id"] if board else None,
+        "source_revision_id": installed["module_revision_id"],
+        "source_point_id": installed["endpoints"][0]["connection_point_id"],
+        "interface_id": socket["network_interface_id"], "module_template_id": target["template_id"],
+        "target_revision_id": target["revision_id"],
+    }
+
+
+def replace(object_id, installation_id, body):
+    return client.post(f"/v1/topology/physical-objects/{object_id}/module-installations/{installation_id}/replacement", json=body)
+
+
+@pytest.mark.parametrize("nested,old_members,new_members", [
+    (False, ("A",), ("B",)),
+    (True, ("A", "B"), ("C", "D")),
+    (False, ("A",), ("B", "C")),
+    (True, ("A", "B"), ("C",)),
+])
+def test_transceiver_replacement_preserves_interface_and_reprojects(hardware, nested, old_members, new_members):
+    object_id, board, direct = create_installation(hardware)
+    socket = board["module_places"][0] if nested else direct
+    parent = board if nested else None
+    old = created(client.post("/v1/library/module-templates", json=physical_transceiver(hardware[-1], members=old_members)))
+    new = created(client.post("/v1/library/module-templates", json={
+        **physical_transceiver(hardware[-1], members=new_members, port_name="Replacement termination"), "name": "New optic",
+    }))
+    config = created(install(object_id, old, socket["bay_key"], parent["id"] if parent else None))
+    installed = config["nested_installations"][0] if nested else config["bays"][1]["installation"]
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        interface_id = uuid.UUID(socket["network_interface_id"])
+        context = L2ForwardingContext()
+        session.add(context)
+        session.flush()
+        session.add(L2Binding(interface_id=interface_id, forwarding_context_id=context.id))
+        repository.add_l3_binding(interface_id, repository.add_routing_context().id)
+    before = package()
+    body = replacement_input(config, socket, installed, new, parent)
+    result = replace(object_id, installed["id"], body)
+    assert result.status_code == 200, result.text
+    config = result.json()
+    replacement = config["nested_installations"][0] if nested else config["bays"][1]["installation"]
+    endpoint, = replacement["endpoints"]
+    assert replacement["id"] != installed["id"]
+    assert replacement["module_revision_id"] == new["revision_id"]
+    assert replacement["parent_installation_id"] == body["parent_installation_id"]
+    assert replacement["bay_key"] == installed["bay_key"]
+    assert endpoint["members"] == list(new_members)
+    point_id = endpoint["connection_point_id"]
+    assert point_id != body["source_point_id"]
+    after = package()
+    for table in ("PhysicalObject", "NetworkInterface", "NetworkInterfacePhysicalOwner", "L2Binding", "L3Binding"):
+        assert after["canonical"][table] == before["canonical"][table]
+    for table in ("ObjectConfiguration", "HardwareInterfaceAssociation"):
+        assert after["authoring"][table] == before["authoring"][table]
+    assert [row for row in after["authoring"]["ModuleInstallation"] if row["id"] != replacement["id"]] == [
+        row for row in before["authoring"]["ModuleInstallation"] if row["id"] != installed["id"]
+    ]
+    for table, field in (("ConnectionPoint", "id"), ("InterfacePhysicalBinding", "point_id"),
+                         ("EntityMetadata", "connection_point_id")):
+        assert all(row.get(field) != body["source_point_id"] for row in after["canonical"][table])
+    assert all(row["connection_point_id"] != body["source_point_id"] for row in after["authoring"]["ModuleEndpointMapping"])
+    assert {(row["interface_id"], row["point_member"]) for row in after["canonical"]["InterfacePhysicalBinding"]
+            if row["point_id"] == point_id} == {(body["interface_id"], i) for i in range(1, len(new_members) + 1)}
+    projection = client.post("/v1/topology/projection", json={
+        "layer": "L1", "detail_level": "PHYSICAL_OBJECT",
+        "scope": {"include_location_subtrees": [], "include_entities": []},
+    })
+    assert projection.status_code == 200, projection.text
+    slots = [slot for node in projection.json()["nodes"]
+             for slot in node["attributes"].get("blueprint_presentation", {}).get("slots", [])]
+    assert body["source_point_id"] not in {slot["connection_point_id"] for slot in slots}
+    slot, = [slot for slot in slots if slot["connection_point_id"] == point_id]
+    assert slot["installation_id"] == replacement["id"]
+    assert slot["external_attachment"]
+    reason(replace(object_id, installed["id"], body), 409, "INSTALLATION_CHANGED")
+    assert package() == after
+
+
+def test_transceiver_replacement_requires_confirmed_publication_and_socket(hardware):
+    object_id, _, socket = create_installation(hardware)
+    optic = created(client.post("/v1/library/module-templates", json=physical_transceiver(hardware[-1])))
+    config = created(install(object_id, optic, socket["bay_key"]))
+    installed = config["bays"][1]["installation"]
+    body = replacement_input(config, socket, installed, optic)
+    before = package()
+    result = replace(object_id, installed["id"], body)
+    assert result.status_code == 200, result.text
+    assert result.json() == config
+    assert package() == before
+    reason(replace(object_id, installed["id"], {**body, "bay_key": "other"}), 409, "INSTALLATION_CHANGED")
+    wrong = hardware[1]
+    reason(replace(object_id, installed["id"], replacement_input(config, socket, installed, wrong)),
+           409, "MODULE_MOUNT_MISMATCH")
+    assert package() == before
+    published = revision(optic["template_id"], lambda d: d.update(name="Optic v2"))
+    after_publish = package()
+    reason(replace(object_id, installed["id"], body), 409, "TARGET_REVISION_CHANGED")
+    assert package() == after_publish
+    result = replace(object_id, installed["id"], {**body, "target_revision_id": published["revision_id"]})
+    assert result.status_code == 200, result.text
+    installed_v2 = result.json()["bays"][1]["installation"]
+    assert installed_v2["module_revision_id"] == published["revision_id"]
+    assert installed_v2["id"] != installed["id"]
 
 
 @pytest.mark.parametrize("nested", [False, True])
@@ -187,7 +297,10 @@ def test_duplex_wiring_preserves_installed_bindings_and_workspace_roundtrip(hard
     optic = created(client.post("/v1/library/module-templates", json=physical_transceiver(
         hardware[-1], members=("Alpha", "Beta"),
     )))
-    installation = created(install(object_id, optic, "direct"))["bays"][1]["installation"]
+    config = created(install(object_id, optic, "direct"))
+    installation = config["bays"][1]["installation"]
+    target = created(client.post("/v1/library/module-templates", json=physical_transceiver(hardware[-1])))
+    replacement = replacement_input(config, direct, installation, target)
     point = installation["endpoints"][0]
     point_id = point["connection_point_id"]
     created(install(object_id, optic, "socket", board["id"]))
@@ -223,7 +336,10 @@ def test_duplex_wiring_preserves_installed_bindings_and_workspace_roundtrip(hard
     }]}))["created"]
     assert wired["source_member_index"] == 2
     before = package()
-    assert_cable_blockers(object_id, point, {2})
+    cables = assert_cable_blockers(object_id, point, {2})
+    response = replace(object_id, installation["id"], replacement)
+    reason(response, 409, "MODULE_INSTALLATION_IN_USE")
+    assert response.json()["error"]["details"]["blocking_cables"] == cables
     assert package() == before
     moved = post_confirmed_physical(client, reconnect, json={**reconnect_request, "new_member_index": 1})
     assert moved.status_code == 204, moved.text
@@ -237,6 +353,9 @@ def test_duplex_wiring_preserves_installed_bindings_and_workspace_roundtrip(hard
             row["point_a_member"] = 1
     assert after == before
     cables = assert_cable_blockers(object_id, point, {1, 2})
+    response = replace(object_id, installation["id"], replacement)
+    reason(response, 409, "MODULE_INSTALLATION_IN_USE")
+    assert response.json()["error"]["details"]["blocking_cables"] == cables
     by_member = {cable["local"]["member_index"]: cable for cable in cables}
     for index, expected_name in ((1, "Alpha"), (2, "Beta")):
         assert by_member[index]["local"]["members"][index - 1] == {"index": index, "designation": expected_name}
@@ -345,9 +464,11 @@ def test_blocking_cable_address_for_board_on_rear_panel(hardware):
 
 @pytest.mark.parametrize("blocker", ["CONNECTION", "INTERFACE_PHYSICAL_BINDING"])
 def test_transceiver_refuses_non_cable_dependencies_without_changes(hardware, blocker):
-    object_id, _, _ = create_installation(hardware)
+    object_id, _, socket = create_installation(hardware)
     optic = created(client.post("/v1/library/module-templates", json=physical_transceiver(hardware[-1])))
-    installed = created(install(object_id, optic, "direct"))["bays"][1]["installation"]
+    config = created(install(object_id, optic, "direct"))
+    installed = config["bays"][1]["installation"]
+    target = created(client.post("/v1/library/module-templates", json=physical_transceiver(hardware[-1], port_name="Replacement termination")))
     point_id = uuid.UUID(installed["endpoints"][0]["connection_point_id"])
     with SessionLocal.begin() as session:
         if blocker == "CONNECTION":
@@ -358,6 +479,9 @@ def test_transceiver_refuses_non_cable_dependencies_without_changes(hardware, bl
             session.execute(delete(InterfacePhysicalBinding).where(InterfacePhysicalBinding.point_id == point_id))
     before = package()
     response = uninstall(object_id, installed["id"])
+    reason(response, 409, "MODULE_INSTALLATION_IN_USE")
+    assert response.json()["error"]["details"]["blockers"] == {blocker: 1}
+    response = replace(object_id, installed["id"], replacement_input(config, socket, installed, target))
     reason(response, 409, "MODULE_INSTALLATION_IN_USE")
     assert response.json()["error"]["details"]["blockers"] == {blocker: 1}
     assert package() == before
@@ -374,12 +498,17 @@ def wait_for_blocked_transaction(pid):
     pytest.fail("Competing write did not wait for the ConnectionPoint lock")
 
 
+@pytest.mark.parametrize("replacing", [False, True])
 @pytest.mark.parametrize("first", ["remove", "create"])
 @pytest.mark.parametrize("reconnect", [False, True])
-def test_transceiver_removal_serializes_with_cable_writes(hardware, first, reconnect):
-    object_id, _, _ = create_installation(hardware)
+def test_transceiver_lifecycle_serializes_with_cable_writes(hardware, first, reconnect, replacing):
+    object_id, _, socket = create_installation(hardware)
     optic = created(client.post("/v1/library/module-templates", json=physical_transceiver(hardware[-1])))
-    installed = created(install(object_id, optic, "direct"))["bays"][1]["installation"]
+    config = created(install(object_id, optic, "direct"))
+    installed = config["bays"][1]["installation"]
+    target = created(client.post("/v1/library/module-templates", json=physical_transceiver(
+        hardware[-1], port_name="Replacement termination"))) if replacing else None
+    replacement = replacement_input(config, socket, installed, target) if target else None
     point = installed["endpoints"][0]["connection_point_id"]
     _, peer = create_object_with_point(client, "Peer")
     url = "/v1/topology/physical-connections"
@@ -397,7 +526,12 @@ def test_transceiver_removal_serializes_with_cable_writes(hardware, first, recon
         with SessionLocal.begin() as session:
             pid = session.scalar(text("SELECT pg_backend_pid()"))
             if first == "remove":
-                ModuleInstallationDeletionCatalog(session).delete(uuid.UUID(object_id), uuid.UUID(installed["id"]))
+                lifecycle = ModuleInstallationDeletionCatalog(session)
+                if replacing:
+                    lifecycle.replace_transceiver(uuid.UUID(object_id), uuid.UUID(installed["id"]),
+                                                  ReplaceTransceiverRequest.model_validate(replacement))
+                else:
+                    lifecycle.delete(uuid.UUID(object_id), uuid.UUID(installed["id"]))
                 competing = worker.submit(client.post, url, json=payload)
                 if reconnect:
                     response = competing.result(timeout=5)
@@ -412,7 +546,8 @@ def test_transceiver_removal_serializes_with_cable_writes(hardware, first, recon
                         ConnectionPointEndpoint(uuid.UUID(point), 1), ConnectionPointEndpoint(uuid.UUID(peer), 1),
                         compatibility=PhysicalCompatibilityConfirmation.model_validate(payload["compatibility"]),
                     )
-                competing = worker.submit(uninstall, object_id, installed["id"])
+                competing = (worker.submit(replace, object_id, installed["id"], replacement) if replacing
+                             else worker.submit(uninstall, object_id, installed["id"]))
             if not reconnect or first != "remove":
                 wait_for_blocked_transaction(pid)
         response = competing.result(timeout=5)
@@ -421,18 +556,28 @@ def test_transceiver_removal_serializes_with_cable_writes(hardware, first, recon
             response = client.post(url, json=payload)
             assert client.get(url).json()["expected"] == payload["expected"]
         assert response.status_code == 422, response.text
-        assert read(object_id)["bays"][1]["installation"] is None
+        actual = read(object_id)["bays"][1]["installation"]
+        if replacing:
+            assert actual["module_revision_id"] == target["revision_id"]
+            assert actual["endpoints"][0]["connection_point_id"] != point
+        else:
+            assert actual is None
     else:
         reason(response, 409, "MODULE_INSTALLATION_IN_USE")
         assert read(object_id)["bays"][1]["installation"] == installed
     assert len(package()["canonical"]["Cable"]) == (reconnect or first == "create")
 
 
-def test_failed_second_member_rolls_back_duplex_installation(hardware, monkeypatch):
-    object_id, _, _ = create_installation(hardware)
+@pytest.mark.parametrize("replacing", [False, True])
+def test_failed_second_member_rolls_back_duplex_installation(hardware, monkeypatch, replacing):
+    object_id, _, socket = create_installation(hardware)
     optic = created(client.post("/v1/library/module-templates", json=physical_transceiver(
         hardware[-1], members=("Alpha", "Beta"),
     )))
+    if replacing:
+        source = created(client.post("/v1/library/module-templates", json=physical_transceiver(hardware[-1])))
+        config = created(install(object_id, source, "direct"))
+        installed = config["bays"][1]["installation"]
     before = package()
     add_binding = CanonicalRepository.add_interface_physical_binding
 
@@ -442,5 +587,7 @@ def test_failed_second_member_rolls_back_duplex_installation(hardware, monkeypat
         return add_binding(repository, interface_id, point_id, point_member=point_member)
 
     monkeypatch.setattr(CanonicalRepository, "add_interface_physical_binding", fail_second)
-    reason(install(object_id, optic, "direct"), 409, "TEST_BINDING_FAILURE")
+    response = (replace(object_id, installed["id"], replacement_input(config, socket, installed, optic))
+                if replacing else install(object_id, optic, "direct"))
+    reason(response, 409, "TEST_BINDING_FAILURE")
     assert package() == before

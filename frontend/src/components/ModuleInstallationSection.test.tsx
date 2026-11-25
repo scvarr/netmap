@@ -15,7 +15,7 @@ const occupied: HardwareConfiguration = { ...free, panels: [{ panel_key: 'back',
     local_display_name: 'feth1', contextual_display_name: 'Back / PCIe1 / feth1', connection_point_id: 'point', network_interface_id: 'interface', x: .2, y: .2,
   }],
 } }] };
-const source = (): HardwareModuleDataSource => ({ listModules: vi.fn().mockResolvedValue({ modules: [module] }), loadConfiguration: vi.fn().mockResolvedValue(occupied), createModule: vi.fn(), deleteModule: vi.fn(), installModule: vi.fn().mockResolvedValue(occupied), uninstallModule: vi.fn().mockResolvedValue(free) });
+const source = (): HardwareModuleDataSource => ({ listModules: vi.fn().mockResolvedValue({ modules: [module] }), loadConfiguration: vi.fn().mockResolvedValue(occupied), createModule: vi.fn(), deleteModule: vi.fn(), installModule: vi.fn().mockResolvedValue(occupied), replaceTransceiver: vi.fn(), uninstallModule: vi.fn().mockResolvedValue(free) });
 const basePresentation: import('../topology/types').BlueprintPresentation = { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'base' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'base-revision' }, body: { kind: 'RECTANGLE', width: 600, height: 200 }, panels: [{ panel_key: 'back', panel_number: 1, display_name: 'Back', x: 0, y: 0, width: 600, height: 200 }], slots: [] };
 function show(dataSource: HardwareModuleDataSource, onInstalled = vi.fn(), presentation = basePresentation) {
   render(<I18nProvider><ModuleInstallationSection objectId="object" presentation={presentation} dataSource={dataSource} onInstalled={onInstalled} /></I18nProvider>);
@@ -259,6 +259,62 @@ function socketCenters(panel: Element) {
     return [Number(top.split(',')[0]), Number(right.split(',')[1])];
   });
 }
+
+it('confirms a pinned replacement, replaces the marker, and retries refresh without another write', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => Response.json(url.endsWith('/port-types') ? [
+    { id: 'simplex', name: 'LC Simplex', cardinality: 1, medium: 'FIBER' },
+    { id: 'duplex', name: 'LC Duplex', cardinality: 2, medium: 'FIBER' },
+  ] : [])));
+  const data = source();
+  const confirm = vi.spyOn(window, 'confirm');
+  const definition = { key: 'optic', display_name: 'LC', kind: 'CONNECTION_POINT' as const, port_type_id: 'simplex' };
+  const optic = { ...module, ...sfpMount, name: 'Current optic', template_id: 'optic', revision_id: 'v1',
+    transceiver: {}, endpoints: [definition] };
+  const target = { ...optic, name: 'Next optic', revision_id: 'v2', endpoints: [{ ...definition, port_type_id: 'duplex' }] };
+  vi.mocked(data.listModules).mockResolvedValue({ modules: [optic, target, { ...target, name: 'Wrong mount', module_port_type_id: 'QSFP' }] });
+  const installed = occupied.bays[0].installation!;
+  const config = { ...occupied, bays: [{ ...occupied.bays[0], ...sfpMount, network_interface_id: 'interface', installation: {
+    ...installed, name: optic.name, module_template_id: optic.template_id, module_revision_id: optic.revision_id,
+    endpoints: [{ ...installed.endpoints[0], ...definition, network_interface_id: null }],
+  } }] };
+  const confirmed = structuredClone(config);
+  const updated = confirmed.bays[0].installation;
+  Object.assign(updated, { id: 'new-optic', name: target.name, module_revision_id: target.revision_id });
+  Object.assign(updated.endpoints[0], { connection_point_id: 'new-point', port_type_id: 'duplex', cardinality: 2 });
+  vi.mocked(data.loadConfiguration).mockResolvedValue(config);
+  vi.mocked(data.replaceTransceiver).mockResolvedValue(confirmed);
+  const refresh = vi.fn().mockRejectedValueOnce(new Error('Cannot refresh')).mockResolvedValueOnce(undefined);
+  show(data, refresh);
+  const open = await screen.findByRole('button', { name: 'Заменить' });
+  await userEvent.click(open);
+  const dialog = within(screen.getByRole('dialog', { name: 'Заменить трансивер' }));
+  expect(dialog.getByText(/Текущий трансивер.*Current optic/)).toBeInTheDocument();
+  expect(dialog.queryByRole('option', { name: 'Wrong mount' })).toBeNull();
+  await userEvent.selectOptions(dialog.getByRole('combobox'), 'v1');
+  expect(dialog.getByRole('button', { name: 'Заменить' })).toBeDisabled();
+  await userEvent.click(dialog.getByRole('button', { name: 'Отмена' }));
+  expect(data.replaceTransceiver).not.toHaveBeenCalled();
+  await userEvent.click(open);
+  const reopened = within(screen.getByRole('dialog', { name: 'Заменить трансивер' }));
+  await userEvent.selectOptions(reopened.getByRole('combobox'), 'v2');
+  expect(reopened.getByText(/LC Simplex → LC Duplex/)).toBeInTheDocument();
+  expect(reopened.getByText(/1 → 2/)).toBeInTheDocument();
+  await userEvent.click(reopened.getByRole('button', { name: 'Заменить' }));
+  expect(data.replaceTransceiver).toHaveBeenCalledWith('object', installed.id, {
+    configuration_id: 'config', base_revision_id: 'base-revision', bay_key: 'bay-key',
+    parent_installation_id: null, parent_revision_id: null, source_revision_id: 'v1',
+    source_point_id: 'point', interface_id: 'interface', module_template_id: 'optic', target_revision_id: 'v2',
+  });
+  await userEvent.click(within(await screen.findByRole('alert')).getByRole('button', { name: 'Повторить' }));
+  expect(refresh).toHaveBeenCalledTimes(2);
+  expect(data.replaceTransceiver).toHaveBeenCalledOnce();
+  expect(data.installModule).not.toHaveBeenCalled();
+  expect(data.uninstallModule).not.toHaveBeenCalled();
+  expect(confirm).not.toHaveBeenCalled();
+  const panel = screen.getByRole('img', { name: 'Back' });
+  expect(panel.querySelector('[data-endpoint-id="point"]')).toBeNull();
+  expect(panel.querySelector('[data-endpoint-id="new-point"]')).toBeInTheDocument();
+});
 
 function boardConfiguration(orientation: 'HORIZONTAL' | 'VERTICAL') {
   const config = structuredClone(occupied);

@@ -42,9 +42,9 @@ def module(name, mount, places=(), has_endpoint=False):
     return response.json()
 
 
-def physical_transceiver(mount, *, medium="FIBER", members=("1",)):
+def physical_transceiver(mount, *, medium="FIBER", members=("1",), port_name=None):
     port = created(client.post("/v1/port-types", json={
-        "name": f"Lab termination ({medium}, {len(members)})", "medium": medium, "members": list(members),
+        "name": port_name or f"Lab termination ({medium}, {len(members)})", "medium": medium, "members": list(members),
         "compatibility_mode": "SAME_TYPE",
         "color": "#336699",
     }))
