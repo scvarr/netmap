@@ -70,7 +70,9 @@
   подключить кабелем через обычную таблицу портов. FN-010-MAP-01 IMPLEMENTED,
   ACCEPTED: L1-карта отображает корпуса плат, пустые гнёзда и физические
   трансиверы с учётом FRONT/REAR, сохраняя реальные UUID и Cable.
-  MOD-03B и MOD-03C IMPLEMENTED, ACCEPTED. Пассивная ModuleTemplate continuity,
+  MOD-03B и MOD-03C IMPLEMENTED, ACCEPTED. C-CAP-MOD-01 IMPLEMENTED.
+  Пассивная ModuleTemplate continuity задаётся через API явными member mappings.
+  [Контракт](L1_CONNECTIVITY.md#c-cap-mod-01--passive-moduletemplate-continuity).
   QSFP breakout и смена аппаратного режима остаются OPEN.
 - **Карта.** DOC-LOC-03 PARTIAL. Есть стрелочная расстановка, сортировка
   Location и порядок непосредственного оборудования. Остался grid-specific

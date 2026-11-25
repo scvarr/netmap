@@ -208,7 +208,8 @@ export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwar
                 </div>
                 <div className="template-library-actions">
                   <Link className="secondary-action" to={`${modulePath}/${module.template_id}/edit`}>{t('review.edit')}</Link>
-                  {(!isTransceiver || module.transceiver) && <Link className="secondary-action" to={modulePath + '/new'} state={{ moduleCopy: {
+                  {module.internal_links?.length ? <p>{t('templateCopy.moduleWiringUnsupported')}</p>
+                    : (!isTransceiver || module.transceiver) && <Link className="secondary-action" to={modulePath + '/new'} state={{ moduleCopy: {
                     name: module.name, ...moduleMount(module.mount_kind, mountTypeId(module)), endpoints: module.endpoints,
                     geometry: module.geometry, module_places: module.module_places, transceiver: module.transceiver,
                   } }}>{t('templateCopy.action')}</Link>}

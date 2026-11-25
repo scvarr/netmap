@@ -14,10 +14,11 @@ export function NewModuleTemplatePage({ dataSource = hardwareModuleDataSource, t
 }) {
   const { t } = useI18n(); const navigate = useNavigate();
   const copy = useLocation().state?.moduleCopy as ModuleTemplateInput | undefined;
+  const unsupportedCopy = Boolean(copy?.internal_links?.length);
   const kind = transceiver ? 'MODULE_PORT' : 'MODULE_BAY';
   const title = t(transceiver ? 'transceiver.new' : 'hardware.newModule');
   const library = '/library/base-templates?tab=' + (transceiver ? 'transceivers' : 'modules');
-  const [definition, setDefinition] = useState<ModuleTemplateInput>(() => copy?.mount_kind === kind
+  const [definition, setDefinition] = useState<ModuleTemplateInput>(() => !unsupportedCopy && copy?.mount_kind === kind
     ? { ...copy, name: t('templateCopy.name', { name: copy.name }),
         module_places: copy.module_places?.map(port => port.hardware_interface_key
           ? { ...port, hardware_interface_key: crypto.randomUUID() } : port) }
@@ -28,10 +29,11 @@ export function NewModuleTemplatePage({ dataSource = hardwareModuleDataSource, t
   return <PageShell className="catalog-page">
     <Breadcrumbs label={t('blueprint.breadcrumb.library')} items={[{ label: t(transceiver ? 'transceiver.library' : 'templateLibrary.modules'), to: library }, { label: title }]} />
     <PageHeader title={title} />
-    <form className="module-template-form" onSubmit={e => { e.preventDefault(); void save(); }}>
+    {unsupportedCopy ? <p role="alert">{t('templateCopy.moduleWiringUnsupported')}</p>
+      : <form className="module-template-form" onSubmit={e => { e.preventDefault(); void save(); }}>
       {transceiver ? <TransceiverTemplateForm creating disabled={pending} value={definition} onChange={setDefinition} />
         : <ModuleTemplateEditor disabled={pending} value={definition} onChange={setDefinition} />}
       {error && <p role="alert">{error}</p>}<button type="submit" className="primary-action" disabled={pending || !name.trim() || !mountTypeId(definition) || (transceiver && endpoints.length !== 1) || endpoints.some(e => !e.display_name.trim()) || module_places?.some(port => !port.display_name.trim() || !mountTypeId(port))}>{t('hardware.save')}</button>
-    </form>
+    </form>}
   </PageShell>;
 }

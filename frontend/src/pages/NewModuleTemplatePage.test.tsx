@@ -16,6 +16,31 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+it.each([true, false])('handles a module copy payload safely (wiring=%s)', async wired => {
+  const createModule = vi.fn().mockResolvedValue({});
+  const moduleCopy: ModuleTemplateInput = {
+    name: 'Board', mount_kind: 'MODULE_BAY', module_bay_type_id: 'PCIe',
+    endpoints: [], geometry: initialModuleGeometry(),
+    internal_links: wired ? [{
+      from_endpoint_key: 'rear', to_endpoint_key: 'front',
+      member_mappings: [{ from_member_index: 1, to_member_index: 1 }],
+    }] : [],
+  };
+  render(<I18nProvider><MemoryRouter initialEntries={[{
+    pathname: '/library/module-templates/new', state: { moduleCopy },
+  }]}><NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} /></MemoryRouter></I18nProvider>);
+  if (wired) {
+    expect(screen.getByRole('alert')).toHaveTextContent(/Копирование шаблона модуля с внутренней разводкой/);
+    expect(screen.queryByRole('button', { name: 'Создать шаблон' })).not.toBeInTheDocument();
+    expect(createModule).not.toHaveBeenCalled();
+  } else {
+    expect(screen.getByLabelText('Название')).toHaveValue('Board (копия)');
+    await screen.findByRole('option', { name: 'PCIe' });
+    fireEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));
+    await waitFor(() => expect(createModule).toHaveBeenCalledWith({ ...moduleCopy, name: 'Board (копия)' }));
+  }
+});
+
 it('assigns selected and remaining board sockets while retaining existing declarations', () => {
   const changed = vi.fn();
   function Editor() {

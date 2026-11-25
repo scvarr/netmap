@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
-import { hardwareModuleDataSource } from '../topology/hardwareModules';
+import { hardwareModuleDataSource, type ModuleTemplate } from '../topology/hardwareModules';
 import type { BaseTemplateRevisionDocument } from '../topology/baseTemplateTypes';
 import { BaseTemplateLibraryPage } from './BaseTemplateLibraryPage';
 
@@ -34,8 +34,8 @@ const module = {
   publication_state: { revision_id: 'nic-rev', version_number: 3, outdated_count: 0, awaiting_update_count: 0, requires_intervention_count: 1, installations: [] },
 };
 
-function show(loadBaseTemplateRevision = vi.fn().mockResolvedValue(revision)) {
-  const listModules = vi.fn().mockResolvedValue({ modules: [module, { ...module, template_id: 'optic', name: 'Historical optic', mount_kind: 'MODULE_PORT', module_bay_type_id: undefined, module_port_type_id: 'SFP+' }] });
+function show(loadBaseTemplateRevision = vi.fn().mockResolvedValue(revision), board: ModuleTemplate = module) {
+  const listModules = vi.fn().mockResolvedValue({ modules: [board, { ...module, template_id: 'optic', name: 'Historical optic', mount_kind: 'MODULE_PORT', module_bay_type_id: undefined, module_port_type_id: 'SFP+' }] });
   const dataSource = {
     loadBaseTemplates: vi.fn().mockResolvedValue({ schema_version: '2.0', blueprints: [listed, second] }),
     loadBaseTemplateRevision, createBaseTemplate: vi.fn(), loadDraft: vi.fn(),
@@ -53,6 +53,22 @@ function show(loadBaseTemplateRevision = vi.fn().mockResolvedValue(revision)) {
 const serverRow = () => screen.findByRole('button', { name: /^Server/ });
 const objectsTab = () => screen.getByRole('tab', { name: 'Объекты' });
 const modulesTab = () => screen.getByRole('tab', { name: 'Шаблоны плат' });
+
+it.each([true, false])('offers board copy only without internal wiring (wiring=%s)', async wired => {
+  const { user } = show(undefined, { ...module, internal_links: wired ? [{
+    from_endpoint_key: 'p1', to_endpoint_key: 'p2',
+    member_mappings: [{ from_member_index: 1, to_member_index: 1 }],
+  }] : [] });
+  await user.click(modulesTab());
+  await user.click(await screen.findByRole('button', { name: /^NIC/ }));
+  if (wired) {
+    expect(screen.queryByRole('link', { name: 'Создать копию' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Копирование шаблона модуля с внутренней разводкой/)).toBeVisible();
+  } else {
+    expect(screen.getByRole('link', { name: 'Создать копию' }))
+      .toHaveAttribute('href', '/library/module-templates/new');
+  }
+});
 
 it('lists transceivers separately by mount kind and opens their specialized editor', async () => {
   const { user } = show();
