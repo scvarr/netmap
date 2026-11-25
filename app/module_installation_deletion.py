@@ -8,13 +8,15 @@ from sqlalchemy.orm import Session
 from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.errors import ModelError, ValidationError
 from app.hardware_interfaces import associations, declared_interfaces
+from app.module_port_types import mount_identity, row_mount
 from app.models import (
-    BuiltInEndpointMapping, Connection, ConnectionPoint, EntityMetadata, HardwareInterfaceAssociation,
-    InterfacePhysicalBinding, L2Binding, L3Binding, ModuleEndpointDefinition,
+    BuiltInEndpointMapping, Cable, Connection, ConnectionMember, ConnectionPoint, EntityMetadata, HardwareInterfaceAssociation,
+    InterfacePhysicalBinding, L2Binding, L3Binding, ModuleBay, ModuleEndpointDefinition,
     ModuleEndpointMapping, ModuleInstallation, ModuleTemplateRevision, NATPolicyAttachment, NetworkInterface,
     NetworkInterfacePhysicalOwner, NetworkInterfaceRealization, ObjectConfiguration,
-    PacketProcessingPlanAttachment, PhysicalObject, RoutingPolicyRule, SecurityPolicyAttachment,
+    PacketProcessingPlanAttachment, PhysicalObject, PortType, RoutingPolicyRule, SecurityPolicyAttachment,
 )
+from app.port_types import supports_transceiver_termination
 
 
 class ModuleInstallationDeletionCatalog:
@@ -45,9 +47,12 @@ class ModuleInstallationDeletionCatalog:
         point_ids = tuple(sorted({m.connection_point_id for m in mappings}, key=str))
         hardware = associations(self.session, config.id, installation.id)
         revision = self.session.get(ModuleTemplateRevision, installation.module_revision_id)
-        if revision.mount_kind == "MODULE_PORT" and mappings:
-            raise ModelError("Извлечение физического трансивера пока недоступно",
-                             {"reason": "TRANSCEIVER_REMOVAL_UNSUPPORTED"})
+        if revision.mount_kind == "MODULE_PORT" and (mappings or revision.transceiver is not None
+                or self.session.scalar(select(ModuleEndpointDefinition.id).where(
+                    ModuleEndpointDefinition.module_revision_id == revision.id,
+                ).limit(1)) is not None):
+            self._remove_transceiver(object_id, config, installation, revision, mappings, hardware)
+            return
         endpoint_interfaces = {m.network_interface_id for m in mappings if m.network_interface_id}
         hardware_interfaces = {row.interface_id for row in hardware}
         if (endpoint_interfaces & hardware_interfaces
@@ -82,7 +87,100 @@ class ModuleInstallationDeletionCatalog:
         self.session.delete(installation)
         self.session.flush()
 
-    def _blockers(self, object_id, installation, mappings, points, point_ids, interface_ids):
+    def _remove_transceiver(self, object_id, config, installation, revision, mappings, hardware):
+        parent_id = installation.parent_installation_id
+        bay_key = installation.bay_key
+        if parent_id is None:
+            bay = self.session.scalar(select(ModuleBay).where(
+                ModuleBay.base_revision_id == config.base_revision_id, ModuleBay.bay_key == bay_key,
+            ))
+            place = {**row_mount(bay), "key": bay_key, "hardware_interface_key": bay.hardware_interface_key} if bay else None
+        else:
+            parent = self.session.get(ModuleInstallation, parent_id)
+            parent_revision = self.session.get(ModuleTemplateRevision, parent.module_revision_id)
+            place = None
+            if parent.parent_installation_id is None and parent_revision.mount_kind == "MODULE_BAY":
+                place = next((p for p in parent_revision.module_places if p["key"] == bay_key), None)
+        definitions = tuple(self.session.execute(select(ModuleEndpointDefinition, PortType)
+            .join(PortType, PortType.id == ModuleEndpointDefinition.port_type_id)
+            .where(ModuleEndpointDefinition.module_revision_id == revision.id)))
+        if (revision.transceiver is None or revision.module_places or hardware or place is None
+                or mount_identity(place) != mount_identity(row_mount(revision))
+                or len(mappings) != 1 or len(definitions) != 1):
+            self._refuse(installation, {"INVALID_ENDPOINT_MAPPING": 1})
+        mapping, = mappings
+        (definition, port_type), = definitions
+        if (mapping.definition_id != definition.id or mapping.network_interface_id is not None
+                or definition.kind != "CONNECTION_POINT"
+                or not supports_transceiver_termination(port_type.medium, port_type.cardinality)):
+            self._refuse(installation, {"INVALID_ENDPOINT_MAPPING": 1})
+
+        key = declared_interfaces([place], place_key="key").get(bay_key)
+        association = self.session.scalar(select(HardwareInterfaceAssociation).where(
+            HardwareInterfaceAssociation.configuration_id == config.id,
+            HardwareInterfaceAssociation.parent_installation_id == parent_id,
+            HardwareInterfaceAssociation.bay_key == bay_key,
+            HardwareInterfaceAssociation.hardware_interface_key == key,
+            HardwareInterfaceAssociation.physical_object_id == object_id,
+        ).with_for_update())
+        if association is None:
+            self._refuse(installation, {"INVALID_HARDWARE_INTERFACE_ASSOCIATION": 1})
+        interface_id = association.interface_id
+        # Connection creation locks interfaces before points. The interface lock
+        # also prevents new bindings on this interface during validation.
+        self.session.scalar(select(NetworkInterface.id).where(NetworkInterface.id == interface_id).with_for_update())
+        owner = self.session.scalar(select(NetworkInterfacePhysicalOwner).where(
+            NetworkInterfacePhysicalOwner.interface_id == interface_id,
+            NetworkInterfacePhysicalOwner.physical_object_id == object_id,
+        ))
+        if owner is None:
+            self._refuse(installation, {"NETWORK_INTERFACE_PHYSICAL_OWNER": 1})
+
+        point_id = mapping.connection_point_id
+        # Cable create and reconnect take the same point lock. Check for
+        # connections only after acquiring it, in a fresh READ COMMITTED query.
+        point = self.session.scalar(select(ConnectionPoint).where(ConnectionPoint.id == point_id).with_for_update())
+        if point is None or point.physical_object_id != object_id:
+            self._refuse(installation, {"CONNECTION_POINT_OWNER": 1})
+        if point.cardinality != port_type.cardinality:
+            self._refuse(installation, {"INVALID_ENDPOINT_MAPPING": 1})
+        expected = {(interface_id, point_id, member) for member in range(1, point.cardinality + 1)}
+        # Passing no interfaces checks point dependencies without treating the
+        # preserved interface's logical configuration as a dependency of the optic.
+        blockers = self._blockers(object_id, installation, mappings, (point,), (point_id,), (),
+                                  transceiver_bindings=expected)
+        if blockers:
+            self._refuse(installation, blockers, self._blocking_cables(point_id))
+
+        self.session.delete(mapping)
+        self.session.execute(delete(InterfacePhysicalBinding).where(InterfacePhysicalBinding.point_id == point_id))
+        self.session.execute(delete(EntityMetadata).where(EntityMetadata.connection_point_id == point_id))
+        self.session.flush()
+        self.session.delete(point)
+        self.session.delete(installation)
+        self.session.flush()
+
+    def _blocking_cables(self, point_id):
+        rows = self.session.execute(select(Cable, Connection, ConnectionMember)
+            .join(Connection, Connection.id == Cable.connection_id)
+            .outerjoin(ConnectionMember, ConnectionMember.connection_id == Connection.id)
+            .where(or_(Connection.point_a_id == point_id, Connection.point_b_id == point_id))
+            .order_by(Cable.id, ConnectionMember.index))
+        return [{
+            "cable_id": str(cable.id), "label": cable.label, "connection_id": str(connection.id),
+            "point_id": str(point_id),
+            "member_index": (member.point_a_member if connection.point_a_id == point_id else member.point_b_member)
+            if member else None,
+        } for cable, connection, member in rows]
+
+    @staticmethod
+    def _refuse(installation, blockers, cables=()):
+        raise ModelError("ModuleInstallation cannot be removed because its endpoints are in use", {
+            "reason": "MODULE_INSTALLATION_IN_USE", "installation_id": str(installation.id),
+            "blockers": blockers, "blocking_cables": list(cables),
+        })
+
+    def _blockers(self, object_id, installation, mappings, points, point_ids, interface_ids, *, transceiver_bindings=None):
         blockers = Counter()
         queries = {
             "CONNECTION": (Connection, or_(Connection.point_a_id.in_(point_ids), Connection.point_b_id.in_(point_ids))),
@@ -106,10 +204,20 @@ class ModuleInstallationDeletionCatalog:
             definition = definitions[mapping.definition_id]
             if definition.module_revision_id != installation.module_revision_id or (definition.kind == "NETWORK_PORT") != (mapping.network_interface_id is not None):
                 blockers["INVALID_ENDPOINT_MAPPING"] += 1
-        expected = {(m.network_interface_id, m.connection_point_id, 1) for m in mappings if m.network_interface_id}
-        for binding in self.session.scalars(select(InterfacePhysicalBinding).where(or_(InterfacePhysicalBinding.point_id.in_(point_ids), InterfacePhysicalBinding.interface_id.in_(interface_ids)))):
-            if (binding.interface_id, binding.point_id, binding.point_member) not in expected:
-                blockers["INTERFACE_PHYSICAL_BINDING"] += 1
+        expected = transceiver_bindings if transceiver_bindings is not None else {
+            (m.network_interface_id, m.connection_point_id, 1) for m in mappings if m.network_interface_id
+        }
+        binding_interfaces = interface_ids if transceiver_bindings is None else {row[0] for row in expected}
+        binding_query = select(InterfacePhysicalBinding).where(or_(
+            InterfacePhysicalBinding.point_id.in_(point_ids),
+            InterfacePhysicalBinding.interface_id.in_(binding_interfaces),
+        ))
+        if transceiver_bindings is not None:
+            binding_query = binding_query.order_by(InterfacePhysicalBinding.id).with_for_update()
+        actual = {(b.interface_id, b.point_id, b.point_member) for b in self.session.scalars(binding_query)}
+        unexpected = actual - expected if transceiver_bindings is None else actual ^ expected
+        if unexpected:
+            blockers["INTERFACE_PHYSICAL_BINDING"] += len(unexpected)
         # These supported configuration references live in JSON, without FK protection.
         # Their tables remain SHARE-locked through the transaction.
         ids = {str(value) for value in interface_ids}

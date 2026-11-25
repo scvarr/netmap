@@ -243,6 +243,7 @@ def test_same_object_cable_has_one_selectable_projection_edge_with_exact_endpoin
 def test_installed_board_projection_uses_pinned_geometry_and_canonical_endpoints(hardware):
     from tests.test_module_layout_editing import request as layout_request
     from tests.test_module_reconciliation import package
+    from tests.test_module_uninstall import uninstall
     from tests.test_nested_module_installations import created, install, physical_transceiver
     from tests.test_hardware_configuration import base_payload, create_base, create_object
 
@@ -321,3 +322,12 @@ def test_installed_board_projection_uses_pinned_geometry_and_canonical_endpoints
             "y": edit["layout"]["y"] + y * edit["layout"]["height"],
         })
         assert package()["canonical"] == installed_snapshot["canonical"]
+        for physical_endpoint in (direct_point, nested_point):
+            response = uninstall(object_id, physical_endpoint["installation_id"])
+            assert response.status_code == 200, response.text
+        removed = presentation(object_id)
+        assert {item["socket_key"] for item in removed["module_sockets"]} == set(sockets)
+        assert all("connection_point_id" not in item and "external_attachment" not in item for item in removed["module_sockets"])
+        assert {item["connection_point_id"] for item in removed["slots"]} == slots.keys() - {
+            direct_point["connection_point_id"], nested_point["connection_point_id"],
+        }

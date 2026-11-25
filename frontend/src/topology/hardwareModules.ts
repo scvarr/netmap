@@ -147,8 +147,14 @@ export interface HardwareModuleDataSource {
   loadConfiguration(objectId: string): Promise<HardwareConfiguration>;
   installModule(objectId: string, input: { module_template_id: string; bay_key: string; parent_installation_id?: string; orientation: 'HORIZONTAL' | 'VERTICAL' }): Promise<HardwareConfiguration>;
 }
+export interface BlockingModuleCable {
+  cable_id: string;
+  label: string | null;
+  member_index: number | null;
+}
+
 export class HardwareModuleError extends Error {
-  constructor(message: string, readonly reason?: string) {
+  constructor(message: string, readonly reason?: string, readonly blockingCables: BlockingModuleCable[] = []) {
     super(message);
   }
 }
@@ -157,7 +163,8 @@ async function request<T>(url: string, input?: unknown, method: 'GET' | 'POST' |
   const response = await fetch(url, { method, ...(input === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }) });
   if (response.status === 204) return undefined as T;
   const document = await response.json();
-  if (!response.ok) throw new HardwareModuleError(document.error?.message ?? `HTTP ${response.status}`, document.error?.details?.reason);
+  if (!response.ok) throw new HardwareModuleError(document.error?.message ?? `HTTP ${response.status}`,
+    document.error?.details?.reason, document.error?.details?.blocking_cables);
   return document as T;
 }
 export const hardwareModuleDataSource: HardwareModuleDataSource = {

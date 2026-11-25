@@ -7,7 +7,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { BlueprintPresentation } from '../topology/types';
 import { panelCompositionBounds } from '../topology/blueprintDisplaySize';
 import { useI18n, type MessageKey } from '../i18n';
-import { HardwareModuleError, hardwareModuleDataSource, type HardwareConfiguration, type HardwareModuleDataSource, type ModuleInstallation, type ModuleTemplate } from '../topology/hardwareModules';
+import { HardwareModuleError, hardwareModuleDataSource, type BlockingModuleCable, type HardwareConfiguration, type HardwareModuleDataSource, type ModuleInstallation, type ModuleTemplate } from '../topology/hardwareModules';
 
 function compareKeys(a: string, b: string) {
   return a < b ? -1 : a > b ? 1 : 0;
@@ -50,7 +50,6 @@ const operationErrors: Partial<Record<string, MessageKey>> = {
   TRANSCEIVER_BINDING_REQUIRED: 'hardware.error.transceiver',
   UNSUPPORTED_TRANSCEIVER_TERMINATION: 'hardware.error.transceiverMember',
   HARDWARE_INTERFACE_ALREADY_BOUND: 'hardware.error.interfaceBound',
-  TRANSCEIVER_REMOVAL_UNSUPPORTED: 'hardware.error.transceiverRemoval',
   MODULE_INSTALLATION_HAS_CHILDREN: 'hardware.error.children',
   MODULE_INSTALLATION_IN_USE: 'hardware.error.inUse',
 };
@@ -100,6 +99,8 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
   const { types: portTypes } = usePortTypes();
   const { t, collator } = useI18n(); const [config, setConfig] = useState<HardwareConfiguration>(); const [modules, setModules] = useState<ModuleTemplate[]>([]); const [error, setError] = useState(''); const [pending, setPending] = useState(false); const [retry, setRetry] = useState(0);
   const [editing, setEditing] = useState(false);
+  const [blockingCables, setBlockingCables] = useState<BlockingModuleCable[]>([]);
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const [selected, setSelected] = useState<string>();
   const [draft, setDraft] = useState<ModuleInstallation['layout']>();
   const gesture = useRef<{ x: number; y: number; layout: ModuleInstallation['layout']; resize: boolean } | undefined>(undefined);
@@ -134,7 +135,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
   const installed = selectedBay?.installation;
   const dirty = !!draft && JSON.stringify(draft) !== JSON.stringify(installed?.layout);
   const cancel = () => { setDraft(undefined); setSelected(undefined); setError(''); gesture.current = undefined; };
-  useEffect(() => { setEditing(false); cancel(); }, [objectId]);
+  useEffect(() => { setEditing(false); setRefreshFailed(false); setBlockingCables([]); cancel(); }, [objectId]);
   const save = async () => {
     if (!installed || !draft || !config || !dataSource.saveLayout || pending) return;
     setPending(true); setError('');
@@ -154,12 +155,13 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
   useEffect(() => { let active = true; setConfig(undefined); setError(''); setChoices({}); setExpanded(new Set()); void Promise.all([dataSource.loadConfiguration(objectId), dataSource.listModules()]).then(([c, m]) => { if (active) { setConfig(c); setModules(m.modules); } }, e => { if(active) setError(t('hardware.failed', { error: String(e) })); }); return () => { active = false; }; }, [objectId, dataSource, retry, t]);
   const showOperationError = (error: unknown) => {
     const key = error instanceof HardwareModuleError && operationErrors[error.reason ?? ''];
+    setBlockingCables(error instanceof HardwareModuleError ? error.blockingCables : []);
     setError(key ? t(key) : t('hardware.failed', { error: String(error) }));
   };
   const install = async (bay: ModuleBay, parentId?: string) => {
     const choice = choices[placeChoiceKey(bay.bay_key, parentId)];
     if (!choice?.module || pending) return;
-    setPending(true); setError('');
+    setPending(true); setError(''); setBlockingCables([]);
     try {
       setConfig(await dataSource.installModule(objectId, {
         bay_key: bay.bay_key, ...(parentId ? { parent_installation_id: parentId } : {}),
@@ -169,10 +171,18 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
     } catch(e) { showOperationError(e); }
     finally { setPending(false); }
   };
+  const refreshAfterRemoval = async () => {
+    setRefreshFailed(false);
+    try { await onInstalled(); }
+    catch { setRefreshFailed(true); }
+  };
   const uninstall = async (installationId: string, name: string, bay: ModuleBay) => {
     if (pending || !window.confirm(t(placeLabels[bay.mount_kind].remove, { name, bay: bay.display_name }))) return;
-    setPending(true); setError('');
-    try { setConfig(await dataSource.uninstallModule(objectId, installationId)); await onInstalled(); }
+    setPending(true); setError(''); setBlockingCables([]);
+    try {
+      setConfig(await dataSource.uninstallModule(objectId, installationId));
+      await refreshAfterRemoval();
+    }
     catch(e) { showOperationError(e); }
     finally { setPending(false); }
   };
@@ -252,9 +262,9 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
           <option value="VERTICAL">{t('hardware.vertical')}</option>
         </select>}</td>}
       <td>{installation ?
-        physicalTransceiver || hasPhysicalChild
-          ? <span>{t(physicalTransceiver ? 'hardware.error.transceiverRemoval' : 'hardware.error.children')}</span>
-          : <button type="button" className="text-action" disabled={disabled} onClick={() => void uninstall(installation.id, installation.name, bay)}>{t('hardware.uninstall')}</button> :
+        hasPhysicalChild
+          ? <span>{t('hardware.error.children')}</span>
+          : <button type="button" className="text-action" disabled={disabled} onClick={() => void uninstall(installation.id, installation.name, bay)}>{t(physicalTransceiver ? 'hardware.extract' : 'hardware.uninstall')}</button> :
         installable && <button type="button" className="primary-action" disabled={disabled || !compatible.some(m => m.template_id === choice.module)} onClick={() => void install(bay, parentId)}>{t('hardware.install')}</button>}</td>
     </tr>;
   };
@@ -266,7 +276,14 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
         <button className="secondary-action" disabled={pending || !selected} onClick={cancel}>{t('layout.cancel')}</button>
         <button className="secondary-action" disabled={pending || !installed?.initial_layout} onClick={() => setDraft(installed!.initial_layout)}>{t('layout.reset')}</button></>}
     </div>}
-    {error && <p role="alert">{error} {!editing && <button type="button" className="secondary-action" onClick={() => setRetry(v => v + 1)}>{t('action.retry')}</button>}</p>}
+    {error && <div role="alert">{error} {blockingCables.length > 0
+      ? <ul>{blockingCables.map(cable => <li key={`${cable.cable_id}:${cable.member_index}`}>
+        {cable.label && <>{cable.label} · </>}<code>{cable.cable_id}</code>
+        {cable.member_index !== null && <> · {t('hardware.cableMember', { member: cable.member_index })}</>}
+      </li>)}</ul>
+      : !editing && <button type="button" className="secondary-action" onClick={() => setRetry(v => v + 1)}>{t('action.retry')}</button>}</div>}
+    {refreshFailed && <p role="alert">{t('physical.loadFailed')} <button type="button" className="secondary-action"
+      onClick={() => void refreshAfterRemoval()}>{t('action.retry')}</button></p>}
     {!config && !error && <p>{t('create.blueprintsLoading')}</p>}
     <div ref={viewport} style={{ width: '100%', height, minWidth: 0 }}>
     {config && !bounds && <p role="status">{t('layout.presentationUnavailable')}</p>}
@@ -284,7 +301,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
         } else setDraft({ ...l, x: Math.max(0, Math.min(1-l.width, l.x+dx)), y: Math.max(0, Math.min(1-l.height, l.y+dy)) });
       }} onPointerUp={() => { gesture.current = undefined; }} onPointerCancel={() => { gesture.current = undefined; }}>
       <rect data-panel-key={panel.panel_key} width={panel.width} height={panel.height} fill={image.body.fill_color ?? '#18383a'} stroke="#64748b" vectorEffect="non-scaling-stroke"><title>{panel.display_name}</title></rect>
-      {image.slots.filter(s => s.panel_key === panel.panel_key && !modulePorts.has(s.connection_point_id)).map(s => <EndpointMarker key={s.connection_point_id} kind={s.kind} label={s.display_name} data-builtin-endpoint-id={s.connection_point_id} cx={s.panel_local_position.x * panel.width} cy={s.panel_local_position.y * panel.height} r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />)}
+      {image.slots.filter(s => s.panel_key === panel.panel_key && !s.installation_id && !modulePorts.has(s.connection_point_id)).map(s => <EndpointMarker key={s.connection_point_id} kind={s.kind} label={s.display_name} data-builtin-endpoint-id={s.connection_point_id} cx={s.panel_local_position.x * panel.width} cy={s.panel_local_position.y * panel.height} r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />)}
       {config!.bays.filter(b => b.panel_key === panel.panel_key).map(b => {
         const i = b.installation; const l = i?.id === selected && draft ? draft : i?.layout;
         if (b.mount_kind === 'MODULE_PORT') {

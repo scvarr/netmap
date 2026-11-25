@@ -48,7 +48,12 @@ it.each([['single', ['1']], ['duplex', ['Alpha', 'Beta']]] as const)(
     ...installation, orientation: 'VERTICAL', name: available.name,
     endpoints: [{ ...installation.endpoints[0], ...endpoint, network_interface_id: null, cardinality: members.length, members: [...members] }],
   } }] });
-  show(data);
+  const refresh = show(data, vi.fn(), { ...basePresentation, slots: [{
+    slot_key: 'config:bay-key', display_name: 'Termination', kind: 'CONNECTION_POINT',
+    marker: 'TRANSCEIVER', installation_id: installation.id, connection_point_id: 'point', panel_key: 'back',
+    panel_local_position: { x: .2, y: .2 }, rendered_position: { x: .2, y: .2 },
+    external_attachment: { x: 0, y: .2, side: 'LEFT' },
+  }] });
   expect(await screen.findByRole('option', { name: 'Optic' })).toBeInTheDocument();
   expect(screen.queryByRole('option', { name: 'Unsupported' })).toBeNull();
   expect(document.querySelectorAll('polygon[data-module-port-marker]')).toHaveLength(1);
@@ -65,10 +70,28 @@ it.each([['single', ['1']], ['duplex', ['Alpha', 'Beta']]] as const)(
   expect(document.querySelector('rect[data-endpoint-id="point"]')).toHaveAttribute('fill', '#336699');
   await userEvent.click(screen.getByText('Порты', { selector: 'summary' }));
   expect(screen.getByText(`Физические каналы (${members.length}) · ${members.join(', ')}`)).toBeVisible();
-  expect(screen.getByText(/Извлечение и замена физического трансивера/)).toBeInTheDocument();
   expect(screen.queryByText('Вертикальная')).toBeNull();
   expect(screen.getByText(/Аппаратный интерфейс/)).toBeInTheDocument();
   expect(screen.queryByText('Корректировать расположение плат')).toBeNull();
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  const extract = screen.getByRole('button', { name: 'Извлечь' });
+  vi.mocked(data.uninstallModule).mockRejectedValueOnce(new HardwareModuleError('In use', 'MODULE_INSTALLATION_IN_USE',
+    [{ cable_id: 'cable-id', label: 'Patch 12', member_index: members.length }]));
+  await userEvent.click(extract);
+  expect(confirm).toHaveBeenCalledWith('Извлечь трансивер «Optic» из гнезда «PCIe1»?');
+  expect(await screen.findByRole('alert')).toHaveTextContent(`Patch 12 · cable-id · канал ${members.length}`);
+  expect(document.querySelector('rect[data-endpoint-id="point"]')).toBeInTheDocument();
+  vi.mocked(data.uninstallModule).mockResolvedValueOnce({ ...free, bays: [socket] });
+  refresh.mockRejectedValueOnce(new Error('Read failed'));
+  await userEvent.click(extract);
+  const alert = await screen.findByRole('alert');
+  expect(document.querySelector('rect[data-endpoint-id="point"]')).toBeNull();
+  expect(document.querySelector('[data-builtin-endpoint-id="point"]')).toBeNull();
+  expect(document.querySelector('polygon[data-module-port-marker]')).toBeInTheDocument();
+  expect(screen.getByText(/Аппаратный интерфейс/)).toBeInTheDocument();
+  await userEvent.click(within(alert).getByRole('button', { name: 'Повторить' }));
+  expect(data.uninstallModule).toHaveBeenCalledTimes(2);
+  expect(refresh).toHaveBeenCalledTimes(3);
 });
 
 function expectTransceiverOutline(container: ParentNode, pointId: string, cx: number, cy: number) {

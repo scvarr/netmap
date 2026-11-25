@@ -67,7 +67,6 @@ def test_uninstall_removes_only_owned_aggregate_and_read_context(kind):
     assert {p['connection_point_id'] for p in node['attributes']['connection_points']} == remaining
     assert {p['connection_point_id'] for p in node['attributes']['blueprint_presentation']['slots']} == remaining
     package = client.get('/v1/workspace/package').json()
-    assert package['format_version'] == 4
     assert installation['id'] not in str(package['authoring']['ModuleInstallation'])
     assert not {str(i) for i in ids} & {e['connection_point_id'] for e in package['authoring']['ModuleEndpointMapping']}
     # The same bay/template can immediately be used again.

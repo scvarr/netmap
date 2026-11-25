@@ -85,6 +85,7 @@ export function InfrastructureObjectDetailPage({
   const [projection, setProjection] =
     useState<TopologyProjectionDocument | null>(null);
   const [projectionRevision, setProjectionRevision] = useState(0);
+  const [projectionFailed, setProjectionFailed] = useState(false);
   const [inventory, setInventory] = useState<CatalogInventoryDocument | null>(
     null,
   );
@@ -120,12 +121,13 @@ export function InfrastructureObjectDetailPage({
   useEffect(() => {
     if (activeSection !== "physical" && activeSection !== "interfaces") return;
     let current = true;
+    setProjectionFailed(false);
     void dataSource.loadProjection(PHYSICAL_PROJECTION_REQUEST).then(
       (nextProjection) => {
         if (current) setProjection(nextProjection);
       },
       () => {
-        if (current) setProjection(null);
+        if (current) { setProjection(null); setProjectionFailed(true); }
       },
     );
     return () => {
@@ -372,7 +374,9 @@ export function InfrastructureObjectDetailPage({
       )}
       </>}
       {activeSection === "physical" && <section className="detail-section detail-section--operations">
-        <ModuleInstallationSection presentation={projection?.nodes.find(node => node.source_refs.some(ref => ref.entity_type === "PhysicalObject" && ref.entity_id === physicalObjectId))?.attributes.blueprint_presentation} objectId={physicalObjectId} onInstalled={async () => { await refreshDetails(); refreshProjection(); }} />
+        {projectionFailed && <p role="alert">{t("map.loadFailed")} <button type="button" className="secondary-action"
+          onClick={refreshProjection}>{t("action.retry")}</button></p>}
+        <ModuleInstallationSection presentation={projection?.nodes.find(node => node.source_refs.some(ref => ref.entity_type === "PhysicalObject" && ref.entity_id === physicalObjectId))?.attributes.blueprint_presentation} objectId={physicalObjectId} onInstalled={() => { refreshProjection(); return refreshDetails(); }} />
         <PhysicalObjectDetailsSection
           key={physicalObjectId}
           node={node}
