@@ -39,6 +39,19 @@
   JSON v17, включая закреплённые ревизии модулей, деревья установок и
   определения трансиверов. SavedMap пока хранит представление общей канонической сети.
 
+## Физическая связность и трассировка
+
+- **C-CAP-01 IMPLEMENTED, ACCEPTED** в подтверждённых границах. C-CAP-01-01
+  реализует определения и materialization BaseTemplate, C-CAP-01-02 покрыт
+  принятым внешним lifecycle MOD-03B-2A/B/C, C-CAP-01-03 реализует редакторы
+  точной разводки BaseTemplate и ModuleTemplate. C-CAP-01-04A/B прошли все
+  десять сценариев ручной инженерной приёмки 26 ноября 2026 года.
+  [Границы приёмки](L1_CONNECTIVITY.md#ручная-инженерная-приёмка-c-cap-01-04ab).
+- **L1-TRACE-PERF-01 и PERF-003 IMPLEMENTED, ACCEPTED.** Реализация прошла
+  внешнее ревью. На основной БД пользовательский замер дал TTFB 49,61 мс
+  вместо 14,80 с для проверенного объектного запроса.
+  [Результаты](L1_TRACE_PERF_01.md).
+
 ## Реализовано только в core/API
 
 - **Модульная конструкция.** В core/API MOD-02A реализовал
@@ -48,14 +61,6 @@
   Авторинг и новые установки через API ограничены MOD-ASSEMBLY-01. API
   отклоняет установку и reconcile на ревизию трансивера с физическим
   окончанием (`TRANSCEIVER_BINDING_REQUIRED`).
-- **C-CAP-01-01 IMPLEMENTED.** BaseTemplate поддерживает cardinality и точные
-  внутренние member mappings. Материализация создаёт canonical points и
-  continuity без Cable. Графическое редактирование и копирование таких
-  определений блокируются безопасно.
-- **Exact L1 resolver foundation.** Resolver обходит пары point/member и
-  возвращает ссылки на точные Connection/ConnectionMember. Object trace
-  показывает отдельные ветви. Пользовательский цикл выбора внешних members,
-  отдельного member и полноты группы остаётся OPEN.
 - **L2/L3.** Серверное ядро содержит forwarding contexts, bindings,
   encapsulation, FDB, routing contexts, next-hop/reachability и packet-flow.
   Логические виды и отдельные действия с интерфейсами/L2 доступны. Полноценные
@@ -71,7 +76,7 @@
   ACCEPTED: L1-карта отображает корпуса плат, пустые гнёзда и физические
   трансиверы с учётом FRONT/REAR, сохраняя реальные UUID и Cable.
   MOD-03B и MOD-03C IMPLEMENTED, ACCEPTED. C-CAP-MOD-01 IMPLEMENTED.
-  Пассивная ModuleTemplate continuity задаётся через API явными member mappings.
+  Пассивная ModuleTemplate continuity задаётся явными member mappings через API и графический редактор C-CAP-01-03B.
   [Контракт](L1_CONNECTIVITY.md#c-cap-mod-01--passive-moduletemplate-continuity).
   QSFP breakout и смена аппаратного режима остаются OPEN.
 - **Карта.** DOC-LOC-03 PARTIAL. Есть стрелочная расстановка, сортировка
@@ -91,13 +96,9 @@
 
 - **CAT-D-05 IMPLEMENTED.** Раздельные справочники типов портов трансиверов
   и отсеков. Установка сверяет вид места и UUID типа.
-- Внешний lifecycle для выбора members, member occupancy, полный member authoring
-  и пользовательский workflow exact member trace и групповой проверки
-  (C-CAP-01-02/03/04 OPEN). Серверный C-CAP-01-04A реализован.
-  [Контракт API](L1_CONNECTIVITY.md#c-cap-01-04a--exact-member-trace-и-групповая-проверка).
 - Независимые канонические сети карт, persisted NetworkWorkspace, auth,
   ACL, sharing, activity и отдельная переносимость определений.
-- IA-01–IA-06 и PERF-002–005 остаются OPEN.
+- IA-01–IA-06, PERF-002, PERF-004 и PERF-005 остаются OPEN.
 
 ## Пользовательская приёмка и перепроверки
 
@@ -118,7 +119,10 @@ Location, графического copy, ручной работы с grid и в
 ## Статус готовности L1
 
 - [G1 · L1 CONNECTIVITY COMPLETE](BACKLOG.md#g1--l1-connectivity-complete) — **OPEN**.
-  Остаётся полный инженерный цикл медной и оптической коммутации и его адресная приёмка.
+  Остаются адресная приёмка медной и оптической связности, внешняя проверка
+  контрактов совместимости, проверки отказов и сохранения состояния, а также
+  уточнение границ оставшихся записей. Диагностика SM/MM пока не реализована,
+  её контракт будет согласован отдельно.
 - [G2 · L1 PRODUCT COMPLETE](BACKLOG.md#g2--l1-product-complete) — **OPEN**.
   Требует принятого G1, продуктовых границ, UX, производительности и итогового
   интеграционного прогона. Продуктовый L2 зависит от G2, продуктовый L3 — от L2.
