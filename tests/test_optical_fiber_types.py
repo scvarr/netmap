@@ -117,12 +117,24 @@ def test_optical_revision_updates_only_selected_connected_instances(kind):
             assert row[pin] == source_revision
     assert changed == 2 and not old_instances
 
-    for args in traces:
-        assert trace(*args)["verdict"] == "REACHABLE"
+    diagnostics = []
+    for index, args in enumerate(traces):
+        result = trace(*args)
+        assert result["verdict"] == "REACHABLE"
+        diagnostic, = result["optical_diagnostics"]
+        diagnostics.append(diagnostic)
+        pinned = diagnostic["facts"][0]
+        assert pinned["source"] == f"{kind.upper()}_MEMBER_MAPPING"
+        assert pinned["provenance"]["revision_id"] == (updated_revision if index < 2 else source_revision)
+        assert pinned["points"][0]["member_index"] == mappings[0]["from_member_index"]
+        assert pinned["points"][1]["member_index"] == mappings[0]["to_member_index"]
+        assert diagnostic["status"] == ("CONFLICT" if index < 2 else "CONSISTENT")
+    assert package() == after
     assert client.delete("/v1/workspace/dataset").status_code == 204
     restored = client.post("/v1/workspace/package", json=after)
     assert restored.status_code == 204, restored.text
     assert package() == after
+    assert [trace(*args)["optical_diagnostics"][0] for args in traces] == diagnostics
 
 
 def test_bulk_fiber_assignment_and_cable_edit_preserve_identity():
@@ -135,6 +147,12 @@ def test_bulk_fiber_assignment_and_cable_edit_preserve_identity():
     assert client.post(URL, json=body).status_code == 422
     assert package() == before
     body["pairs"][1]["fiber_type"] = "MM"
+    preview = client.post(URL, params={"preview": True}, json=body)
+    assert preview.status_code == 200, preview.text
+    diagnostics = [pair["optical_diagnostic"] for pair in preview.json()["pairs"]]
+    assert [diagnostic["status"] for diagnostic in diagnostics] == ["CONSISTENT", "CONSISTENT", "UNKNOWN"]
+    assert [diagnostic["facts"][0]["value"] for diagnostic in diagnostics] == ["SM", "MM", None]
+    assert package() == before
     created = post_confirmed_physical(client, URL, json=body)
     assert created.status_code == 201, created.text
     urls = [f"/v1/cables/{row['cable_id']}/fiber-type" for row in created.json()["created"]]

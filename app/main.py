@@ -35,6 +35,7 @@ from app.packet_processing_plan_resolver import PacketProcessingPlanValidationRe
 from app.packet_processing_plan_selection_resolver import PacketProcessingPlanSelectionResolver
 from app.packet_processing_executor import PacketProcessingPlanExecutor
 from app.packet_flow_resolver import ConfiguredPacketFlowResolver
+from app.optical_diagnostics import diagnose_composed_trace, diagnose_exact_traces
 from app.physical_connections import (
     ConnectionPointEndpoint,
     NetworkInterfaceEndpoint,
@@ -1495,7 +1496,9 @@ def trace_l1(
 ) -> TraceArtifact:
     session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
     repository = CanonicalRepository(session)
-    return L1Resolver(repository).resolve(query, EvaluationView())
+    result = L1Resolver(repository).resolve(query, EvaluationView())
+    diagnose_exact_traces(session, [result])
+    return result
 
 
 @app.post(
@@ -1507,7 +1510,9 @@ def trace_l1_group(
     query: L1TraceGroupQuery, session: Session = Depends(get_session)
 ) -> L1TraceGroupArtifact:
     session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
-    return L1Resolver(CanonicalRepository(session)).resolve_group(query, EvaluationView())
+    result = L1Resolver(CanonicalRepository(session)).resolve_group(query, EvaluationView())
+    diagnose_exact_traces(session, result.results)
+    return result
 
 
 @app.post(
@@ -1521,7 +1526,9 @@ def trace_interface_physical(
 ) -> InterfacePhysicalTraceArtifact:
     session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
     repository = CanonicalRepository(session)
-    return InterfacePhysicalResolver(repository).resolve(query, EvaluationView())
+    result = InterfacePhysicalResolver(repository).resolve(query, EvaluationView())
+    diagnose_composed_trace(session, result)
+    return result
 
 
 @app.post(
@@ -1534,9 +1541,9 @@ def trace_physical_objects_l1(
     session: Session = Depends(get_session),
 ) -> PhysicalObjectL1TraceArtifact:
     session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
-    return PhysicalObjectL1Resolver(CanonicalRepository(session)).resolve(
-        query, EvaluationView()
-    )
+    result = PhysicalObjectL1Resolver(CanonicalRepository(session)).resolve(query, EvaluationView())
+    diagnose_composed_trace(session, result)
+    return result
 
 
 @app.post(

@@ -1268,6 +1268,7 @@ class PhysicalCompatibilityPair(BaseModel):
     pair: int
     verdict: PhysicalCompatibilityVerdict
     reasons: list[PhysicalCompatibilityReason]
+    optical_diagnostic: "OpticalDiagnostic | None" = None
 
 
 class PhysicalCompatibilityPreview(BaseModel):
@@ -1569,6 +1570,50 @@ class EvidenceEdge(BaseModel):
     evidence_refs: list[EvidenceRef]
 
 
+class OpticalProposedEnding(BaseModel):
+    side: Literal["A", "B"]
+    interface_id: uuid.UUID
+    member_index: int
+
+
+class OpticalFact(BaseModel):
+    source: Literal[
+        "CABLE", "PROPOSED_CABLE", "BASE_MEMBER_MAPPING", "MODULE_MEMBER_MAPPING",
+        "TRANSCEIVER", "DIRECT_CONNECTION", "UNRESOLVED_INTERNAL_CONNECTION", "ACTIVE_ENDING",
+    ]
+    value: Literal["SM", "MM", "NO_FIBER", "COPPER"] | None = None
+    unknown_reason: Literal[
+        "FIBER_TYPE_UNSPECIFIED", "DIRECT_CONSTRUCTION_UNKNOWN", "INTERNAL_PROVENANCE_UNKNOWN",
+        "TRANSCEIVER_FIBER_TYPE_UNKNOWN", "ACTIVE_ENDING_CHARACTERISTIC_UNKNOWN",
+    ] | None = None
+    points: list[PointMemberAddress]
+    trace_edge_id: str | None = None
+    canonical_refs: list[EvidenceRef]
+    provenance: OpticalProvenance | None = None
+    proposed_endings: list[OpticalProposedEnding] = Field(default_factory=list)
+
+
+class OpticalProvenance(BaseModel):
+    revision_id: uuid.UUID
+    mapping_ids: list[uuid.UUID]
+    internal_link_id: uuid.UUID | None = None
+
+
+class OpticalConflict(BaseModel):
+    kind: Literal["LOCAL", "END_TO_END"]
+    left_fact: int
+    right_fact: int
+    unknown_facts: list[int]
+
+
+class OpticalDiagnostic(BaseModel):
+    status: Literal["CONSISTENT", "CONFLICT", "UNKNOWN", "NOT_APPLICABLE"]
+    facts: list[OpticalFact]
+    conflicts: list[OpticalConflict]
+    termination: "L1TraceTermination | None" = None
+    reason: Literal["INCOMPLETE_PATH", "NO_SEGMENTS", "OPTICAL_MODE_UNESTABLISHED"] | None = None
+
+
 class TraceGap(BaseModel):
     code: Literal["L1_TOPOLOGY_INCOMPLETE"]
     node_id: str | None = None
@@ -1601,6 +1646,7 @@ class TraceArtifact(BaseModel):
     gaps: list[TraceGap]
     warnings: list[dict[str, Any]]
     terminations: list[L1TraceTermination]
+    optical_diagnostics: list[OpticalDiagnostic] = Field(default_factory=list)
 
 
 class L1TraceGroupArtifact(BaseModel):
@@ -1626,6 +1672,7 @@ class PhysicalObjectL1TraceBranch(BaseModel):
     target: PointMemberAddress
     edge_ids: list[str]
     evidence_refs: list[EvidenceRef]
+    optical_diagnostic: OpticalDiagnostic | None = None
 
 
 class PhysicalObjectL1TraceCycle(BaseModel):
@@ -1633,6 +1680,7 @@ class PhysicalObjectL1TraceCycle(BaseModel):
     state_node_ids: list[str]
     edge_ids: list[str]
     evidence_refs: list[EvidenceRef]
+    optical_diagnostic: OpticalDiagnostic | None = None
 
 
 class PhysicalObjectL1TraceArtifact(BaseModel):
@@ -1709,6 +1757,7 @@ class InterfacePhysicalTraceBranch(BaseModel):
     target_candidate_id: str
     edge_ids: list[str]
     evidence_refs: list[EvidenceRef]
+    optical_diagnostic: OpticalDiagnostic | None = None
 
 
 class InterfacePhysicalTraceArtifact(BaseModel):

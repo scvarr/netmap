@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app import models as m
 from app.errors import NetMapError
+from app.optical_diagnostics import OpticalPreviewLine, diagnose_preview
 from app.schemas import (
     PhysicalCompatibilityConfirmation, PhysicalCompatibilityPair,
     PhysicalCompatibilityPreview, PhysicalCompatibilityReason, PhysicalCompatibilityVerdict,
@@ -116,6 +117,7 @@ def verify_compatibility(
     *, intent: object, preview: bool, confirmation: PhysicalCompatibilityConfirmation | None,
     require_preview: bool = False,
     replacement_point_id: uuid.UUID | None = None,
+    optical_lines: list[OpticalPreviewLine] | None = None,
 ) -> PhysicalCompatibilityPreview:
     try:
         points = {point.id: point for pair in pairs for point in pair if point is not None}
@@ -165,9 +167,12 @@ def verify_compatibility(
     token = hmac.digest(_TOKEN_KEY, payload, "sha256").hex()
     result = PhysicalCompatibilityPreview(verdict=verdict, pairs=results, token=token if verdict != "DENY" else None)
     if preview:
+        if optical_lines is not None:
+            for pair, diagnostic in zip(results, diagnose_preview(session, optical_lines), strict=True):
+                pair.optical_diagnostic = diagnostic
         return result
 
-    details = {"pairs": [pair.model_dump() for pair in results]}
+    details = {"pairs": [pair.model_dump(exclude={"optical_diagnostic"}) for pair in results]}
     if verdict == "DENY":
         raise NetMapError("PHYSICAL_COMPATIBILITY_DENIED", "Physical compatibility check failed", details)
     if confirmation is not None and not hmac.compare_digest(confirmation.token.encode(), token.encode()):

@@ -19,10 +19,12 @@ from app.models import (
     PacketProcessingPlanAttachment, PhysicalObject, PortType, RoutingPolicyRule, SecurityPolicyAttachment,
 )
 from app.port_types import supports_transceiver_termination
+from app.optical_diagnostics import OpticalPreviewLine
 from app.physical_compatibility import verify_compatibility
+from app.repository import PointMember
 from app.physical_connections import PhysicalConnectionCatalog
 from app.physical_object_details_resolver import cable_endpoint_addresses
-from app.schemas import InstallModuleRequest
+from app.schemas import EvidenceRef, InstallModuleRequest
 
 
 class ModuleInstallationDeletionCatalog:
@@ -109,18 +111,30 @@ class ModuleInstallationDeletionCatalog:
                         InterfacePhysicalBinding.point_member == 1))
                 pairs = []
                 state = []
+                optical_lines = []
+                cable_by_connection = {row["connection_id"]: row["cable_id"] for row in cables}
                 for snapshot, connection, member, remote, local_is_a, index in moves:
                     if index > new_point.cardinality:
                         raise ValidationError("Select a member within the new ConnectionPoint cardinality")
                     pairs.append((new_point, remote) if local_is_a else (remote, new_point))
                     state.append((snapshot.expected.model_dump(mode="json"), index))
+                    if preview:
+                        local = PointMember(new_point.id, index)
+                        peer = PointMember(remote.id, member.point_b_member if local_is_a else member.point_a_member)
+                        optical_lines.append(OpticalPreviewLine(
+                            (local, peer) if local_is_a else (peer, local),
+                            cable_id=uuid.UUID(cable_by_connection[str(connection.id)]),
+                            interfaces=(query.interface_id, None) if local_is_a else (None, query.interface_id),
+                            refs=(EvidenceRef(entity_type="Connection", entity_id=connection.id),
+                                  EvidenceRef(entity_type="ConnectionMember", entity_id=member.id)),
+                        ))
                 expectation = query.model_dump(mode="json", exclude={"compatibility", "cable_assignments"})
                 result = verify_compatibility(
                     self.session, pairs, intent=["transceiver-replacement", object_id, installation_id,
                         expectation, orientation, revision.transceiver, target.transceiver,
                         sorted((str(item.cable_id), item.member_index) for item in query.cable_assignments), state],
                     preview=preview, confirmation=query.compatibility, require_preview=True,
-                    replacement_point_id=new_point.id,
+                    replacement_point_id=new_point.id, optical_lines=optical_lines if preview else None,
                 )
                 if preview:
                     return {"compatibility": result, "cables": cables}

@@ -13,11 +13,12 @@ from app.models import (
     ConnectionPoint, HardwareInterfaceAssociation, NetworkInterface, NetworkInterfacePhysicalOwner,
 )
 from app.physical_compatibility import point_member_designations, verify_compatibility
-from app.repository import CanonicalRepository, ConnectionMemberInput
+from app.optical_diagnostics import OpticalPreviewLine
+from app.repository import CanonicalRepository, ConnectionMemberInput, PointMember
 from app.schemas import (
     BulkCableDeleteCandidate, BulkCableDeleteExpectation, BulkCableDeleteMember,
     CableReconnectExactExpectation, CableReconnectRequest, CableReconnectSnapshot,
-    FiberType, PhysicalCompatibilityConfirmation, PhysicalCompatibilityPreview,
+    EvidenceRef, FiberType, PhysicalCompatibilityConfirmation, PhysicalCompatibilityPreview,
 )
 
 
@@ -257,6 +258,13 @@ class PhysicalConnectionCatalog:
                     endpoint_owners, cable_label, cable_label_template_id, generate_cable_label,
                     generated, fiber_type],
             preview=preview, confirmation=compatibility, require_preview=multichannel,
+            optical_lines=[OpticalPreviewLine(
+                tuple(PointMember(point.id, requested_members[point.id]) if point is not None else None
+                      for point in endpoint_points),
+                fiber_type=fiber_type,
+                interfaces=tuple(end.interface_id if isinstance(end, NetworkInterfaceEndpoint) else None
+                                 for end in (source, target)),
+            )] if preview else None,
         )
         if preview:
             return result
@@ -369,6 +377,8 @@ class PhysicalConnectionCatalog:
             intent=["bulk", addresses, template_id, labels, fiber_types],
             preview=preview, confirmation=compatibility,
             require_preview=any(point.cardinality > 1 for point in by_id.values()),
+            optical_lines=[OpticalPreviewLine((PointMember(*a), PointMember(*b)), fiber_type=fiber_type)
+                           for (a, b), fiber_type in zip(addresses, fiber_types, strict=True)] if preview else None,
         )
         if preview:
             return result
@@ -500,6 +510,13 @@ class PhysicalConnectionCatalog:
                         request.side, new_point.id, new_index],
                 preview=preview, confirmation=request.compatibility,
                 require_preview=require_preview,
+                optical_lines=[OpticalPreviewLine(
+                    (PointMember(pair[0].id, new_index if request.side == "A" else member.point_a_member),
+                     PointMember(pair[1].id, new_index if request.side == "B" else member.point_b_member)),
+                    cable_id=cable_id,
+                    refs=(EvidenceRef(entity_type="Connection", entity_id=connection.id),
+                          EvidenceRef(entity_type="ConnectionMember", entity_id=member.id)),
+                )] if preview else None,
             )
             if preview:
                 return result
