@@ -1,5 +1,5 @@
 import type { PhysicalObjectL1TraceArtifact, PhysicalTraceEvidenceRef } from './physicalObjectL1TraceTypes';
-import type { TopologyProjectionDocument } from './types';
+import type { ProjectionSourceRef, TopologyProjectionDocument } from './types';
 
 export interface PhysicalTraceOverlay {
   highlightedNodeIds: Set<string>;
@@ -11,10 +11,6 @@ export interface PhysicalTraceOverlay {
 }
 
 const emptyOverlay = (): PhysicalTraceOverlay => ({ highlightedNodeIds: new Set(), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set(), highlightedConnectionPointIds: new Set(), highlightedCableIds: new Set() });
-
-const sameEvidence = (left: PhysicalTraceEvidenceRef, right: { entity_type: string; entity_id: string }): boolean => (
-  left.entity_type === right.entity_type && left.entity_id === right.entity_id
-);
 
 export const physicalTraceOverlayFor = (
   artifact: PhysicalObjectL1TraceArtifact | null,
@@ -39,39 +35,41 @@ export const physicalTraceOverlayFor = (
     evidence.push(...edge.evidence_refs);
     for (const nodeId of [edge.from_node_id, edge.to_node_id]) {
       const refs = traceNodes.get(nodeId)?.canonical_refs ?? [];
-      evidence.push(...refs);
       for (const ref of refs) if (ref.entity_type === 'ConnectionPoint') points.add(ref.entity_id);
     }
   }
   const members = new Set(evidence.filter(ref => ref.entity_type === 'ConnectionMember').map(ref => ref.entity_id));
+  const cables = new Set(evidence.filter(ref => ref.entity_type === 'Cable').map(ref => ref.entity_id));
+  const objects = new Set(evidence.filter(ref => ref.entity_type === 'PhysicalObject').map(ref => ref.entity_id));
+  const matchesLine = (ref: ProjectionSourceRef) => ref.ref_type === 'CANONICAL_FACT' && (
+    (ref.entity_type === 'ConnectionMember' && members.has(ref.entity_id))
+    || (ref.entity_type === 'Cable' && cables.has(ref.entity_id))
+  );
 
   for (const edge of document.edges) {
+    let highlighted = edge.source_refs.some(matchesLine);
     for (const pair of edge.attributes.endpoint_pairs ?? []) {
-      if (members.has(pair.connection_member_id)) {
-        points.add(pair.from_connection_point_id);
-        points.add(pair.to_connection_point_id);
-        overlay.highlightedConnectionMemberIds.add(pair.connection_member_id);
-      }
       const cable = pair.cable_ref;
-      if (
-        cable?.ref_type === 'CANONICAL_FACT'
-        && cable.entity_type === 'Cable'
-        && evidence.some((item) => (
-          sameEvidence(item, cable)
-          || (item.entity_type === 'Connection' && item.entity_id === pair.connection_id)
-          || (item.entity_type === 'ConnectionMember' && item.entity_id === pair.connection_member_id)
-        ))
-      ) {
-        overlay.highlightedCableIds.add(cable.entity_id);
+      const canonicalCable = cable?.ref_type === 'CANONICAL_FACT' && cable.entity_type === 'Cable' ? cable : undefined;
+      if (!members.has(pair.connection_member_id) && !(canonicalCable && matchesLine(canonicalCable))) continue;
+      highlighted = true;
+      points.add(pair.from_connection_point_id);
+      points.add(pair.to_connection_point_id);
+      overlay.highlightedConnectionMemberIds.add(pair.connection_member_id);
+      if (canonicalCable) {
+        overlay.highlightedCableIds.add(canonicalCable.entity_id);
       }
     }
-    if (!edge.source_refs.some((ref) => evidence.some((item) => sameEvidence(item, ref)))) continue;
+    if (!highlighted) continue;
     overlay.highlightedEdgeIds.add(edge.id);
     // Endpoints are emphasized only because this exact physical projection edge is evidenced.
     overlay.highlightedNodeIds.add(edge.from_node_id);
     overlay.highlightedNodeIds.add(edge.to_node_id);
   }
   for (const node of document.nodes) {
+    if (node.source_refs.some(ref => ref.entity_type === 'PhysicalObject' && objects.has(ref.entity_id))) {
+      overlay.highlightedNodeIds.add(node.id);
+    }
     for (const link of node.attributes.internal_l1_links ?? []) {
       if (members.has(link.connection_member_id)) {
         points.add(link.from_connection_point_id);
@@ -80,12 +78,9 @@ export const physicalTraceOverlayFor = (
         overlay.highlightedNodeIds.add(node.id);
       }
     }
-    if (node.source_refs.some((ref) => evidence.some((item) => sameEvidence(item, ref)))) {
-      overlay.highlightedNodeIds.add(node.id);
-    }
   }
   for (const continuation of document.l1_off_map_continuations ?? []) {
-    if (!continuation.source_refs.some(ref => ref.entity_type === 'ConnectionMember' && members.has(ref.entity_id))) continue;
+    if (!matchesLine(continuation.cable_ref) && !continuation.source_refs.some(matchesLine)) continue;
     points.add(continuation.local_connection_point_ref.entity_id);
     overlay.highlightedCableIds.add(continuation.cable_ref.entity_id);
     overlay.highlightedNodeIds.add(continuation.local_node_id);

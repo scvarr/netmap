@@ -363,7 +363,9 @@ view fingerprint и resolver/compiler version входят в ключ; invalida
 commit, старый artifact не источник актуальной truth. Query memo не меняет semantics.
 
 Exact L1 trace строится по ConnectionPoint UUID и member index, включая
-свободные members. Внешний переход разрешает Cable через Connection.
+свободные members. Разные владельцы ConnectionPoint задают внешнюю роль
+перехода, включая DIRECT_CONNECTION. Cable, если он существует, разрешается
+через Connection. Подсветку связей трассы определяют ConnectionMember и Cable.
 Внутренние mappings ограничены одним объектом и одной установкой модуля.
 Активное окончание завершает обход. Одиночный и групповой API используют
 согласованный снимок canonical topology на запрос. Полнота группы

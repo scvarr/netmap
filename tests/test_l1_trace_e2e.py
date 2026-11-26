@@ -178,7 +178,7 @@ def test_cycle_terminates_and_missing_path_is_unknown_with_typed_gap():
     assert termination["node_id"] in {node["id"] for node in artifact["nodes"]}
 
 
-def test_corrupt_connection_member_has_localized_model_diagnostic():
+def test_corrupt_connection_member_returns_model_error():
     with SessionLocal.begin() as session:
         repository = CanonicalRepository(session)
         object_a = repository.add_physical_object()
@@ -212,13 +212,8 @@ def test_corrupt_connection_member_has_localized_model_diagnostic():
         timeout=5,
     )
 
-    assert response.status_code == 200
-    artifact = response.json()
-    assert artifact["verdict"] == "UNKNOWN"
-    assert artifact["edges"] == []
-    termination, = artifact["terminations"]
-    assert termination["reason"] == "INVALID_CANONICAL_DATA"
-    assert termination["node_id"] == f"l1-state:{source_id}:1"
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "MODEL_ERROR"
 
 
 def test_passive_pass_through_reuses_members_and_returns_all_evidence():
@@ -284,7 +279,7 @@ def test_passive_pass_through_reuses_members_and_returns_all_evidence():
     } == expected_evidence_ids
 
 
-def test_corrupt_connection_cardinality_has_localized_model_diagnostic():
+def test_corrupt_connection_cardinality_returns_model_error():
     with SessionLocal.begin() as session:
         repository = CanonicalRepository(session)
         object_a = repository.add_physical_object()
@@ -319,13 +314,10 @@ def test_corrupt_connection_cardinality_has_localized_model_diagnostic():
         timeout=5,
     )
 
-    assert response.status_code == 200
-    artifact = response.json()
-    assert artifact["verdict"] == "UNKNOWN"
-    termination, = artifact["terminations"]
-    assert termination["reason"] == "INVALID_CANONICAL_DATA"
-    details = termination["details"]
-    assert details.pop("message")
+    assert response.status_code == 409
+    error = response.json()["error"]
+    assert error["code"] == "MODEL_ERROR"
+    details = error["details"]
     assert details == {
         "connection_id": str(connection_id),
         "cardinality": 2,

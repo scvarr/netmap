@@ -6,8 +6,10 @@ from sqlalchemy import select
 from app.database import SessionLocal
 from app.models import Cable, Connection, ConnectionMember, ConnectionPoint, SavedMap
 from app.repository import CanonicalRepository, ConnectionMemberInput
+from app.workspace_portability import import_package, reset_dataset
 from tests.l1_builders import connect_trace_points, create_endpoint_cable, post_confirmed_physical
-from tests.test_hardware_configuration import client
+from tests.test_hardware_configuration import client, create_base, create_object
+from tests.test_multichannel_definitions import payload as fanout_payload
 from tests.test_passive_module_continuity import points, setup
 from tests.test_physical_compatibility_e2e import port, typed_points
 
@@ -38,6 +40,64 @@ def assert_ending(result, reason, address):
     assert termination["reason"] == reason
     node = next(node for node in result["nodes"] if node["id"] == termination["node_id"])
     assert node["payload"] == address
+
+
+def test_external_direct_connection_continues_through_passive_mapping():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        source, panel, target = [repository.add_physical_object() for _ in range(3)]
+        left = repository.add_connection_point(source.id, 2)
+        rear = repository.add_connection_point(panel.id, 2)
+        front = repository.add_connection_point(panel.id, 2)
+        right = repository.add_connection_point(target.id, 2)
+        direct, (member,) = repository.add_connection(
+            left.id, rear.id, 1, [ConnectionMemberInput(1, 1, 2)]
+        )
+        connect_trace_points(repository, rear, front, members=[ConnectionMemberInput(1, 2, 1)])
+        connect_trace_points(repository, front, right, members=[ConnectionMemberInput(1, 1, 2)])
+
+    forward = pair(left.id, 1, right.id, 2)
+    exported = client.get("/v1/workspace/package")
+    assert exported.status_code == 200, exported.text
+    with SessionLocal.begin() as session:
+        reset_dataset(session)
+        import_package(session, exported.json())
+
+    result = group(forward, pair(right.id, 2, left.id, 1))
+    assert result["completeness"] == "COMPLETE"
+    trace, reverse = result["results"]
+    assert len(trace["edges"]) == len(reverse["edges"]) == 3
+    assert exact(forward) == trace
+    assert {
+        (ref["entity_type"], ref["entity_id"]) for ref in trace["edges"][0]["evidence_refs"]
+    } == {
+        ("ConnectionPoint", str(left.id)), ("ConnectionPoint", str(rear.id)),
+        ("Connection", str(direct.id)), ("ConnectionMember", str(member.id)),
+    }
+    assert exact(pair(left.id, 1, right.id, 1))["verdict"] == "UNKNOWN"
+
+
+def test_object_and_interface_traces_report_l1_model_error():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        source, target, other = [repository.add_physical_object() for _ in range(3)]
+        left, right, competing = [repository.add_connection_point(owner.id, 1)
+                                  for owner in (source, target, other)]
+        source_interface, target_interface = [repository.add_network_interface() for _ in range(2)]
+        repository.add_interface_physical_binding(source_interface.id, left.id, 1)
+        repository.add_interface_physical_binding(target_interface.id, right.id, 1)
+        connect_trace_points(repository, left, right)
+        repository.add_connection(left.id, competing.id, 1, [ConnectionMemberInput(1, 1, 1)])
+
+    for path, body in [
+        ("physical-objects/l1", {"from_physical_object_id": str(source.id), "to_physical_object_id": str(target.id)}),
+        ("interfaces/physical", {"from_interface_id": str(source_interface.id), "to_interface_id": str(target_interface.id)}),
+    ]:
+        response = client.post(f"/v1/traces/{path}", json=body)
+        assert response.status_code == 409, response.text
+        error = response.json()["error"]
+        assert error["code"] == "MODEL_ERROR"
+        assert error["details"]["role"] == "EXTERNAL"
 
 
 def test_rear_24_subset_permutation_and_resolved_evidence_after_reload():
@@ -107,6 +167,58 @@ def test_rear_24_subset_permutation_and_resolved_evidence_after_reload():
     })
     assert object_trace.status_code == 200
     assert object_trace.json()["verdict"] == "REACHABLE"
+
+
+def test_rear_24_materializes_permuted_mappings_to_separate_front_points():
+    definition = fanout_payload(24)
+    definition["slots"] = definition["slots"][:4]
+    definition["internal_links"] = definition["internal_links"][:3]
+    rear_members = (3, 24, 12)
+    for link, rear_member in zip(definition["internal_links"], rear_members):
+        link["member_mappings"] = [{"from_member_index": rear_member, "to_member_index": 1}]
+    template, _ = create_base(definition)
+    instance = create_object(template)
+    point_ids = {slot["slot_key"]: slot["connection_point_ref"]["entity_id"] for slot in instance["slots"]}
+    rear, front_one, front_two, front_three = [point_ids[slot["key"]] for slot in definition["slots"]]
+
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        terminal = repository.add_connection_point(repository.add_physical_object().id, 2)
+        interface = repository.add_network_interface()
+        cable_ids = {}
+        for front, index in ((front_one, 2), (front_two, 1)):
+            repository.add_interface_physical_binding(interface.id, terminal.id, index)
+            connection, _ = connect_trace_points(
+                repository, session.get(ConnectionPoint, uuid.UUID(front)), terminal,
+                members=[ConnectionMemberInput(1, 1, index)],
+            )
+            cable_ids[front] = str(session.scalar(select(Cable.id).where(Cable.connection_id == connection.id)))
+
+    internal_pairs = [pair(rear, member, front, 1)
+                      for member, front in zip(rear_members, (front_one, front_two, front_three))]
+    assert group(*internal_pairs)["completeness"] == "COMPLETE"
+    assert group(internal_pairs[1])["completeness"] == "COMPLETE"
+    assert group(pair(rear, 24, front_one, 1), pair(rear, 3, front_two, 1))["completeness"] == "UNCONFIRMED"
+    assert group(pair(rear, 4, front_three, 1))["completeness"] == "UNCONFIRMED"
+    expected = [pair(rear, 24, terminal.id, 1), pair(rear, 3, terminal.id, 2)]
+    assert group(pair(rear, 24, terminal.id, 2))["completeness"] == "UNCONFIRMED"
+    proof = group(*expected)
+    assert proof["completeness"] == "COMPLETE"
+    assert group(*expected) == proof
+
+    entities = {"Cable": Cable, "Connection": Connection, "ConnectionMember": ConnectionMember,
+                "ConnectionPoint": ConnectionPoint}
+    with SessionLocal() as session:
+        for front, artifact, query in zip((front_two, front_one), proof["results"], expected):
+            assert [node["payload"] for node in artifact["nodes"]] == [
+                query["from"], {"point_id": front, "member_index": 1}, query["to"],
+            ]
+            internal, external = artifact["edges"]
+            assert not any(ref["entity_type"] == "Cable" for ref in internal["evidence_refs"])
+            assert cable_ref(artifact) == cable_ids[front]
+            for hop in (internal, external):
+                for ref in hop["evidence_refs"]:
+                    assert session.get(entities[ref["entity_type"]], uuid.UUID(ref["entity_id"])) is not None
 
 
 @pytest.mark.parametrize("permutation", [(1, 2), (2, 1)])
@@ -183,7 +295,7 @@ def test_break_then_disconnect_and_reconnect_refreshes_evidence():
         connect_trace_points(CanonicalRepository(session), rear, front)
     missing_external = exact(expected)
     assert len(missing_external["edges"]) == 2
-    assert_ending(missing_external, "MISSING_EXTERNAL_CABLE", pair(left.id, 1, front.id, 1)["to"])
+    assert_ending(missing_external, "MISSING_EXTERNAL_CONNECTION", pair(left.id, 1, front.id, 1)["to"])
 
     create_endpoint_cable(client, str(front.id), str(right.id))
     first = exact(pair(front.id, 1, right.id, 1))
@@ -217,7 +329,11 @@ def test_preserves_prefix_at_active_end_or_corrupt_continuity(termination):
             repository.add_interface_physical_binding(repository.add_network_interface().id, rear.id, 1)
         else:
             members[0].point_b_member = 2
-    artifact = exact(pair(left.id, 1, right.id, 1))
+    expected = pair(left.id, 1, right.id, 1)
+    artifact = (
+        group(expected)["results"][0] if termination == "INVALID_CANONICAL_DATA"
+        else exact(expected)
+    )
     assert artifact["verdict"] == "UNKNOWN"
     assert len(artifact["edges"]) == 1
     assert_ending(artifact, termination, pair(left.id, 1, rear.id, 1)["to"])

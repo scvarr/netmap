@@ -31,12 +31,17 @@ class L1Resolver:
     def __init__(self, repository: CanonicalRepository) -> None:
         self.repository = repository
 
-    def resolve(self, query: L1TraceQuery, evaluation_view: EvaluationView) -> TraceArtifact:
+    def resolve(
+        self, query: L1TraceQuery, evaluation_view: EvaluationView, *,
+        localize_model_errors: bool = False,
+    ) -> TraceArtifact:
         source = PointMember(query.from_.point_id, query.from_.member_index)
         target = PointMember(query.to.point_id, query.to.member_index)
         self.repository.validate_point_member(source)
         self.repository.validate_point_member(target)
-        reached, predecessors, closures, terminations = self._traverse(source, target)
+        reached, predecessors, closures, terminations = self._traverse(
+            source, target, localize_model_errors=localize_model_errors
+        )
         if reached:
             steps = self._path(source, target, predecessors)
         else:
@@ -90,7 +95,10 @@ class L1Resolver:
             sources.add(source)
             targets.add(target)
 
-        results = [self.resolve(pair, evaluation_view) for pair in query.expected_pairs]
+        results = [
+            self.resolve(pair, evaluation_view, localize_model_errors=True)
+            for pair in query.expected_pairs
+        ]
         confirmed = sum(result.verdict == "REACHABLE" for result in results)
         completeness: Literal["COMPLETE", "PARTIAL", "UNCONFIRMED"] = "UNCONFIRMED"
         if confirmed == len(results):
@@ -100,7 +108,8 @@ class L1Resolver:
         return L1TraceGroupArtifact(completeness=completeness, results=results)
 
     def _traverse(
-        self, source: PointMember, target: PointMember | None
+        self, source: PointMember, target: PointMember | None, *,
+        localize_model_errors: bool = False,
     ) -> tuple[
         bool,
         dict[PointMember, TraversalStep],
@@ -118,6 +127,8 @@ class L1Resolver:
             try:
                 active, edges = self.repository.get_l1_member_links(current)
             except ModelError as error:
+                if not localize_model_errors:
+                    raise
                 terminal_members.add(current)
                 terminations.append(L1TraceTermination(
                     node_id=node_id,
@@ -141,18 +152,18 @@ class L1Resolver:
             if arrival is not None:
                 edges = [
                     edge for edge in edges
-                    if (edge.cable_id is None) != (arrival.edge.cable_id is None)
+                    if edge.external != arrival.edge.external
                 ]
             if not edges:
                 reason: Literal[
-                    "NO_CONNECTION", "MISSING_EXTERNAL_CABLE", "MISSING_INTERNAL_CONTINUITY", "OTHER_ENDING"
+                    "NO_CONNECTION", "MISSING_EXTERNAL_CONNECTION", "MISSING_INTERNAL_CONTINUITY", "OTHER_ENDING"
                 ] = "NO_CONNECTION"
                 if arrival is not None and target is not None and current.point_id == target.point_id:
                     reason = "OTHER_ENDING"
                 elif arrival is not None:
                     reason = (
-                        "MISSING_EXTERNAL_CABLE" if arrival.edge.cable_id is None
-                        else "MISSING_INTERNAL_CONTINUITY"
+                        "MISSING_INTERNAL_CONTINUITY" if arrival.edge.external
+                        else "MISSING_EXTERNAL_CONNECTION"
                     )
                 terminations.append(L1TraceTermination(node_id=node_id, reason=reason))
 

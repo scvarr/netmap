@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from app.database import SessionLocal
-from app.models import L2EgressRule
+from app.models import Connection, L2EgressRule
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from tests.l1_builders import connect_trace_points
 
@@ -377,6 +377,21 @@ def test_passive_l1_preserves_ordered_stack_and_target_can_translate():
             if ref["entity_type"] == "Connection"
         ]
     ) == 3
+
+
+def test_l1_role_conflict_surfaces_as_model_error_in_l2_transport():
+    facts = configured_one_hop()
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        original = session.get(Connection, facts["connections"][0])
+        other = repository.add_connection_point(repository.add_physical_object().id, 1)
+        repository.add_connection(original.point_a_id, other.id, 1, [ConnectionMemberInput(1, 1, 1)])
+
+    response = trace(facts["source"], [], facts["target"], [])
+    assert response.status_code == 409, response.text
+    error = response.json()["error"]
+    assert error["code"] == "MODEL_ERROR"
+    assert error["details"]["role"] == "EXTERNAL"
 
 
 @pytest.mark.parametrize(

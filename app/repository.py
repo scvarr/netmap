@@ -94,6 +94,7 @@ class L1AdjacencyEdge:
     connection_id: uuid.UUID
     connection_member_id: uuid.UUID
     cable_id: uuid.UUID | None
+    external: bool
     internal_scope_matches: bool
 
 
@@ -2513,6 +2514,7 @@ class CanonicalRepository:
                         connection.id,
                         member.id,
                         row.cable_id,
+                        not row.same_object,
                         row.internal_scope_matches,
                     )
                 )
@@ -2524,6 +2526,7 @@ class CanonicalRepository:
                         connection.id,
                         member.id,
                         row.cable_id,
+                        not row.same_object,
                         row.internal_scope_matches,
                     )
                 )
@@ -2541,18 +2544,17 @@ class CanonicalRepository:
         edges = self.get_l1_adjacency([address])[address]
         roles: set[bool] = set()
         for edge in edges:
-            external = edge.cable_id is not None
-            if not external and not edge.internal_scope_matches:
+            if not edge.external and not edge.internal_scope_matches:
                 raise ModelError(
-                    "Connection without Cable crosses internal continuity scope",
+                    "Internal Connection crosses module installation scope",
                     {"connection_id": str(edge.connection_id)},
                 )
-            if external in roles:
+            if edge.external in roles:
                 raise ModelError(
                     "Multiple Connections occupy the same L1 member role",
-                    {"connection_id": str(edge.connection_id), "role": "EXTERNAL" if external else "INTERNAL"},
+                    {"connection_id": str(edge.connection_id), "role": "EXTERNAL" if edge.external else "INTERNAL"},
                 )
-            roles.add(external)
+            roles.add(edge.external)
         return active, edges
 
     @staticmethod

@@ -28,9 +28,10 @@ DB uniqueness ограничена одним Connection. Exact trace прове
 [Модели](../app/models.py) · [Repository](../app/repository.py).
 
 Cable является отдельной canonical сущностью, связанной с одним Connection
-уникальным обязательным `connection_id`. Один Connection может существовать
-без Cable. Внешний Cable соединяет разные PhysicalObjects, внутренняя
-continuity обходится без Cable. IDs Cable и Connection различны. Маркировка
+уникальным обязательным `connection_id`. Connection между разными
+PhysicalObjects представляет внешнюю связь. При отсутствии Cable такая
+связь отображается как DIRECT_CONNECTION. Connection внутри одного объекта
+представляет внутреннюю continuity. IDs Cable и Connection различны. Маркировка
 и CableLabelHistory обслуживают Cable lifecycle отдельно от общего activity.
 
 Resolver обходит canonical adjacency по точным адресам. Point trace и
@@ -213,9 +214,11 @@ UUID Cable, Connection и ConnectionMember, маркировка с истори
 **IMPLEMENTED.** Запрос `POST /v1/traces/l1` принимает `from` и `to`.
 Каждый адрес содержит UUID `point_id` и целый `member_index` от 1 до
 cardinality, в том числе для свободных members. Переход содержит refs к обоим
-ConnectionPoint, Connection, ConnectionMember и Cable для внешней линии.
-Внутренний переход читается из materialized mappings внутри одного объекта
-и одной установки, если точки принадлежат модулю. Binding к NetworkInterface
+ConnectionPoint, Connection, ConnectionMember и к Cable при наличии.
+Роль перехода определяется владельцами окончаний. Внешняя связь, в том
+числе DIRECT_CONNECTION, занимает внешнюю роль member. Внутренний переход
+читается из materialized mappings внутри одного объекта и одной установки,
+если точки принадлежат модулю. Binding к NetworkInterface
 определяет активное окончание для данного member. Достигнутое активное
 окончание завершает обход.
 
@@ -230,9 +233,11 @@ permutation. `results` сохраняет порядок запроса и во�
 
 Для недоказанной пары возвращаются UNKNOWN, доказанный участок и
 `terminations` с указанием node ID и причины. Причины различают отсутствие
-внешней линии, внутренней continuity или любой коммутации, другое окончание,
-ошибку canonical данных и цикл. Ошибка в пределах обхода одной пары не
-прерывает остальные пары. Невалидные адреса и неоднозначные ожидаемые
+внешней связи (`MISSING_EXTERNAL_CONNECTION`), внутренней continuity или
+любой коммутации, другое окончание и цикл. Одиночная трассировка и
+объектный и интерфейсный поиск возвращают HTTP 409 `MODEL_ERROR` при
+повреждении модели. В группе повреждение локализуется как
+`INVALID_CANONICAL_DATA` в результате затронутой пары. Невалидные адреса и неоднозначные ожидаемые
 mappings отклоняют запрос с HTTP 422. Evidence читается заново при каждом
 запросе из согласованного snapshot canonical topology и не хранится.
 
@@ -628,8 +633,8 @@ Connection и ConnectionMember. Операция атомарна, а при н�
 
 - Patch cord и цепь пассивных объектов: точные hops, после разрыва UNKNOWN.
   Активный объект не добавляет transit.
-- Rear-N → N front с независимыми внешними Cable, включая rear-24:
-  exact member evidence после reload, permutation/subset, отсутствие пути
+- Rear-N → отдельные front points с независимыми внешними Cable, включая
+  rear-24: exact member evidence после reload, permutation/subset, резерв, отсутствие пути
   к чужим members и полный групповой результат по ожидаемым парам.
 - Внешний lifecycle: актуальный preview, create/edit/disconnect, занятый member
   отклоняет всю запись, свободный member того же point доступен, disconnect

@@ -1556,7 +1556,7 @@ class L1TraceTermination(BaseModel):
     reason: Literal[
         "EXPECTED_MEMBER",
         "OTHER_ENDING",
-        "MISSING_EXTERNAL_CABLE",
+        "MISSING_EXTERNAL_CONNECTION",
         "MISSING_INTERNAL_CONTINUITY",
         "NO_CONNECTION",
         "INVALID_CANONICAL_DATA",

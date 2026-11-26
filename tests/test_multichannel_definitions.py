@@ -5,9 +5,9 @@ import pytest
 from sqlalchemy import select, func
 from app.database import SessionLocal
 from app import models as m
-from app.schemas import CreateBaseTemplateRequest
+from app.schemas import CreateBaseTemplateRequest, EvaluationView, L1TraceQuery, PointMemberAddress
 from app.hardware_catalog import HardwareCatalog
-from app.repository import CanonicalRepository, PointMember
+from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.base_template_review import physical_structure
 from tests.test_hardware_configuration import base_payload, create_base, create_object, client
@@ -39,14 +39,23 @@ def test_exact_materialization_reload_trace_archive(n, fanout):
     with SessionLocal() as session:
         assert session.get(m.ConnectionPoint, ids[d['slots'][0]['key']]).cardinality == n
         resolver = L1Resolver(CanonicalRepository(session))
+        rear_id = ids[d['slots'][0]['key']]
+
+        def verdict(rear_member, front_id, front_member):
+            return resolver.resolve(
+                L1TraceQuery(
+                    from_=PointMemberAddress(point_id=rear_id, member_index=rear_member),
+                    to=PointMemberAddress(point_id=front_id, member_index=front_member),
+                ),
+                EvaluationView(),
+            ).verdict
+
         for i,s in enumerate(d['slots'][1:],1):
             pairs = [(i,1)] if fanout else [(j,n-j+1) for j in range(1,n)]
             for a,b in pairs:
-                target = PointMember(ids[s['key']],b)
-                assert target in resolver._traverse(PointMember(ids[d['slots'][0]['key']],a),target)[0]
+                assert verdict(a, ids[s['key']], b) == "REACHABLE"
         if not fanout:
-            target = PointMember(ids[d['slots'][1]['key']],1)
-            assert target not in resolver._traverse(PointMember(ids[d['slots'][0]['key']],n),target)[0]
+            assert verdict(n, ids[d['slots'][1]['key']], 1) == "UNKNOWN"
     package = client.get('/v1/workspace/package').json()
     from app.workspace_portability import validate_package, import_package, reset_dataset
     validate_package(package)

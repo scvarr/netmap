@@ -1461,7 +1461,7 @@ def evaluate_packet_flow(
 @app.post(
     "/v1/traces/l1",
     response_model=TraceArtifact,
-    responses={422: {"model": ErrorResponse}},
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
 )
 def trace_l1(
     query: L1TraceQuery, session: Session = Depends(get_session)
