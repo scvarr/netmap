@@ -83,7 +83,11 @@ describe('exact member trace panel', () => {
     const verify = () => user.click(screen.getByRole('button', { name: 'Проверить группу' }));
     await select(user, 'a2:1', 'b1:2');
     await add();
-    const first = trace(pair());
+    const first = {
+      ...trace(pair()), optical_diagnostics: [{
+        status: 'CONSISTENT', conflicts: [], facts: [{ source: 'CABLE', value: 'SM', points: [], canonical_refs: [] }],
+      }],
+    };
     fetch.mockResolvedValueOnce(json({ results: [first], completeness: 'COMPLETE' }));
     await verify();
     expect(await screen.findByText(/COMPLETE ·/)).toBeInTheDocument();
@@ -93,16 +97,28 @@ describe('exact member trace panel', () => {
     await select(user, 'a2:2', 'b1:1');
     await add();
     expect(screen.queryByText(/COMPLETE ·/)).not.toBeInTheDocument();
-    const broken = trace(pair(2, 1), 'INVALID_CANONICAL_DATA');
+    const broken = {
+      ...trace(pair(2, 1), 'INVALID_CANONICAL_DATA'), optical_diagnostics: [{
+        status: 'UNKNOWN', reason: 'INCOMPLETE_PATH', conflicts: [], facts: [{
+          source: 'MODULE_MEMBER_MAPPING', value: null, points: [pair(2, 1).from], canonical_refs: [],
+          model_error: { code: 'MODEL_ERROR', reason: 'INVALID_CANONICAL_DATA', detail: 'AMBIGUOUS_MEMBER_MAPPING' },
+        }],
+      }],
+    };
     fetch.mockResolvedValueOnce(json({ results: [first, broken], completeness: 'PARTIAL' }));
     await verify();
     expect(await screen.findByText(/PARTIAL ·/)).toBeInTheDocument();
+    expect(screen.getByText(/SM\/MM согласованы.*\(1\).*Недостаточно сведений \(1\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Повреждён источник канонических данных/)).not.toBeInTheDocument();
     expect(fetch).toHaveBeenLastCalledWith('/api/v1/traces/l1/group', expect.objectContaining({
       body: JSON.stringify({ expected_pairs: [pair(), pair(2, 1)] }),
     }));
     await user.click(screen.getByRole('button', { name: 'Не удалось подтвердить физический путь L1' }));
     expect(screen.getByText(/Некорректные данные канонической топологии/)).toBeInTheDocument();
     expect(screen.getByText('Подтверждённые участки: 1')).toBeInTheDocument();
+    expect(screen.getByText(/Повреждён источник канонических данных.*AMBIGUOUS_MEMBER_MAPPING/))
+      .toHaveTextContent(/Cassette \/ MPO · #2/);
+    expect(screen.getByText('Физический путь неполон')).toBeInTheDocument();
     expect(onEvidence).toHaveBeenLastCalledWith(broken);
   });
 

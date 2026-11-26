@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../i18n';
+import { ConnectionPreview } from './OpticalEvidence';
+import { useCompatibilityPreview } from './useCompatibilityPreview';
 import { usePhysicalCompatibilityConfirmation } from './PhysicalCompatibilityDialog';
 import type {
   DeviceDetailsDataSource,
@@ -84,20 +86,28 @@ export function ConnectPhysicalInterface({
       : []
   ), [sourceInterface.interface_ref.entity_id, targetState]);
 
+  const input: CreatePhysicalLinkRequest = {
+    source_interface_id: sourceInterface.interface_ref.entity_id,
+    target_interface_id: targetInterfaceId,
+    ...cableNaming, ...(fiberType && { fiber_type: fiberType }),
+  };
+  const ready = targetInterfaces.some(item => item.interface_ref.entity_id === targetInterfaceId)
+    && (!cableNaming.generate_cable_label || Boolean(cableNaming.cable_label_template_id));
+  const review = useCompatibilityPreview(
+    open && ready && writeDataSource.previewPhysicalLink ? JSON.stringify(input) : null,
+    writeDataSource, () => writeDataSource.previewPhysicalLink!(input),
+  );
+  const canWrite = ready && (!writeDataSource.previewPhysicalLink || Boolean(review.preview && review.preview.verdict !== 'DENY'));
   const submit = async () => {
-    if (!targetInterfaceId || busy || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
+    if (!canWrite || busy) return;
     setBusy(true);
     setError(null);
+    const current = review.capture();
     try {
-      const request: CreatePhysicalLinkRequest = {
-        source_interface_id: sourceInterface.interface_ref.entity_id,
-        target_interface_id: targetInterfaceId,
-        ...cableNaming,
-        ...(fiberType && { fiber_type: fiberType }),
-      };
-      if (writeDataSource.previewPhysicalLink) {
-        const compatibility = await confirm(await writeDataSource.previewPhysicalLink(request));
-        if (!compatibility) return;
+      const request = { ...input };
+      if (review.preview) {
+        const compatibility = await confirm(review.preview);
+        if (!compatibility || !current()) return;
         request.compatibility = compatibility;
       }
       setSubmitting(true);
@@ -108,6 +118,8 @@ export function ConnectPhysicalInterface({
       setTargetInterfaceId('');
       onConnected();
     } catch (reason) {
+      if (!current()) return;
+      if (review.preview) review.retry();
       setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
     } finally {
       setSubmitting(false);
@@ -181,11 +193,12 @@ export function ConnectPhysicalInterface({
           )}
           <label>{t('fiber.type')} <FiberTypeSelect value={fiberType} onChange={setFiberType} disabled={busy} /></label>
           <CableNamingFields dataSource={cableLabelDataSource} disabled={busy} value={cableNaming} onChange={setCableNaming} />
+          <ConnectionPreview review={review} />
           <div className="connect-interface__actions">
             <button type="button" onClick={() => setOpen(false)} disabled={busy}>
               Отмена
             </button>
-            <button type="submit" disabled={!targetInterfaceId || busy || (cableNaming.generate_cable_label === true && !cableNaming.cable_label_template_id)}>
+            <button type="submit" disabled={!canWrite || busy}>
               {submitting ? 'Подключаем…' : busy ? t('compatibility.checking') : error ? 'Повторить' : 'Подключить'}
             </button>
           </div>

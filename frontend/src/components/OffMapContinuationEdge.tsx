@@ -30,7 +30,7 @@ export function OffMapContinuationEdge({ id, source, data, selected }: EdgeProps
     sourceNode.data.facePresentation?.visibleBlueprint,
   );
   if (!endpoint) return null;
-  const color = selected ? '#54e3b4' : data?.cablePresentationEmphasis === 'traced' ? '#f0bd66' : '#d7a960';
+  const color = data?.opticalTraceColor ?? (selected ? '#54e3b4' : data?.cablePresentationEmphasis === 'traced' ? '#f0bd66' : '#d7a960');
   const vector = vectorFor(endpoint.side);
   const markerX = endpoint.x + vector.x * 34;
   const markerY = endpoint.y + vector.y * 34;

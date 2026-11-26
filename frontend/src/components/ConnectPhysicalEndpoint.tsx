@@ -18,6 +18,8 @@ import type { TopologyProjectionNode } from "../topology/types";
 import { PhysicalMemberSelect } from "./PhysicalMemberSelect";
 import { isAvailablePhysicalPort, physicalMemberLabel, selectedPhysicalMember } from "../topology/physicalPortAvailability";
 import { useI18n } from "../i18n";
+import { ConnectionPreview } from './OpticalEvidence';
+import { useCompatibilityPreview } from './useCompatibilityPreview';
 import { usePhysicalCompatibilityConfirmation } from './PhysicalCompatibilityDialog';
 import { PhysicalCompatibilityError } from '../topology/physicalCompatibility';
 import { FiberTypeSelect } from './FiberTypeSelect';
@@ -225,32 +227,30 @@ export function ConnectPhysicalEndpoint({
   const summary = targetPoint && canSubmit && (sourcePoint.cardinality > 1 || targetPoint.cardinality > 1) ? (
     `${physicalMemberLabel(sourcePoint, sourcePoint.label, sourceIndex, true)} ↔ ${targetName} / ${physicalMemberLabel(targetPoint, targetPoint.label, targetIndex, true)}`
   ) : undefined;
+  const target: PhysicalEndpointRequest = mode === "PORT"
+    ? { kind: "CONNECTION_POINT", connection_point_id: targetEntityId, member_index: targetIndex! }
+    : { kind: "NETWORK_INTERFACE", network_interface_id: targetEntityId };
+  const input: CreatePhysicalEndpointConnectionRequest = {
+    source: { kind: "CONNECTION_POINT", connection_point_id: sourcePoint.connection_point_ref.entity_id, member_index: sourceIndex! },
+    target, ...cableNaming, ...(fiberType && { fiber_type: fiberType }),
+  };
+  const ready = canSubmit && selectedObjectIsVisible && sourceIndex !== undefined
+    && (!cableNaming.generate_cable_label || Boolean(cableNaming.cable_label_template_id));
+  const review = useCompatibilityPreview(
+    open && ready && writeDataSource.previewPhysicalEndpointConnection ? JSON.stringify(input) : null,
+    writeDataSource, () => writeDataSource.previewPhysicalEndpointConnection!(input),
+  );
+  const canWrite = ready && (!writeDataSource.previewPhysicalEndpointConnection || Boolean(review.preview && review.preview.verdict !== 'DENY'));
   const submit = async () => {
-    if (!canSubmit || !sourceIndex || busy || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
+    if (!canWrite || busy) return;
     setBusy(true);
     setError(null);
-    const target: PhysicalEndpointRequest =
-      mode === "PORT"
-        ? {
-            kind: "CONNECTION_POINT",
-            connection_point_id: targetEntityId,
-            member_index: targetIndex!,
-          }
-        : { kind: "NETWORK_INTERFACE", network_interface_id: targetEntityId };
+    const current = review.capture();
     try {
-      const request: CreatePhysicalEndpointConnectionRequest = {
-        source: {
-          kind: "CONNECTION_POINT",
-          connection_point_id: sourcePoint.connection_point_ref.entity_id,
-          member_index: sourceIndex,
-        },
-        target,
-        ...cableNaming,
-        ...(fiberType && { fiber_type: fiberType }),
-      };
-      if (writeDataSource.previewPhysicalEndpointConnection) {
-        const compatibility = await confirm(await writeDataSource.previewPhysicalEndpointConnection(request), summary);
-        if (!compatibility) return;
+      const request = { ...input };
+      if (review.preview) {
+        const compatibility = await confirm(review.preview, summary);
+        if (!compatibility || !current()) return;
         request.compatibility = compatibility;
       }
       setSubmitting(true);
@@ -258,6 +258,8 @@ export function ConnectPhysicalEndpoint({
       reset();
       onConnected();
     } catch (reason) {
+      if (!current()) return;
+      if (review.preview) review.retry();
       setError(reason instanceof PhysicalCompatibilityError ? reason.message : t('physical.connectFailed'));
     } finally {
       setSubmitting(false);
@@ -431,6 +433,7 @@ export function ConnectPhysicalEndpoint({
           {summary && <p>{summary}</p>}
           <label>{t('fiber.type')} <FiberTypeSelect value={fiberType} onChange={setFiberType} disabled={busy} /></label>
           <CableNamingFields dataSource={cableLabelDataSource} disabled={busy} value={cableNaming} onChange={setCableNaming} />
+          <ConnectionPreview review={review} />
           <div className="connect-interface__actions">
             <button type="button" disabled={busy} onClick={reset}>
               {t("action.cancel")}
@@ -438,7 +441,7 @@ export function ConnectPhysicalEndpoint({
             <button
               type="submit"
               disabled={
-                !canSubmit || !selectedObjectIsVisible || busy || (cableNaming.generate_cable_label === true && !cableNaming.cable_label_template_id)
+                !canWrite || busy
               }
             >
               {submitting ? t("connect.connecting") : busy ? t('compatibility.checking') : error ? t("action.retry") : t("connect.connect")}

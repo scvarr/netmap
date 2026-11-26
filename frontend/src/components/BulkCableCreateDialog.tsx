@@ -1,7 +1,8 @@
 import { FiberTypeSelect } from './FiberTypeSelect';
 import type { FiberType } from '../topology/fiberTypes';
+import { OpticalPreview } from './OpticalEvidence';
 import { usePhysicalCompatibilityConfirmation } from './PhysicalCompatibilityDialog';
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { BulkPhysicalConnectionError } from '../topology/apiPhysicalEndpointConnectionWriteDataSource';
 import type { CableLabelDataSource, CableLabelTemplate } from '../topology/cableLabelTypes';
@@ -329,6 +330,8 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
   const [busy, setBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const inFlight = useRef(false);
+  const previewScope = useRef(0);
+  useLayoutEffect(() => () => { previewScope.current++; }, [sourceId, writer]);
   const pairTable = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (stage === 'pairs' || stage === 'preview') pairTable.current?.focus();
@@ -440,16 +443,17 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
   const submit = () => run(async () => {
     if (stage !== 'preview' || !canCreate || !writer.createBulkPhysicalConnections) return;
     setError(null);
+    const scope = previewScope.current;
     try {
       let operation = request;
       if (writer.previewBulkPhysicalConnections && !review) {
         const preview = await writer.previewBulkPhysicalConnections(request);
-        setCompatibilityReview({ requestKey, preview });
+        if (scope === previewScope.current) setCompatibilityReview({ requestKey, preview });
         return;
       }
       if (review) {
         const compatibility = await confirm(review.preview);
-        if (!compatibility) return;
+        if (!compatibility || scope !== previewScope.current) return;
         operation = { ...request, compatibility };
       }
       setSubmitting(true);
@@ -531,7 +535,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
           {pairing && <p>{t('map.bulk.adjust')}</p>}
           {pairing && hasOccupied && <p role="alert">{t('map.bulk.resolveOccupied')}</p>}
           {!pairing && <FiberTypeSelect action value={null} label={t('fiber.applyAll')} disabled={busy}
-            onChange={fiberType => setPairs(current => current.map(pair => ({ ...pair, fiberType })))} />}
+            onChange={fiberType => { setCompatibilityReview(undefined); setPairs(current => current.map(pair => ({ ...pair, fiberType }))); }} />}
           <div className="catalog-table-wrap map-dialog-table bulk-create-pairs" ref={pairTable} tabIndex={0}
             role="region" aria-label={t('map.bulk.pairs', { count: pairs.length })}>
             <table className="catalog-table">
@@ -562,8 +566,10 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
                     {channelOccupied(right, pair.target) && <div>{t('map.bulk.occupiedChannel')}</div>}
                   </>}</td>
                 {!pairing && <td><FiberTypeSelect label={t('fiber.type') + ' · ' + (index + 1)}
-                  value={pair.fiberType ?? null} disabled={busy} onChange={fiberType => setPairs(current =>
-                    current.map(item => item.source === pair.source ? { ...item, fiberType } : item))} /></td>}
+                  value={pair.fiberType ?? null} disabled={busy} onChange={fiberType => {
+                    setCompatibilityReview(undefined);
+                    setPairs(current => current.map(item => item.source === pair.source ? { ...item, fiberType } : item));
+                  }} /></td>}
                 <td>{pairing
                   ? <button type="button" onClick={() => setPairs(current => current.filter(item => item.source !== pair.source))}>
                     {t('map.bulk.exclude')}
@@ -586,7 +592,15 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
             </label>}
           </div>
           {multichannel && !writer.previewBulkPhysicalConnections && <p role="alert">{t('map.bulk.previewUnavailable')}</p>}
-          {review && <BulkCompatibilitySummary key={requestKey} preview={review.preview} />}
+          {review && <>
+            <BulkCompatibilitySummary key={requestKey} preview={review.preview} />
+            <OpticalPreview preview={review.preview} pairLabel={index => {
+              const pair = pairs[index - 1];
+              const from = pair && left.byId.get(pair.source);
+              const to = pair && right.byId.get(pair.target);
+              return from && to ? `${left.labels.get(pair.source) ?? from.label} ↔ ${right.labels.get(pair.target) ?? to.label}` : undefined;
+            }} />
+          </>}
         </>}
         {busy && <p role="status">{t(submitting ? 'connect.connecting' : 'object.loading')}</p>}
         {error && <p role="alert">{error}</p>}

@@ -1,5 +1,6 @@
+import { OpticalPreview } from './OpticalEvidence';
 import { usePhysicalCompatibilityConfirmation } from './PhysicalCompatibilityDialog';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { compatibilityMessage, type PhysicalCompatibilityPreview } from '../topology/physicalCompatibility';
 import { CableReconnectError, type CableEnd, type CableReconnectDataSource, type CableReconnectSnapshot } from '../topology/apiCableReconnectDataSource';
@@ -35,6 +36,8 @@ export function CableReconnectDialog({ cableId, objects, details, writer, onComm
   const { confirm: confirmCompatibility, confirmationDialog } = usePhysicalCompatibilityConfirmation('compatibility.confirmReconnect');
   const [error, setError] = useState<'load' | 'target' | 'write' | 'unsupported'>();
   const [retry, setRetry] = useState(0);
+  const previewScope = useRef(0);
+  useLayoutEffect(() => () => { previewScope.current++; }, [cableId, writer, retry]);
 
   const panels = (document: PhysicalObjectDetailsDocument) => {
     const options = (document.panels ?? []).map(item => {
@@ -149,10 +152,13 @@ export function CableReconnectDialog({ cableId, objects, details, writer, onComm
     if (!current || !selected || selectedIndex === undefined) return;
     setCompatibility(undefined);
     setStep('checking');
+    const scope = previewScope.current;
     try {
-      setCompatibility(await writer.previewCompatibility(cableId, current.snapshot.expected, side, pointId(selected), selectedIndex));
+      const preview = await writer.previewCompatibility(cableId, current.snapshot.expected, side, pointId(selected), selectedIndex);
+      if (scope !== previewScope.current) return;
+      setCompatibility(preview);
     } catch {
-      setStep('conflict');
+      if (scope === previewScope.current) setStep('conflict');
       return;
     }
     setStep('review');
@@ -160,12 +166,14 @@ export function CableReconnectDialog({ cableId, objects, details, writer, onComm
   const canReconnect = Boolean(compatibility?.token) && compatibility?.verdict !== 'DENY';
   const confirm = async () => {
     if (step !== 'review' || !current || !selected || selectedIndex === undefined || !compatibility || !canReconnect) return;
+    const scope = previewScope.current;
     setStep('confirming');
     setError(undefined);
     try {
       const destination = target && endpoint(target, selected, selectedIndex);
       const end = t(side === 'A' ? 'catalog.endpointA' : 'catalog.endpointB');
       const confirmation = await confirmCompatibility(compatibility, `${current.snapshot.display_label} · ${end} → ${destination}`);
+      if (scope !== previewScope.current) return;
       if (confirmation === null) {
         setStep('review');
         return;
@@ -238,8 +246,10 @@ export function CableReconnectDialog({ cableId, objects, details, writer, onComm
           {step !== 'edit' && target && selected && selectedIndex !== undefined && <>
             <p>{t('map.reconnect.after')}</p>
             {ends(side === 'A' ? [endpoint(target, selected, selectedIndex), current.ends[1]] : [current.ends[0], endpoint(target, selected, selectedIndex)], side)}
-            {compatibility &&
-              <p role={compatibility.verdict === 'ALLOW' ? 'status' : 'alert'}>{compatibilityMessage(compatibility, t)}</p>}
+            {compatibility && <>
+              <p role={compatibility.verdict === 'ALLOW' ? 'status' : 'alert'}>{compatibilityMessage(compatibility, t)}</p>
+              <OpticalPreview preview={compatibility} />
+            </>}
           </>}
         </>}
       </>}

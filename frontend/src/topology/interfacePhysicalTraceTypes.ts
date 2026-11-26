@@ -1,3 +1,5 @@
+import type { OpticalDiagnostic } from './opticalDiagnostic';
+
 export interface InterfacePhysicalTraceQuery {
   from_interface_id: string;
   to_interface_id: string;
@@ -16,6 +18,7 @@ export interface InterfaceTraceEvidenceRef {
 
 export interface InterfacePhysicalTraceBranch {
   branch_id: string;
+  optical_diagnostic?: OpticalDiagnostic | null;
   source_candidate_id: string;
   target_candidate_id: string;
   edge_ids: string[];

@@ -7,6 +7,7 @@ import { usePortTypes } from './PortTypeSelect';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { BlueprintPresentation } from '../topology/types';
 import { panelCompositionBounds } from '../topology/blueprintDisplaySize';
+import { OpticalPreview } from './OpticalEvidence';
 import { useI18n, type MessageKey } from '../i18n';
 import { HardwareModuleError, hardwareModuleDataSource, type BlockingModuleCable, type BlockingModuleCableEndpoint, type HardwareConfiguration, type HardwareModuleDataSource, type ModuleInstallation, type ModuleTemplate, type ReplaceTransceiverInput } from '../topology/hardwareModules';
 import { physicalEndpointAddress } from '../topology/physicalPortAvailability';
@@ -122,6 +123,8 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
   const [blockingCables, setBlockingCables] = useState<BlockingModuleCable[]>([]);
   const [refreshFailed, setRefreshFailed] = useState(false);
   const [replacement, setReplacement] = useState<Replacement>();
+  const replacementScope = useRef(0);
+  useLayoutEffect(() => () => { replacementScope.current++; }, [objectId, dataSource]);
   const [selected, setSelected] = useState<string>();
   const [draft, setDraft] = useState<ModuleInstallation['layout']>();
   const gesture = useRef<{ x: number; y: number; layout: ModuleInstallation['layout']; resize: boolean } | undefined>(undefined);
@@ -233,11 +236,12 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
       })) }),
     };
     setPending(true);
+    const scope = replacementScope.current;
     setReplacement({ ...replacement, error: undefined, preview: undefined });
     try {
       if (review) {
         const result = await dataSource.previewTransceiverReplacement(objectId, source.id, input);
-        setReplacement({ ...replacement, error: undefined, cables: result.cables, preview: result.compatibility });
+        if (scope === replacementScope.current) setReplacement({ ...replacement, error: undefined, cables: result.cables, preview: result.compatibility });
         return;
       }
       if (preview?.token) input.compatibility = { token: preview.token, accept_unknown: preview.verdict === 'UNKNOWN' };
@@ -245,6 +249,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
       setReplacement(undefined);
       await refreshAfterModuleChange();
     } catch (error) {
+      if (scope !== replacementScope.current) return;
       const changed = error instanceof HardwareModuleError &&
         (error.reason === 'REPLACEMENT_CABLES_CHANGED' || error.blockingCables.length > 0);
       const latest = changed ? error.blockingCables : cables;
@@ -507,6 +512,8 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
         </>}
         {compatibility && <p className="transceiver-replacement__verdict"
           role={compatibility.verdict === 'ALLOW' ? 'status' : 'alert'}>{compatibilityMessage(compatibility, t)}</p>}
+        {compatibility && <OpticalPreview preview={compatibility}
+          pairLabel={pair => { const cable = replacementCables[pair - 1]; return cable && `${cableEnd(cable.local, true)} ↔ ${cableEnd(cable.remote, true)}`; }} />}
         {!!replacement.error && <div role="alert" className="catalog-dialog__error">
           {replacementStale ? t('hardware.replaceStale')
             : replacementConflict ? t('upgrade.conflict')

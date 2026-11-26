@@ -68,7 +68,13 @@ describe('MapPage visual wiring', () => {
           { index: 2, designation: 'Beta', occupied: index === 1 }],
       }] } };
     });
-    const preview = vi.fn().mockResolvedValue({ verdict: 'ALLOW', token: 'exact-preview', pairs: [] });
+    const preview = vi.fn().mockResolvedValue({ verdict: 'ALLOW', token: 'exact-preview', pairs: [{
+      pair: 1, verdict: 'ALLOW', reasons: ['COMPATIBLE'],
+      optical_diagnostic: {
+        status: 'NOT_APPLICABLE', conflicts: [],
+        facts: [{ source: 'PROPOSED_CABLE', value: 'COPPER', points: [], canonical_refs: [] }],
+      },
+    }] });
     const { write } = renderPage(undefined, vi.fn().mockResolvedValue({ ...doc, nodes }), undefined, preview);
     await screen.findByTestId('canvas');
     startWiring();
@@ -80,6 +86,9 @@ describe('MapPage visual wiring', () => {
     expect(create).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Канал назначения'), { target: { value: '1' } });
     expect(screen.getByText('Source / A01 · Beta → Target / B01 · Alpha')).toBeVisible();
+    await waitFor(() => expect(create).toBeEnabled());
+    expect(screen.queryByText(/Оптика SM\/MM/)).not.toBeInTheDocument();
+    expect(write).not.toHaveBeenCalled();
     fireEvent.click(create);
     await waitFor(() => expect(write).toHaveBeenCalledWith(expect.objectContaining({
       source: { kind: 'CONNECTION_POINT', connection_point_id: 'a-cp', member_index: 2 },

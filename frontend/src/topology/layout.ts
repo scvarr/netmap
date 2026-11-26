@@ -30,6 +30,8 @@ export interface DeviceNodeData extends Record<string, unknown> {
   resolvedFace?: import('./physicalFaces').ResolvedFace;
   temporaryFace?: import('./physicalFaces').TemporaryFace;
   traceHighlightedConnectionPointIds?: ReadonlySet<string>;
+  opticalLocalPointIds?: ReadonlySet<string>;
+  opticalMemberHighlights?: ReadonlyMap<string, import('./interfacePhysicalTraceOverlay').OpticalHighlight>;
   facePresentation?: ReturnType<typeof import('./physicalFaces').blueprintFace>;
   onFaceChange?: (value: import('./savedMapTypes').FaceOverride) => void;
   faceBusy?: boolean;
@@ -52,6 +54,7 @@ export interface LogicalEdgeData extends Record<string, unknown> {
   projection?: TopologyProjectionEdge;
   endpointPair?: PhysicalEndpointPair;
   renderCableInForegroundOnly?: boolean;
+  opticalTraceColor?: string;
   cableNode?: TopologyProjectionNode;
   supportingEdgeIds?: string[];
   continuation?: L1OffMapContinuation;

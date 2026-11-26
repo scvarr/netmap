@@ -1,3 +1,4 @@
+import type { OpticalDiagnostic } from './opticalDiagnostic';
 import type { PhysicalTraceEdge, PhysicalTraceNode } from './physicalObjectL1TraceTypes';
 
 export interface MemberAddress {
@@ -20,6 +21,7 @@ export interface ExactMemberTrace {
   verdict: 'REACHABLE' | 'UNKNOWN';
   nodes: (PhysicalTraceNode & { payload: MemberAddress })[];
   edges: PhysicalTraceEdge[];
+  optical_diagnostics?: OpticalDiagnostic[];
   terminations: { node_id: string; reason: typeof terminationReasons[number] }[];
 }
 

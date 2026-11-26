@@ -1,3 +1,4 @@
+import type { OpticalDiagnostic } from './opticalDiagnostic';
 import type { useI18n } from '../i18n';
 
 export interface PhysicalCompatibilityConfirmation {
@@ -18,7 +19,7 @@ export const compatibilityReasonKeys = {
 export interface PhysicalCompatibilityPreview {
   verdict: Verdict;
   token: string | null;
-  pairs: { pair: number; verdict: Verdict; reasons: (keyof typeof compatibilityReasonKeys)[] }[];
+  pairs: { pair: number; verdict: Verdict; reasons: (keyof typeof compatibilityReasonKeys)[]; optical_diagnostic?: OpticalDiagnostic | null }[];
 }
 
 export class PhysicalCompatibilityError extends Error {}

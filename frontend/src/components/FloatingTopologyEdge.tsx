@@ -1,3 +1,4 @@
+import { opticalHighlightColors } from '../topology/interfacePhysicalTraceOverlay';
 import { physicalMemberLabel } from '../topology/physicalPortAvailability';
 import { useRuntimePortTypes } from './RuntimePortTypes';
 import {
@@ -212,7 +213,9 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates, endpointEmphasi
       const { fill, outline } = physicalPortPaint(portTypes?.find(type => type.id === port.portTypeId)?.color,
         occupied, tracedPorts.has(port.id) || Boolean(node.data.traceHighlightedConnectionPointIds?.has(port.id)), state);
       const className = `cable-route-port-marker${blueprint ? ' cable-route-port-marker--blueprint' : ''}${port.square ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`;
-      const style = { fill: port.transceiver && !occupied ? 'none' : fill, stroke: outline, strokeWidth: blueprint ? BLUEPRINT_PORT_STROKE : undefined };
+      const local = node.data.opticalLocalPointIds?.has(port.id) && !visiblePorts.some(other => other.id !== port.id
+        && other.endpoint.x === endpoint.x && other.endpoint.y === endpoint.y);
+      const style = { fill: port.transceiver && !occupied ? 'none' : fill, stroke: local ? opticalHighlightColors.LOCAL : outline, strokeWidth: local ? 2 * unit : blueprint ? BLUEPRINT_PORT_STROKE : undefined };
       const emphasis = state === 'source' || state === 'destination' ? undefined : endpointEmphasis.get(port.id);
       const neighbours = emphasis ? visiblePorts.filter(other => other !== port &&
         Math.abs(other.endpoint.x - endpoint.x) < haloBounds + exclusionRadius &&
@@ -561,6 +564,7 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
     return <path key={segment.key} d={`M ${segment.from.x} ${segment.from.y} L ${segment.to.x} ${segment.to.y}`} fill="none"
       className={`${channel ? 'object-virtual-channel' : 'cable-route-foreground'} ${preview ? 'wiring-route-preview' : `cable-route-foreground--${emphasis}`}${hover ? ' cable-route-foreground--hovered' : ''}`}
       data-route-segment={segment.key} data-cable-ids={JSON.stringify([...segment.cables.keys()].sort())}
+      style={segment.cables.size === 1 && edge?.data?.opticalTraceColor ? { stroke: edge.data.opticalTraceColor } : undefined}
       data-preview={segment.preview || undefined}
       pointerEvents="none" />;
   };

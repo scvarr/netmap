@@ -1,6 +1,13 @@
 import type { PhysicalObjectL1TraceArtifact, PhysicalTraceEvidenceRef } from './physicalObjectL1TraceTypes';
 import type { ExactMemberTrace } from './exactMemberTrace';
 import type { ProjectionSourceRef, TopologyProjectionDocument } from './types';
+import { readOpticalPaths, type OpticalFact } from './opticalDiagnostic';
+import { memberAddressKey } from './exactMemberTrace';
+
+export type OpticalHighlight = 'LOCAL' | 'END_TO_END' | 'UNKNOWN';
+export const opticalHighlightColors: Record<OpticalHighlight, string> = {
+  LOCAL: '#ff3b48', END_TO_END: '#b46b72', UNKNOWN: '#9da8b0',
+};
 
 export interface PhysicalTraceOverlay {
   highlightedNodeIds: Set<string>;
@@ -10,6 +17,9 @@ export interface PhysicalTraceOverlay {
   faceConnectionPointIds?: Set<string>;
   /** Exact canonical Cable identities evidenced by the selected branch. */
   highlightedCableIds: Set<string>;
+  opticalCableHighlights?: Map<string, OpticalHighlight>;
+  opticalMemberHighlights?: Map<string, OpticalHighlight>;
+  opticalLocalPointIds?: Set<string>;
 }
 
 const emptyOverlay = (): PhysicalTraceOverlay => ({ highlightedNodeIds: new Set(), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set(), highlightedConnectionPointIds: new Set(), highlightedCableIds: new Set() });
@@ -20,30 +30,35 @@ export const physicalTraceOverlayFor = (
   selectedBranchId: string | null,
 ): PhysicalTraceOverlay => {
   const overlay = emptyOverlay();
-  if (!artifact || artifact.verdict !== 'REACHABLE' || !document || document.layer !== 'L1') return overlay;
+  if (!artifact || !document || document.layer !== 'L1') return overlay;
 
   const traceEdges = new Map(artifact.edges.map((edge) => [edge.id, edge]));
   const traceNodes = new Map(artifact.nodes.map((node) => [node.id, node]));
   const evidence: PhysicalTraceEvidenceRef[] = [];
-  const branch = artifact.branches.find((item) => item.branch_id === selectedBranchId);
-  if (!branch) return overlay;
-  evidence.push(...branch.evidence_refs);
+  const branch = artifact.verdict === 'REACHABLE' ? artifact.branches.find(item => item.branch_id === selectedBranchId) : undefined;
+  const cycle = artifact.cycles.find(item => item.cycle_id === selectedBranchId);
+  const selected = branch ?? cycle;
+  if (!selected) return overlay;
+  evidence.push(...selected.evidence_refs);
   const points = overlay.highlightedConnectionPointIds;
-  if (branch.source) points.add(branch.source.point_id);
-  if (branch.target) points.add(branch.target.point_id);
-  for (const edgeId of branch.edge_ids) {
+  if (branch?.source) points.add(branch.source.point_id);
+  if (branch?.target) points.add(branch.target.point_id);
+  const selectedEdges = [];
+  for (const edgeId of selected.edge_ids) {
     const edge = traceEdges.get(edgeId);
     if (!edge) continue;
+    selectedEdges.push(edge);
     evidence.push(...edge.evidence_refs);
     for (const nodeId of [edge.from_node_id, edge.to_node_id]) {
       const refs = traceNodes.get(nodeId)?.canonical_refs ?? [];
       for (const ref of refs) if (ref.entity_type === 'ConnectionPoint') points.add(ref.entity_id);
     }
   }
+  projectOpticalEvidence(document, overlay, [selected.optical_diagnostic], selectedEdges);
   return projectTraceEvidence(document, overlay, evidence);
 };
 
-export function exactTraceOverlayFor(trace: Pick<ExactMemberTrace, 'edges'> | null, document: TopologyProjectionDocument | null): PhysicalTraceOverlay {
+export function exactTraceOverlayFor(trace: Pick<ExactMemberTrace, 'edges' | 'optical_diagnostics'> | null, document: TopologyProjectionDocument | null): PhysicalTraceOverlay {
   const overlay = emptyOverlay();
   if (!trace || document?.layer !== 'L1') return overlay;
   const points = new Set<string>();
@@ -51,7 +66,64 @@ export function exactTraceOverlayFor(trace: Pick<ExactMemberTrace, 'edges'> | nu
     for (const ref of edge.evidence_refs) if (ref.entity_type === 'ConnectionPoint') points.add(ref.entity_id);
   }
   overlay.faceConnectionPointIds = points;
+  projectOpticalEvidence(document, overlay, trace.optical_diagnostics, trace.edges);
   return projectTraceEvidence(document, overlay, trace.edges.flatMap(edge => edge.evidence_refs), true);
+}
+
+function projectOpticalEvidence(
+  document: TopologyProjectionDocument,
+  overlay: PhysicalTraceOverlay,
+  value: unknown,
+  edges: ExactMemberTrace['edges'],
+) {
+  const diagnostics = readOpticalPaths(value).flatMap(item => item ? [item] : []);
+  if (!diagnostics.length) return;
+  const traceEdges = new Map(edges.map(edge => [edge.id, edge]));
+  const singleMemberPoints = new Set(document.nodes.flatMap(node => [
+    ...(node.attributes.connection_points ?? []),
+    ...(node.attributes.blueprint_presentation?.slots ?? []),
+  ]).filter(point => point.cardinality === 1).map(point => point.connection_point_id));
+  const cableHighlights = new Map<string, OpticalHighlight>();
+  const memberHighlights = new Map<string, OpticalHighlight>();
+  const localPoints = new Set<string>();
+  const priority = { END_TO_END: 1, UNKNOWN: 2, LOCAL: 3 };
+  const assign = (map: Map<string, OpticalHighlight>, id: string, kind: OpticalHighlight) => {
+    const prior = map.get(id);
+    if (!prior || priority[kind] > priority[prior]) map.set(id, kind);
+  };
+  const mark = (fact: OpticalFact, kind: OpticalHighlight) => {
+    const edge = fact.trace_edge_id && traceEdges.get(fact.trace_edge_id);
+    if (!edge) return;
+    for (const ref of fact.canonical_refs) {
+      if (!edge.evidence_refs.some(item => item.entity_type === ref.entity_type && item.entity_id === ref.entity_id)) continue;
+      if (ref.entity_type === 'Cable') assign(cableHighlights, ref.entity_id, kind);
+      if (ref.entity_type === 'ConnectionMember') assign(memberHighlights, ref.entity_id, kind);
+    }
+  };
+  for (const diagnostic of diagnostics) {
+    const { facts, conflicts } = diagnostic;
+    for (const fact of facts) {
+      if (fact.value === null || fact.unknown_reason || fact.model_error) mark(fact, 'UNKNOWN');
+    }
+    for (const { kind, left_fact: left, right_fact: right } of conflicts) {
+      const ordered = left < right ? facts.slice(left, right + 1) : [...facts.slice(left), ...facts.slice(0, right + 1)];
+      if (kind === 'END_TO_END') {
+        for (const fact of ordered) mark(fact, kind);
+        continue;
+      }
+      for (let index = 1; index < ordered.length; index++) {
+        const a = ordered[index - 1].points.at(-1);
+        const b = ordered[index].points[0];
+        if (a && b && memberAddressKey(a) === memberAddressKey(b) && a.member_index === 1
+          && singleMemberPoints.has(a.point_id)) localPoints.add(a.point_id);
+      }
+      // Only the transparent transition itself can receive LOCAL line styling.
+      for (const fact of ordered.slice(1, -1)) if (fact.value === 'NO_FIBER') mark(fact, kind);
+    }
+  }
+  overlay.opticalCableHighlights = cableHighlights;
+  overlay.opticalMemberHighlights = memberHighlights;
+  overlay.opticalLocalPointIds = localPoints;
 }
 
 function projectTraceEvidence(document: TopologyProjectionDocument, overlay: PhysicalTraceOverlay,

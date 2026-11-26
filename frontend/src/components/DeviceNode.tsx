@@ -101,7 +101,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
         </section>;
       })}
     </div>
-    <InternalL1Continuity width={displayWidth} height={displayHeight} segments={internalL1Segments(projection, selected, data.traceHighlightedConnectionMemberIds, data.wiringHighlightedConnectionMemberIds, displayWidth, blueprint)} />
+    <InternalL1Continuity width={displayWidth} height={displayHeight} segments={internalL1Segments(projection, selected, data.traceHighlightedConnectionMemberIds, data.wiringHighlightedConnectionMemberIds, displayWidth, blueprint)} opticalHighlights={data.opticalMemberHighlights} />
     </div>
     <div className="blueprint-map-node__cable-zone" aria-hidden="true" />
     <Handle type="source" position={Position.Top} className="device-node__handle" />

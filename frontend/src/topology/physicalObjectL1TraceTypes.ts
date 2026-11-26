@@ -1,3 +1,5 @@
+import type { OpticalDiagnostic } from './opticalDiagnostic';
+
 export interface PhysicalObjectL1TraceQuery {
   from_physical_object_id: string;
   to_physical_object_id: string;
@@ -13,6 +15,7 @@ export interface PhysicalTraceEvidenceRef {
 
 export interface PhysicalObjectL1TraceBranch {
   branch_id: string;
+  optical_diagnostic?: OpticalDiagnostic | null;
   source: { point_id: string; member_index: number };
   target: { point_id: string; member_index: number };
   edge_ids: string[];
@@ -21,6 +24,7 @@ export interface PhysicalObjectL1TraceBranch {
 
 export interface PhysicalObjectL1TraceCycle {
   cycle_id: string;
+  optical_diagnostic?: OpticalDiagnostic | null;
   state_node_ids: string[];
   edge_ids: string[];
   evidence_refs: PhysicalTraceEvidenceRef[];

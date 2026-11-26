@@ -23,6 +23,8 @@ import { CableReconnectDialog } from "../components/CableReconnectDialog";
 import { CableRenameDialog } from "../components/CableRenameDialog";
 import { BulkCableCreateDialog } from "../components/BulkCableCreateDialog";
 import { BulkCableDeleteDialog } from "../components/BulkCableDeleteDialog";
+import { ConnectionPreview } from "../components/OpticalEvidence";
+import { useCompatibilityPreview } from "../components/useCompatibilityPreview";
 import { TraceCommandBar } from "../components/TraceCommandBar";
 import { TopologyCanvas } from "../components/TopologyCanvas";
 import { MapObjectSearchPanel } from "../components/MapObjectSearchPanel";
@@ -272,7 +274,7 @@ function MapPageContent({
     useState<TopologyProjectionDocument | null>(null);
   const [traceArtifact, setTraceArtifact] =
     useState<PhysicalObjectL1TraceArtifact | null>(null);
-  const [exactTrace, setExactTrace] = useState<Pick<ExactMemberTrace, 'edges'> | null>(null);
+  const [exactTrace, setExactTrace] = useState<Pick<ExactMemberTrace, 'edges' | 'optical_diagnostics'> | null>(null);
   const [traceRevision, setTraceRevision] = useState(0);
   const currentTraceRevision = useRef(0);
   const [selectedTraceBranchId, setSelectedTraceBranchId] = useState<string | null>(null);
@@ -964,8 +966,31 @@ function MapPageContent({
     sourceObject: source.objectLabel, sourcePort: physicalMemberLabel(source, source.portLabel, source.memberIndex, target.cardinality > 1),
     targetObject: target.objectLabel, targetPort: physicalMemberLabel(target, target.portLabel, target.memberIndex, source.cardinality > 1),
   });
+  const wiringInput: CreatePhysicalEndpointConnectionRequest | undefined =
+    wiring.status === "confirming" || wiring.status === "checking" || wiring.status === "creating"
+      ? {
+        source: { kind: "CONNECTION_POINT", connection_point_id: wiring.source.connectionPointId, member_index: selectedPhysicalMember(wiring.source, wiring.source.memberIndex)! },
+        target: { kind: "CONNECTION_POINT", connection_point_id: wiring.target.connectionPointId, member_index: selectedPhysicalMember(wiring.target, wiring.target.memberIndex)! },
+        ...(wiring.fiberType && { fiber_type: wiring.fiberType }),
+        cable_label: wiring.naming.cable_label?.trim() || null,
+        cable_label_template_id: wiring.naming.cable_label_template_id ?? null,
+        generate_cable_label: wiring.naming.generate_cable_label === true,
+      } : undefined;
+  const wiringReview = useCompatibilityPreview(
+    wiringInput?.source.kind === 'CONNECTION_POINT' && wiringInput.source.member_index
+      && wiringInput.target.kind === 'CONNECTION_POINT' && wiringInput.target.member_index && 'mapId' in wiring && wiring.mapId === mapId
+      && viewMode === "physical" && physicalEndpointConnectionWriteDataSource?.previewPhysicalEndpointConnection
+      && (!wiringInput.generate_cable_label || wiringInput.cable_label_template_id)
+      ? JSON.stringify([mapId, variantId, traceRevision, wiringInput]) : null,
+    physicalEndpointConnectionWriteDataSource,
+    () => physicalEndpointConnectionWriteDataSource!.previewPhysicalEndpointConnection!(wiringInput!),
+  );
+  const wiringBlocked = Boolean(physicalEndpointConnectionWriteDataSource?.previewPhysicalEndpointConnection)
+    && (!wiringReview.preview || wiringReview.preview.verdict === "DENY");
   const createWiring = async () => {
     if (!physicalEndpointConnectionWriteDataSource || wiring.status !== "confirming" || (wiring.naming.generate_cable_label && !wiring.naming.cable_label_template_id)) return;
+    if (!wiringInput || wiringBlocked) return;
+    const current = wiringReview.capture();
     const operation = wiring;
     const source = endpointFor({ ...operation.source, label: operation.source.portLabel });
     const target = endpointFor({ ...operation.target, label: operation.target.portLabel }, operation.source.physicalObjectId);
@@ -977,19 +1002,10 @@ function MapPageContent({
     }
     setWiring({ ...operation, status: "checking", error: null });
     try {
-      const request: CreatePhysicalEndpointConnectionRequest = {
-        source: { kind: "CONNECTION_POINT", connection_point_id: operation.source.connectionPointId, member_index: sourceMember },
-        target: { kind: "CONNECTION_POINT", connection_point_id: operation.target.connectionPointId, member_index: targetMember },
-        ...(operation.fiberType && { fiber_type: operation.fiberType }),
-        cable_label: operation.naming.cable_label?.trim() || null,
-        cable_label_template_id: operation.naming.cable_label_template_id ?? null,
-        generate_cable_label: operation.naming.generate_cable_label === true,
-      };
-      if (physicalEndpointConnectionWriteDataSource.previewPhysicalEndpointConnection) {
-        const result = await physicalEndpointConnectionWriteDataSource.previewPhysicalEndpointConnection(request);
-        if (selectedMapId.current !== operation.mapId || viewMode !== "physical") return;
-        const compatibility = await confirmCompatibility(result, wiringSummary(operation));
-        if (selectedMapId.current !== operation.mapId) return;
+      const request = { ...wiringInput };
+      if (wiringReview.preview) {
+        const compatibility = await confirmCompatibility(wiringReview.preview, wiringSummary(operation));
+        if (!current() || currentTraceScope.current !== traceScope) return;
         if (!compatibility) { setWiring(current => current.status === "checking" ? { ...operation, error: null } : current); return; }
         request.compatibility = compatibility;
       }
@@ -997,7 +1013,8 @@ function MapPageContent({
       await physicalEndpointConnectionWriteDataSource.createPhysicalEndpointConnection(request);
       clearTrace();
     } catch (reason) {
-      if (selectedMapId.current === operation.mapId && viewMode === "physical") {
+      if (currentTraceScope.current === traceScope) {
+        if (wiringReview.preview) wiringReview.retry();
         setWiring({ ...operation, error: reason instanceof PhysicalCompatibilityError ? reason.message : t("map.connectFailed") });
       }
       return;
@@ -1617,9 +1634,10 @@ function MapPageContent({
     [exactTrace, traceArtifact, document, selectedTraceBranchId],
   );
   const traceOwnsFaces = !physicalAnnotationMode &&
-    (Boolean(exactTrace?.edges.length) || (traceArtifact?.verdict === "REACHABLE" &&
-    selectedTraceBranchId !== null &&
-    traceArtifact.branches.some(branch => branch.branch_id === selectedTraceBranchId)));
+    (Boolean(exactTrace?.edges.length) || (selectedTraceBranchId !== null && Boolean(traceArtifact && (
+      traceArtifact.branches.some(branch => branch.branch_id === selectedTraceBranchId)
+      || traceArtifact.cycles.some(cycle => cycle.cycle_id === selectedTraceBranchId)
+    ))));
   const defaultFace = activeVariant?.default_face;
   const faceViews = useMemo(() => defaultFace && activeMap && locations
     ? resolveFaces(defaultFace, locations, activeMap.location_states ?? [], activeMap.placements)
@@ -1907,7 +1925,7 @@ function MapPageContent({
           <p>{wiringSummary(wiring)}</p>
           <label>{t("fiber.type")} <FiberTypeSelect value={wiring.fiberType ?? null} disabled={wiring.status !== "confirming"}
             onChange={fiberType => setWiring(current => current.status === "confirming" ? { ...current, fiberType } : current)} /></label>
-          <CableNamingFields dataSource={cableLabelDataSource} disabled={wiring.status === "checking" || wiring.status === "creating"} value={wiring.naming} onChange={(naming) => { setWiring((current) => current.status === "confirming" ? { ...current, naming } : current); }} />{wiring.error && <p role="alert">{wiring.error}</p>}<div className="map-dialog__actions map-dialog__actions--wiring"><button type="button" disabled={wiring.status === "checking" || wiring.status === "creating"} onClick={() => { setWiring({ status: "selecting-target", mapId: wiring.mapId, source: wiring.source }); }}>{t("map.back")}</button><button type="button" disabled={wiring.status === "checking" || wiring.status === "creating"} onClick={() => { setWiring({ status: "idle" }); }}>{t("map.cancel")}</button><button type="button" disabled={wiring.status === "checking" || wiring.status === "creating" || !selectedPhysicalMember(wiring.source, wiring.source.memberIndex) || !selectedPhysicalMember(wiring.target, wiring.target.memberIndex) || (wiring.naming.generate_cable_label === true && !wiring.naming.cable_label_template_id)} onClick={() => void createWiring()}>{wiring.status === "creating" ? t("map.creating") : wiring.status === "checking" ? t("compatibility.checking") : wiring.error ? t("action.retry") : t("map.createCable")}</button></div></>}
+          <CableNamingFields dataSource={cableLabelDataSource} disabled={wiring.status === "checking" || wiring.status === "creating"} value={wiring.naming} onChange={(naming) => { setWiring((current) => current.status === "confirming" ? { ...current, naming } : current); }} /><ConnectionPreview review={wiringReview} />{wiring.error && <p role="alert">{wiring.error}</p>}<div className="map-dialog__actions map-dialog__actions--wiring"><button type="button" disabled={wiring.status === "checking" || wiring.status === "creating"} onClick={() => { setWiring({ status: "selecting-target", mapId: wiring.mapId, source: wiring.source }); }}>{t("map.back")}</button><button type="button" disabled={wiring.status === "checking" || wiring.status === "creating"} onClick={() => { setWiring({ status: "idle" }); }}>{t("map.cancel")}</button><button type="button" disabled={wiring.status === "checking" || wiring.status === "creating" || wiringBlocked || !selectedPhysicalMember(wiring.source, wiring.source.memberIndex) || !selectedPhysicalMember(wiring.target, wiring.target.memberIndex) || (wiring.naming.generate_cable_label === true && !wiring.naming.cable_label_template_id)} onClick={() => void createWiring()}>{wiring.status === "creating" ? t("map.creating") : wiring.status === "checking" ? t("compatibility.checking") : wiring.error ? t("action.retry") : t("map.createCable")}</button></div></>}
         {wiring.status === "refresh-failed" && <><p role="alert">{t("map.cableCreatedRefreshFailed")}</p><button type="button" onClick={() => void retryWiringRefresh()}>{t("map.retryRefresh")}</button></>}
       </div></section>}
       {confirmationDialog}
@@ -2014,8 +2032,8 @@ function MapPageContent({
                 return;
               }
               setTraceArtifact(artifact);
-              setSelectedTraceBranchId(artifact?.verdict === "REACHABLE" ? artifact.branches[0]?.branch_id ?? null : null);
-              if (artifact?.verdict === "REACHABLE" && viewMode === "logical") {
+              setSelectedTraceBranchId(artifact?.branches[0]?.branch_id ?? artifact?.cycles[0]?.cycle_id ?? null);
+              if ((artifact.verdict === "REACHABLE" || artifact.cycles.length > 0) && viewMode === "logical") {
                 setTraceViewNotice(t("map.tracePhysical"));
                 setParams((current) => {
                   const next = new URLSearchParams(current);

@@ -9,6 +9,8 @@ import {
 import { ApiInterfacePhysicalTraceDataSource } from '../topology/apiInterfacePhysicalTraceDataSource';
 import type { InterfacePhysicalTraceArtifact } from '../topology/interfacePhysicalTraceTypes';
 import type { TopologyDataSource, TopologyProjectionDocument } from '../topology/types';
+import { OpticalPaths, TraceOpticalEvidence } from './OpticalEvidence';
+import { opticalPathStatus, opticalStatuses } from '../topology/opticalDiagnostic';
 import { resolveTraceMemberNames, traceMemberLabel, traceObjectNames, tracePointNames } from '../topology/traceAddresses';
 
 interface MemberChoice {
@@ -189,6 +191,7 @@ export function ExactMemberTracePanel({ equipment, details, group, projection, p
       ?? t('trace.addressUnavailable', { point: value.point_id, index: value.member_index });
   };
   const trace = result?.results[selected];
+  const opticalByPair = result?.results.map(row => opticalPathStatus(row.optical_diagnostics));
   const nodes = new Map(trace?.nodes.map(node => [node.id, address(node.payload)]));
   const verdict = (value: ExactMemberTrace['verdict']) => t(value === 'REACHABLE' ? 'trace.reachable' : 'trace.unknown');
 
@@ -201,6 +204,9 @@ export function ExactMemberTracePanel({ equipment, details, group, projection, p
     </form>
     {error && <p className="trace-command__message" role="alert">{error}</p>}
     {result?.completeness && <p className="trace-command__group-verdict" role="status">{t(`trace.group.${result.completeness}`)}</p>}
+    {group && opticalByPair && <p>{t('optical.title')} · {opticalStatuses.map(status =>
+      `${t(`optical.${status}`)} (${opticalByPair.filter(pair => pair === status).length})`
+    ).join(' · ')}</p>}
     {group && pairs.length > 0 && <ol className="trace-pairs">
       {pairs.map((pair, index) => {
         const row = result?.results[index];
@@ -210,6 +216,7 @@ export function ExactMemberTracePanel({ equipment, details, group, projection, p
             setSelected(index);
             onEvidence(row);
           }}>{verdict(row.verdict)}</button>}
+          {opticalByPair && <span>{t(`optical.${opticalByPair[index]}`)}</span>}
           <button type="button" onClick={() => { reset(); setPairs(pairs.filter(item => item !== pair)); }}>{t('trace.removePair')}</button>
         </li>;
       })}
@@ -221,6 +228,7 @@ export function ExactMemberTracePanel({ equipment, details, group, projection, p
         <summary>{t('trace.provenSegments', { count: trace.edges.length })}</summary>
         <ol>{trace.edges.map(edge => <li key={edge.id}>{nodes.get(edge.from_node_id)} → {nodes.get(edge.to_node_id)}</li>)}</ol>
       </details>}
+      <OpticalPaths value={trace.optical_diagnostics} address={address} />
       {trace.terminations.map(end => <p key={`${end.node_id}/${end.reason}`}>{t(`trace.end.${end.reason}`)} · {nodes.get(end.node_id)}</p>)}
       <button type="button" className="trace-result__clear" onClick={reset}>{t('trace.clear')}</button>
     </section>}
@@ -243,10 +251,12 @@ function interfaceChoices(object: string, points: ConnectionPointDetails[]): Int
 const interfaceKey = (choice: InterfaceChoice) => choice.id;
 const interfaceTrace = new ApiInterfacePhysicalTraceDataSource();
 
-export function InterfaceTracePanel({ equipment, details, onEvidence }: {
+export function InterfaceTracePanel({ equipment, details, projection, projectionSource, onEvidence }: {
   equipment: CatalogInventoryEquipmentItem[] | null;
   details: PhysicalObjectDetailsDataSource;
-  onEvidence: (trace: Pick<ExactMemberTrace, 'edges'> | null) => void;
+  projection?: TopologyProjectionDocument | null;
+  projectionSource?: TopologyDataSource;
+  onEvidence: (trace: Pick<ExactMemberTrace, 'edges' | 'optical_diagnostics'> | null) => void;
 }) {
   const { t } = useI18n();
   const [source, setSource] = useState<InterfaceChoice | null>(null);
@@ -275,7 +285,7 @@ export function InterfaceTracePanel({ equipment, details, onEvidence }: {
       return;
     }
     const edges = new Map(artifact.edges.map(edge => [edge.id, edge]));
-    onEvidence({ edges: branch.edge_ids.flatMap(edgeId => {
+    onEvidence({ optical_diagnostics: branch.optical_diagnostic ? [branch.optical_diagnostic] : undefined, edges: branch.edge_ids.flatMap(edgeId => {
       const edge = edges.get(edgeId);
       return edge ? [edge] : [];
     }) });
@@ -318,6 +328,10 @@ export function InterfaceTracePanel({ equipment, details, onEvidence }: {
           </option>)}
         </select>
       </label>}
+      <TraceOpticalEvidence
+        value={result.branches.find(branch => branch.branch_id === selected)?.optical_diagnostic}
+        equipment={equipment} details={details} projection={projection} projectionSource={projectionSource} />
+      {result.gaps.length > 0 && <p>{t('trace.gaps', { gaps: result.gaps.map(gap => gap.code).join(', ') })}</p>}
       <button type="button" className="trace-result__clear" onClick={reset}>{t('trace.clear')}</button>
     </section>}
   </>;

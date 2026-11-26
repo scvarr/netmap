@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -11,6 +11,7 @@ import type {
   PhysicalLinkWriteDataSource,
 } from '../topology/physicalLinkWriteTypes';
 import { ConnectPhysicalInterface } from './ConnectPhysicalInterface';
+import type { PhysicalCompatibilityPreview } from '../topology/physicalCompatibility';
 
 const interfaceDetails = (
   id: string,
@@ -163,5 +164,43 @@ describe('ConnectPhysicalInterface', () => {
     render(<ConnectPhysicalInterface sourceInterface={interfaceDetails('core-eth0', 'eth0')} targetDevices={[{ physicalObjectId: 'fw-device', label: 'FW' }]} detailsDataSource={{ loadDeviceDetails: vi.fn().mockResolvedValue(targetDocument) }} writeDataSource={{ createPhysicalLink }} cableLabelDataSource={{ loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [{ id: 'template', name: 'FC', pattern: 'FC####', start_at: 1 }] }) } as any} onConnected={vi.fn()} />);
     await userEvent.click(screen.getByRole('button', { name: 'Подключить' })); await userEvent.selectOptions(screen.getByLabelText('Куда: устройство'), 'fw-device'); await screen.findByRole('option', { name: 'eth0' }); await userEvent.selectOptions(screen.getByLabelText('Куда: интерфейс'), 'fw-eth0'); await userEvent.click(screen.getByRole('radio', { name: 'Сгенерировать по шаблону' })); await userEvent.selectOptions(screen.getByLabelText('Шаблон'), 'template'); await userEvent.click(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!);
     expect(createPhysicalLink).toHaveBeenCalledWith(expect.objectContaining({ cable_label_template_id: 'template', generate_cable_label: true }));
+  });
+
+  it('shows the current optical warning before writing an ALLOW and discards a late preview', async () => {
+    let resolveOld!: (preview: PhysicalCompatibilityPreview) => void;
+    const old = new Promise<PhysicalCompatibilityPreview>(resolve => { resolveOld = resolve; });
+    const allowed: PhysicalCompatibilityPreview = { verdict: 'ALLOW', token: 'current', pairs: [{
+      pair: 1, verdict: 'ALLOW', reasons: ['COMPATIBLE'],
+      optical_diagnostic: {
+        status: 'CONFLICT', conflicts: [{ kind: 'LOCAL', left_fact: 0, right_fact: 1, unknown_facts: [] }],
+        facts: [
+          { source: 'PROPOSED_CABLE', value: 'SM', points: [], canonical_refs: [] },
+          { source: 'TRANSCEIVER', value: 'MM', points: [{ point_id: 'canonical-point', member_index: 2 }], canonical_refs: [] },
+        ],
+      },
+    }] };
+    const previewPhysicalLink = vi.fn().mockReturnValueOnce(old).mockResolvedValue(allowed);
+    const createPhysicalLink = vi.fn().mockResolvedValue(creationDocument);
+    render(<ConnectPhysicalInterface sourceInterface={interfaceDetails('core-eth0', 'eth0')}
+      targetDevices={[{ physicalObjectId: 'fw-device', label: 'FW' }]}
+      detailsDataSource={{ loadDeviceDetails: vi.fn().mockResolvedValue(targetDocument) }}
+      writeDataSource={{ previewPhysicalLink, createPhysicalLink }} onConnected={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Подключить' }));
+    await userEvent.selectOptions(screen.getByLabelText('Куда: устройство'), 'fw-device');
+    await screen.findByRole('option', { name: 'eth0' });
+    await userEvent.selectOptions(screen.getByLabelText('Куда: интерфейс'), 'fw-eth0');
+    await waitFor(() => expect(previewPhysicalLink).toHaveBeenCalledTimes(1));
+    await userEvent.selectOptions(screen.getByLabelText('Тип волокна'), 'SM');
+    expect(await screen.findByText(/Оптика SM\/MM · Противоречие SM\/MM/)).toBeInTheDocument();
+    expect(screen.getByText(/Предлагаемый кабель · SM.*Трансивер · MM.*canonical-point/)).toBeInTheDocument();
+    await act(async () => resolveOld({ verdict: 'DENY', token: null, pairs: [] }));
+    expect(createPhysicalLink).not.toHaveBeenCalled();
+    const submit = screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!;
+    expect(submit).toBeEnabled();
+    await userEvent.click(submit);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(createPhysicalLink).toHaveBeenCalledWith(expect.objectContaining({
+      fiber_type: 'SM', compatibility: { token: 'current', accept_unknown: false },
+    }));
   });
 });

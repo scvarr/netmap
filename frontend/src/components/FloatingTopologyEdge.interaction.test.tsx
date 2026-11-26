@@ -210,6 +210,14 @@ describe('cable route edge interaction', () => {
       expect(channels().length).toBeLessThan(fullCount);
       expect(channels().filter(p => p.getAttribute('d') === 'M 116 16 L 124 16')).toHaveLength(1);
       expect(view.container.querySelectorAll('.cable-route-foreground')).toHaveLength(1);
+      const opticalB = { ...b, data: { ...b.data, opticalTraceColor: '#b46b72' } };
+      view.rerender(<ForegroundCableRoutes edges={[a, opticalB] as any} virtualChannels onCableSelect={onCableSelect} />);
+      const routes = [...view.container.querySelectorAll('path[data-cable-ids]')];
+      expect(routes.filter(path => path.getAttribute('data-cable-ids') === '["b"]').some(path =>
+        path.getAttribute('style')?.includes('rgb(180, 107, 114)'))).toBe(true);
+      expect(routes.filter(path => path.getAttribute('data-cable-ids') !== '["b"]').every(path =>
+        !path.getAttribute('style')?.includes('rgb(180, 107, 114)'))).toBe(true);
+      view.rerender(<ForegroundCableRoutes edges={[a, b] as any} virtualChannels onCableSelect={onCableSelect} />);
       const single = view.container.querySelector('.cable-route-hit[data-cable-count="1"][aria-label*="Port B"]')!;
       const shared = view.container.querySelector('.cable-route-hit[data-cable-count="2"]')!;
       const port = view.container.querySelector('.cable-route-port-marker[data-connection-point-id="left-b"]')!;
