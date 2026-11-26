@@ -90,13 +90,14 @@ export type ModuleTemplateInput = ModuleMount & {
   internal_links?: {
     from_endpoint_key: string;
     to_endpoint_key: string;
-    member_mappings: { from_member_index: number; to_member_index: number }[];
+    member_mappings: import("../blueprints/memberMappings").MemberMapping[];
   }[];
 };
 export type ModuleTemplate = ModuleTemplateInput & { template_id: string; revision_id: string; publication_state?: ModuleDraftDocument["publication_state"] };
 export type ModuleSourceWiring = Pick<ModuleTemplateInput, 'endpoints'> & {
   internal_links: NonNullable<ModuleTemplateInput['internal_links']>;
   draft_incompatible: boolean;
+  fiber_types_changed?: boolean;
 };
 export interface ModuleDraftDocument {
   source_wiring: ModuleSourceWiring | null;
@@ -110,17 +111,19 @@ export interface ModuleDraftDocument {
     }> };
   };
 }
+type InternalFiberAssignment = [[string, number], [string, number], import("./fiberTypes").InternalFiberType];
+
 export interface ModuleStructuralChange {
   section: 'properties' | 'endpoints' | 'module_places' | 'geometry'; key: string; operation: 'added' | 'removed' | 'changed';
-  before: ModuleGeometry | ModulePlaceDefinition | ModuleMount | TransceiverSpecifications | string | (ModuleEndpoint & { order_index: number }) | null;
-  after: ModuleGeometry | ModulePlaceDefinition | ModuleMount | TransceiverSpecifications | string | (ModuleEndpoint & { order_index: number }) | null;
+  before: ModuleGeometry | ModulePlaceDefinition | ModuleMount | TransceiverSpecifications | string | (ModuleEndpoint & { order_index: number }) | InternalFiberAssignment[] | null;
+  after: ModuleGeometry | ModulePlaceDefinition | ModuleMount | TransceiverSpecifications | string | (ModuleEndpoint & { order_index: number }) | InternalFiberAssignment[] | null;
 }
 export interface ModuleReconciliationResult {
   revision_id: string; version_number: number;
   installations: Array<{ installation_id: string; physical_object_id?: string; display_name?: string | null; bay_key?: string; source_revision_id?: string; context_at_batch_start?: boolean; status: 'updated' | 'already_current' | 'requires_intervention'; reasons: TemplateImpactReason[] }>;
 }
 export interface ModuleReviewDataSource {
-  reconcileInstallations?(id: string): Promise<ModuleReconciliationResult>;
+  reconcileInstallations?(id: string, installationIds?: string[]): Promise<ModuleReconciliationResult>;
   publishCandidate(id: string, candidateId: string): Promise<{ revision_id: string; version_number: number }>;
   loadDraft(id: string): Promise<ModuleDraftDocument>;
   saveDraft(id: string, definition: ModuleTemplateInput, generation: number): Promise<ModuleDraftDocument>;
@@ -221,7 +224,11 @@ export const hardwareModuleDataSource: HardwareModuleDataSource = {
   installModule: (id, input) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations`, input),
 };
 export const moduleReviewDataSource: ModuleReviewDataSource = {
-  reconcileInstallations: id => request('/api/v1/library/module-templates/' + encodeURIComponent(id) + '/reconcile', undefined, 'POST'),
+  reconcileInstallations: (id, installationIds) => {
+    const query = new URLSearchParams(installationIds?.map(value => ['installation_ids', value]));
+    const suffix = query.size ? '?' + query : '';
+    return request('/api/v1/library/module-templates/' + encodeURIComponent(id) + '/reconcile' + suffix, undefined, 'POST');
+  },
   publishCandidate: (id, candidate) => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/candidates/${encodeURIComponent(candidate)}/publish`, undefined, "POST"),
   loadDraft: id => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/draft`),
   saveDraft: (id, input, generation) => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/draft?expected_generation=${generation}`, input, 'PUT'),

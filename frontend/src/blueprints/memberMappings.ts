@@ -1,3 +1,5 @@
+import type { InternalFiberType } from "../topology/fiberTypes";
+
 export interface MemberAddress {
   endpointKey: string;
   memberIndex: number;
@@ -6,6 +8,7 @@ export interface MemberAddress {
 export interface MemberPair {
   a: MemberAddress;
   b: MemberAddress;
+  fiberType?: InternalFiberType;
 }
 
 export interface MemberEndpoint {
@@ -78,7 +81,7 @@ export function appendMemberPairs<Link>(
     const key = endpointPairKey(pair.a.endpointKey, pair.b.endpointKey);
     const existing = grouped.get(key);
     const oriented = existing && endpoints(existing)[0] !== pair.a.endpointKey
-      ? { a: pair.b, b: pair.a } : pair;
+      ? { ...pair, a: pair.b, b: pair.a } : pair;
     grouped.set(key, append(existing, oriented));
   }
   return [...grouped.values()];
@@ -101,15 +104,24 @@ export function removeMemberPairs<Link>(
 export interface MemberMapping {
   from_member_index: number;
   to_member_index: number;
+  fiber_type?: InternalFiberType;
 }
 
 export function mappedMemberPairs(from: string, to: string, mappings: readonly MemberMapping[]): MemberPair[] {
   return mappings.map(mapping => ({
     a: { endpointKey: from, memberIndex: mapping.from_member_index },
     b: { endpointKey: to, memberIndex: mapping.to_member_index },
+    ...(mapping.fiber_type && { fiberType: mapping.fiber_type }),
   }));
 }
 
-export const memberMapping = ({ a, b }: MemberPair): MemberMapping => ({
+export const memberMapping = ({ a, b, fiberType }: MemberPair): MemberMapping => ({
   from_member_index: a.memberIndex, to_member_index: b.memberIndex,
+  ...(fiberType && { fiber_type: fiberType }),
 });
+
+export function assignMemberFiberTypes(pairs: MemberPair[], keys: ReadonlySet<string>, value: InternalFiberType | null) {
+  return pairs.map(pair => memberMapping(keys.has(memberPairKey(pair))
+    ? { ...pair, fiberType: value ?? undefined }
+    : pair));
+}

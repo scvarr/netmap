@@ -15,7 +15,7 @@ export function moduleWiringEndpoints(definition: Pick<ModuleTemplateInput, 'mou
   const types = new Map(portTypes?.map(type => [type.id, type]));
   return definition.endpoints.filter(endpoint => endpoint.kind === 'CONNECTION_POINT').map(endpoint => {
     const type = types.get(endpoint.port_type_id);
-    return { ...endpoint, cardinality: type?.cardinality ?? 0, designations: type?.members, allowsInternalLink: true };
+    return { ...endpoint, cardinality: type?.cardinality ?? 0, designations: type?.members, medium: type?.medium, allowsInternalLink: true };
   });
 }
 

@@ -175,7 +175,7 @@ class ModuleReconciliation:
         session.execute(delete(m.ConnectionPoint).where(m.ConnectionPoint.id == point_id))
 
 
-def reconcile_installations(session, template_id):
+def reconcile_installations(session, template_id, selected_ids=None):
     """Independent commits: a busy/problematic installation cannot block its peers."""
     with session.begin():
         latest = _latest(session, template_id)
@@ -201,6 +201,11 @@ def reconcile_installations(session, template_id):
             "source_revision_id": str(row.module_revision_id),
             "bay_key": row.bay_key, "display_name": row.value,
         } for row in rows}
+        if selected_ids is not None:
+            selected = set(selected_ids)
+            if not selected <= contexts.keys():
+                raise ValidationError("Selected installations must belong to the ModuleTemplate")
+            contexts = {identifier: context for identifier, context in contexts.items() if identifier in selected}
     results = []
     for installation_id in contexts:
         # SessionLocal deliberately retains objects after commits. A previous

@@ -196,7 +196,7 @@ class ObjectReconciliation:
         session.execute(delete(m.ConnectionPoint).where(m.ConnectionPoint.id == point_id))
 
 
-def reconcile_objects(session, template_id):
+def reconcile_objects(session, template_id, selected_ids=None):
     """Independent commits: a busy/problematic object cannot block its peers."""
     with session.begin():
         latest = _latest(session, template_id)
@@ -206,6 +206,11 @@ def reconcile_objects(session, template_id):
         object_ids = list(session.scalars(select(m.ObjectConfiguration.physical_object_id).join(
             m.BaseTemplateRevision, m.BaseTemplateRevision.id == m.ObjectConfiguration.base_revision_id
         ).where(m.BaseTemplateRevision.template_id == template_id).order_by(m.ObjectConfiguration.physical_object_id)))
+        if selected_ids is not None:
+            selected = set(selected_ids)
+            if not selected <= set(object_ids):
+                raise ValidationError("Selected objects must belong to the BaseTemplate")
+            object_ids = [identifier for identifier in object_ids if identifier in selected]
     results = []
     for object_id in object_ids:
         # SessionLocal deliberately retains objects after commits. A previous

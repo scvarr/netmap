@@ -7,6 +7,8 @@ import type {
   DeviceInterfaceDetails,
 } from '../topology/deviceDetailsTypes';
 import type { CreatePhysicalLinkRequest, PhysicalLinkWriteDataSource } from '../topology/physicalLinkWriteTypes';
+import { FiberTypeSelect } from './FiberTypeSelect';
+import type { FiberType } from '../topology/fiberTypes';
 import { CableNamingFields } from './CableNamingFields';
 import type { CableLabelDataSource, CableNamingInput } from '../topology/cableLabelTypes';
 
@@ -48,6 +50,7 @@ export function ConnectPhysicalInterface({
   const [submitting, setSubmitting] = useState(false);
   const { confirm, confirmationDialog } = usePhysicalCompatibilityConfirmation();
   const [error, setError] = useState<string | null>(null);
+  const [fiberType, setFiberType] = useState<FiberType | null>(null);
   const [cableNaming, setCableNaming] = useState<CableNamingInput>({ cable_label: null, cable_label_template_id: null, generate_cable_label: false });
 
   useEffect(() => {
@@ -90,6 +93,7 @@ export function ConnectPhysicalInterface({
         source_interface_id: sourceInterface.interface_ref.entity_id,
         target_interface_id: targetInterfaceId,
         ...cableNaming,
+        ...(fiberType && { fiber_type: fiberType }),
       };
       if (writeDataSource.previewPhysicalLink) {
         const compatibility = await confirm(await writeDataSource.previewPhysicalLink(request));
@@ -98,6 +102,7 @@ export function ConnectPhysicalInterface({
       }
       setSubmitting(true);
       await writeDataSource.createPhysicalLink(request);
+      setFiberType(null);
       setOpen(false);
       setTargetDeviceId('');
       setTargetInterfaceId('');
@@ -174,6 +179,7 @@ export function ConnectPhysicalInterface({
               Не удалось подключить интерфейс. {error}
             </p>
           )}
+          <label>{t('fiber.type')} <FiberTypeSelect value={fiberType} onChange={setFiberType} disabled={busy} /></label>
           <CableNamingFields dataSource={cableLabelDataSource} disabled={busy} value={cableNaming} onChange={setCableNaming} />
           <div className="connect-interface__actions">
             <button type="button" onClick={() => setOpen(false)} disabled={busy}>

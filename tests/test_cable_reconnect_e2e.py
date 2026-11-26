@@ -39,7 +39,7 @@ def reconnect_payload(url, payload):
 def cable():
     a = create_object_with_point(client, "A")
     b = create_object_with_point(client, "B")
-    result = create(a[1], b[1], cable_label="Patch 12")
+    result = create(a[1], b[1], cable_label="Patch 12", fiber_type="SM")
     assert result.status_code == 201, result.text
     cable_id = result.json()["cable_ref"]["entity_id"]
     url = f"/v1/cables/{cable_id}/reconnect"
@@ -83,6 +83,7 @@ def test_reconnect_moves_one_end_preserving_identity_label_and_internal_continui
     after = preview(url)
     assert after == {**expected, f"point_{side.lower()}_id": new_point}
     assert after["label"] == "Patch 12"
+    assert client.get(f"/v1/cables/{cable_id}/fiber-type").json() == {"fiber_type": "SM"}
     assert history(cable_id) == history_before
 
     old = a if side == "A" else b

@@ -17,7 +17,7 @@ from app.repository import CanonicalRepository, ConnectionMemberInput
 from app.schemas import (
     BulkCableDeleteCandidate, BulkCableDeleteExpectation, BulkCableDeleteMember,
     CableReconnectExactExpectation, CableReconnectRequest, CableReconnectSnapshot,
-    PhysicalCompatibilityConfirmation, PhysicalCompatibilityPreview,
+    FiberType, PhysicalCompatibilityConfirmation, PhysicalCompatibilityPreview,
 )
 
 
@@ -72,6 +72,7 @@ class PhysicalConnectionCatalog:
         target_interface_id: uuid.UUID,
         *,
         cable_label: str | None = None,
+        fiber_type: FiberType | None = None,
         cable_label_template_id: uuid.UUID | None = None,
         generate_cable_label: bool = False,
         preview: bool = False,
@@ -86,6 +87,7 @@ class PhysicalConnectionCatalog:
             NetworkInterfaceEndpoint(source_interface_id),
             NetworkInterfaceEndpoint(target_interface_id),
             cable_label=cable_label,
+            fiber_type=fiber_type,
             cable_label_template_id=cable_label_template_id,
             generate_cable_label=generate_cable_label,
             preview=preview,
@@ -110,6 +112,7 @@ class PhysicalConnectionCatalog:
         target: PhysicalEndpoint,
         *,
         cable_label: str | None = None,
+        fiber_type: FiberType | None = None,
         cable_label_template_id: uuid.UUID | None = None,
         generate_cable_label: bool = False,
         preview: bool = False,
@@ -252,7 +255,7 @@ class PhysicalConnectionCatalog:
             self.session, [(endpoint_points[0], endpoint_points[1])],
             intent=["create", self._endpoint_description(source), self._endpoint_description(target),
                     endpoint_owners, cable_label, cable_label_template_id, generate_cable_label,
-                    generated],
+                    generated, fiber_type],
             preview=preview, confirmation=compatibility, require_preview=multichannel,
         )
         if preview:
@@ -274,7 +277,7 @@ class PhysicalConnectionCatalog:
             cardinality=1,
             members=member,
         )
-        cable = self._add_cable(connection.id)
+        cable = self._add_cable(connection.id, fiber_type)
         CableLabelCatalog(self.session).assign_new_cable(
             cable,
             label=cable_label,
@@ -295,11 +298,16 @@ class PhysicalConnectionCatalog:
         *,
         template_id: uuid.UUID | None,
         expected_generated_labels: list[str],
+        fiber_types: list[FiberType | None] | None = None,
         preview: bool = False,
         compatibility: PhysicalCompatibilityConfirmation | None = None,
     ) -> list[CreatedEndpointPhysicalConnection] | PhysicalCompatibilityPreview:
         if not 1 <= len(pairs) <= 256:
             raise ValidationError("Bulk pairing requires 1 to 256 pairs")
+        if fiber_types is None:
+            fiber_types = [None] * len(pairs)
+        if len(fiber_types) != len(pairs):
+            raise ValidationError("Fiber types must match the number of cable pairs")
         ids = {endpoint.connection_point_id for pair in pairs for endpoint in pair}
         by_id = {point.id: point for point in self.session.scalars(
             select(ConnectionPoint).where(ConnectionPoint.id.in_(ids))
@@ -358,7 +366,7 @@ class PhysicalConnectionCatalog:
                 raise ValidationError("Bulk label preview is stale", {"reason": "BULK_LABEL_PREVIEW_STALE"})
         result = verify_compatibility(
             self.session, [(by_id[a.connection_point_id], by_id[b.connection_point_id]) for a, b in pairs],
-            intent=["bulk", addresses, template_id, labels],
+            intent=["bulk", addresses, template_id, labels, fiber_types],
             preview=preview, confirmation=compatibility,
             require_preview=any(point.cardinality > 1 for point in by_id.values()),
         )
@@ -366,12 +374,12 @@ class PhysicalConnectionCatalog:
             return result
         repository = CanonicalRepository(self.session)
         created: list[CreatedEndpointPhysicalConnection] = []
-        for ((source_id, source_index), (target_id, target_index)), label in zip(addresses, labels):
+        for ((source_id, source_index), (target_id, target_index)), label, fiber_type in zip(addresses, labels, fiber_types, strict=True):
             connection, _ = repository.add_connection(
                 source_id, target_id, cardinality=1,
                 members=[ConnectionMemberInput(index=1, point_a_member=source_index, point_b_member=target_index)],
             )
-            cable = self._add_cable(connection.id)
+            cable = self._add_cable(connection.id, fiber_type)
             catalog.assign_new_cable(cable, label=label, template_id=None, generate=False)
             created.append(CreatedEndpointPhysicalConnection(
                 source=MaterializedPhysicalEndpoint(ConnectionPointEndpoint(source_id, source_index), source_id, None),
@@ -388,8 +396,8 @@ class PhysicalConnectionCatalog:
         ).all()
         return catalog.preview_batch(template_id, count)
 
-    def _add_cable(self, connection_id: uuid.UUID) -> Cable:
-        cable = Cable(connection_id=connection_id)
+    def _add_cable(self, connection_id: uuid.UUID, fiber_type: FiberType | None) -> Cable:
+        cable = Cable(connection_id=connection_id, fiber_type=fiber_type)
         self.session.add(cable)
         self.session.flush()
         return cable

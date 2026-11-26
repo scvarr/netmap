@@ -16,6 +16,8 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
 }) {
   const { templateId = '' } = useParams(); const { t } = useI18n();
   const [results, setResults] = useState<ModuleReconciliationResult>();
+  const [selectionOpen, setSelectionOpen] = useState(false);
+  const [selectedInstances, setSelectedInstances] = useState<string[]>([]);
   const [document, setDocument] = useState<ModuleDraftDocument>();
   const [definition, setDefinition] = useState<ModuleTemplateInput>();
   const [error, setError] = useState(''); const [notice, setNotice] = useState('');
@@ -65,7 +67,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
       setError(String(e));
     } finally { setBusy(false); }
   };
-  const canRestore = incompatible && !!dataSource.restoreDraftSource;
+  const canRestore = (incompatible || document?.source_wiring?.fiber_types_changed) && !!dataSource.restoreDraftSource;
   const restore = async () => {
     if (!document || !canRestore || restorePhase !== 'confirming' || restoring.current || busy || revalidating) return;
     restoring.current = true;
@@ -81,6 +83,8 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
       setRestorePhase(undefined); setBusy(false);
     }
   };
+  const outdated = document?.publication_state?.installations ?? [];
+  const selection = outdated.filter(item => selectedInstances.includes(item.installation_id)).map(item => item.installation_id);
   const review = document?.review;
   const transceiver = definition ? definition.mount_kind === 'MODULE_PORT' : transceiverRoute;
   const title = t(transceiver ? 'transceiver.edit' : 'review.edit');
@@ -132,15 +136,28 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
       <p>{t('publication.revision', { number: document.publication_state.version_number })}</p>
       <p>{t('publication.awaiting', { count: document.publication_state.awaiting_update_count })}</p>
       <p>{t('publication.intervention', { count: document.publication_state.requires_intervention_count })}</p>
+      {outdated.length > 0 && <details onToggle={event => setSelectionOpen(event.currentTarget.open)}>
+        <summary>{t('reconciliation.selection')}</summary>
+        {selectionOpen && <fieldset aria-label={t('reconciliation.selection')} disabled={busy || revalidating}>
+        {outdated.map(item => <label key={item.installation_id}>
+          <input type="checkbox" checked={selection.includes(item.installation_id)} onChange={event => {
+            const checked = event.target.checked;
+            setSelectedInstances(current => checked ? [...current, item.installation_id] : current.filter(id => id !== item.installation_id));
+          }} />
+          {item.display_name || item.physical_object_id} · {item.bay_key}
+        </label>)}
+        </fieldset>}
+      </details>}
       <button type="button" disabled={busy || revalidating || !dataSource.reconcileInstallations} onClick={async () => {
         setBusy(true); setError(''); setResults(undefined);
         try {
-          setResults(await dataSource.reconcileInstallations!(templateId));
+          setResults(await (selection.length ? dataSource.reconcileInstallations!(templateId, selection) : dataSource.reconcileInstallations!(templateId)));
+          setSelectedInstances([]);
           const refreshed = await dataSource.loadDraft(templateId);
           if (refreshed.generation !== document.generation) throw new Error(t('review.conflict'));
           setDocument(refreshed);
         } catch (e) { setError(String(e)); } finally { setBusy(false); }
-      }}>{t('moduleReconciliation.action')}</button>
+      }}>{t(selection.length ? 'reconciliation.applySelected' : 'moduleReconciliation.action')}</button>
       {results && <ul>{results.installations.map(i => <li key={i.installation_id}>
         {i.physical_object_id && <Link to={'/infrastructure/objects/' + i.physical_object_id}>{i.display_name || i.physical_object_id}</Link>}
         <p>{i.bay_key} {i.source_revision_id}</p>
@@ -173,7 +190,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
         <p>{t('review.candidate', { id: review.candidate_id, time: review.created_at })}</p>
         <p>{t(review.published_revision_id ? 'publication.candidatePublished' : current ? 'review.current' : 'review.stale')}</p>
         {current && <>
-          <ul>{review.result.changes.map((c, i) => <li key={i}>{t(c.section === 'endpoints' ? 'moduleReview.endpoints' : c.section === 'module_places' ? 'moduleMount.places' : 'review.section.properties')} · {t(`review.operation.${c.operation}`)} · {c.section === 'properties' ? t(c.key === 'name' ? 'hardware.name' : c.key === 'transceiver' ? 'transceiver.specifications' : 'hardware.compatibility') : (typeof c.after === 'object' && c.after && 'display_name' in c.after && c.after.display_name) || (typeof c.before === 'object' && c.before && 'display_name' in c.before && c.before.display_name) || t('moduleGeometry.title')}</li>)}</ul>
+          <ul>{review.result.changes.map((c, i) => <li key={i}>{t(c.section === 'endpoints' ? 'moduleReview.endpoints' : c.section === 'module_places' ? 'moduleMount.places' : 'review.section.properties')} · {t(`review.operation.${c.operation}`)} · {c.section === 'properties' ? t(c.key === 'name' ? 'hardware.name' : c.key === 'transceiver' ? 'transceiver.specifications' : c.key === 'fiber_types' ? 'fiber.type' : 'hardware.compatibility') : (typeof c.after === 'object' && c.after && 'display_name' in c.after && c.after.display_name) || (typeof c.before === 'object' && c.before && 'display_name' in c.before && c.before.display_name) || t('moduleGeometry.title')}</li>)}</ul>
           {!review.result.installations.length && <p>{t('moduleReview.noInstallations')}</p>}
           <ul>{review.result.installations.map(i => <li key={i.installation_id}>
             <Link to={`/infrastructure/objects/${i.physical_object_id}`}>{i.display_name}</Link>

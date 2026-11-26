@@ -26,6 +26,8 @@ const signature = (d?: CreateBaseTemplateRequest) => d ? JSON.stringify(
 
 export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateDataSource }) {
   const { templateId = '' } = useParams(); const { t } = useI18n();
+  const [selectionOpen, setSelectionOpen] = useState(false);
+  const [selectedInstances, setSelectedInstances] = useState<string[]>([]);
   const [document, setDocument] = useState<BaseTemplateDraftDocument>();
   const [reconciliation, setReconciliation] = useState<BaseTemplateReconciliationResult>();
   const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -77,7 +79,7 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
   }, [generation, busy, refresh]);
   const changed = useCallback((state: BlueprintEditorState) => { setEditing(signature(createBlueprintRequest(state).request)); setNotice(''); }, []);
   const dirty = editing !== saved;
-  const canRestore = document !== undefined && incompatibleGeneration === generation && !!dataSource.restoreDraftSource;
+  const canRestore = document !== undefined && (incompatibleGeneration === generation || document.fiber_types_changed) && !!dataSource.restoreDraftSource;
   const restore = async () => {
     if (!canRestore || restorePhase !== 'confirming' || restoreInFlight.current || busy || revalidating) return;
     restoreInFlight.current = true;
@@ -105,6 +107,8 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
     if (editorVersion) setNotice(t('review.sourceRestored'));
   }, [editorVersion, t]);
   useEffect(() => { if (notice === t('review.sourceRestored')) restoredNotice.current?.focus(); }, [notice, t]);
+  const outdated = document?.publication_state?.objects ?? [];
+  const selection = outdated.filter(item => selectedInstances.includes(item.physical_object_id)).map(item => item.physical_object_id);
   const review = document?.review;
   const current = review?.current && !review.published_revision_id && review.draft_generation === generation && !dirty && !busy && !revalidating && !error;
   const { safe, intervention } = reviewCounts(review?.result.objects ?? []);
@@ -122,14 +126,27 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
       <p>{t('publication.awaiting', { count: document.publication_state.awaiting_update_count })}</p>
       <p>{t('publication.intervention', { count: document.publication_state.requires_intervention_count })}</p>
       </div>
+      {outdated.length > 0 && <details onToggle={event => setSelectionOpen(event.currentTarget.open)}>
+        <summary>{t('reconciliation.selection')}</summary>
+        {selectionOpen && <fieldset aria-label={t('reconciliation.selection')} disabled={busy || revalidating}>
+        {outdated.map(item => <label key={item.physical_object_id}>
+          <input type="checkbox" checked={selection.includes(item.physical_object_id)} onChange={event => {
+            const checked = event.target.checked;
+            setSelectedInstances(current => checked ? [...current, item.physical_object_id] : current.filter(id => id !== item.physical_object_id));
+          }} />
+          {item.display_name || item.physical_object_id}
+        </label>)}
+        </fieldset>}
+      </details>}
       <button className="primary-action" type="button" disabled={busy || revalidating || !dataSource.reconcileObjects} onClick={() => {
         setBusy(true); setError(''); setReconciliation(undefined);
-        void dataSource.reconcileObjects!(templateId).then(async result => {
+        void (selection.length ? dataSource.reconcileObjects!(templateId, selection) : dataSource.reconcileObjects!(templateId)).then(async result => {
           setReconciliation(result);
+          setSelectedInstances([]);
           // Refresh only server facts: unsaved authoring edits stay in the editor.
           setDocument(await refresh());
         }).catch(e => setError(String(e))).finally(() => setBusy(false));
-      }}>{t('reconciliation.run')}</button>
+      }}>{t(selection.length ? 'reconciliation.applySelected' : 'reconciliation.run')}</button>
     </section>}
     {error && <p role="alert">{error}</p>}
     {document && <section className="base-template-review" aria-label={t('review.impacts')}>

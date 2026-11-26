@@ -1,3 +1,4 @@
+import { assignMemberFiberTypes } from "../blueprints/memberMappings";
 import { EndpointLinkWorkspace } from './EndpointLinkWorkspace';
 import { applyBulkNames, blueprintMarkers, bulkNamePreview, spatialOrderedKeys, applyMemberMappings, linkMemberPairs, removeMemberMappings, validateBlueprintMemberPairs, type BlueprintEditorState } from '../blueprints/editorModel';
 import type { PortType } from './PortTypeSelect';
@@ -41,10 +42,13 @@ export function BaseEndpointLinkWorkspace({ state, onChange, onClose, initialSel
       key: marker.key, display_name: marker.display_name, kind: marker.kind, panel: marker.panel_key,
       cardinality: 'cardinality' in marker ? marker.cardinality ?? 1 : marker.port_type_id ? 1 : 0,
       designations: marker.port_type_id ? typeById.get(marker.port_type_id)?.members : undefined,
+      medium: marker.port_type_id ? typeById.get(marker.port_type_id)?.medium : undefined,
     }))}
     storedPairs={state.individualLinks.flatMap(linkMemberPairs)}
     validate={pairs => validateBlueprintMemberPairs(state, pairs)}
     onApply={pairs => onChange(applyMemberMappings(state, pairs))}
+    onAssignFiber={(keys, fiberType) => onChange({ ...state, individualLinks: state.individualLinks.map(link =>
+      ({ ...link, member_mappings: assignMemberFiberTypes(linkMemberPairs(link), keys, fiberType) })) })}
     onRemove={keys => onChange(removeMemberMappings(state, keys))}
     panelTools={{
       panels: state.panels.map(p => ({ key: p.panel_key, name: p.display_name })),
@@ -61,7 +65,7 @@ export function BaseEndpointLinkWorkspace({ state, onChange, onClose, initialSel
         onChange({ ...renamed, activePanelKey: state.activePanelKey });
       },
       present: (sides, all) => presentedLinks(state, sides.map(side => ({ ...side, panel: side.panel! })), all)
-        .flatMap(({ link, a }) => linkMemberPairs(link).map(pair => a === pair.a.endpointKey ? pair : { a: pair.b, b: pair.a })
+        .flatMap(({ link, a }) => linkMemberPairs(link).map(pair => a === pair.a.endpointKey ? pair : { ...pair, a: pair.b, b: pair.a })
           .sort((first, second) => first.a.memberIndex - second.a.memberIndex || first.b.memberIndex - second.b.memberIndex)),
     }}
     initialSelectedKeys={initialSelectedKeys} wiringReadOnly={wiringReadOnly} onClose={onClose} />;

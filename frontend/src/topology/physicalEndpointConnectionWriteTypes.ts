@@ -1,3 +1,4 @@
+import type { FiberType } from "./fiberTypes";
 import type { ProjectionSourceRef } from './types';
 import type { CableNamingInput } from './cableLabelTypes';
 import type { PhysicalCompatibilityConfirmation, PhysicalCompatibilityPreview } from './physicalCompatibility';
@@ -7,6 +8,7 @@ export type PhysicalEndpointRequest =
   | { kind: 'CONNECTION_POINT'; connection_point_id: string; member_index: number };
 
 export interface CreatePhysicalEndpointConnectionRequest extends CableNamingInput {
+  fiber_type?: FiberType | null;
   source: PhysicalEndpointRequest;
   target: PhysicalEndpointRequest;
   compatibility?: PhysicalCompatibilityConfirmation;
@@ -29,7 +31,7 @@ export interface PhysicalEndpointConnectionCreationDocument {
 }
 
 export interface CreateBulkPhysicalConnectionsRequest {
-  pairs: { source: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }>; target: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }> }[];
+  pairs: { source: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }>; target: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }>; fiber_type?: FiberType | null }[];
   template_id: string | null;
   expected_generated_labels: string[];
   compatibility?: PhysicalCompatibilityConfirmation;

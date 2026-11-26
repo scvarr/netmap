@@ -242,6 +242,7 @@ class Cable(Base):
     __tablename__ = "cables"
     __table_args__ = (
         UniqueConstraint("connection_id", name="uq_cables_connection"),
+        CheckConstraint("fiber_type IN ('SM', 'MM')", name="fiber_type"),
         Index("ix_cables_connection_id", "connection_id"),
     )
 
@@ -251,6 +252,7 @@ class Cable(Base):
     )
     # Mutable user-facing metadata.  It is deliberately not identity or topology.
     label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    fiber_type: Mapped[str | None] = mapped_column(String(2), nullable=True)
     connection: Mapped[Connection] = relationship(back_populates="cable")
 
 

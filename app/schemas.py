@@ -777,10 +777,27 @@ class BlueprintPosition(BaseModel):
     y: FiniteFloat = Field(ge=0, le=1)
 
 
+FiberType = Literal["SM", "MM"]
+InternalFiberType = Literal["SM", "MM", "NO_FIBER"]
+
+
+class CableFiberTypeDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    fiber_type: FiberType | None
+
+
 class BaseInternalMemberMapping(BaseModel):
     model_config = ConfigDict(extra="forbid")
     from_member_index: int = Field(ge=1, le=2147483647, strict=True)
     to_member_index: int = Field(ge=1, le=2147483647, strict=True)
+    fiber_type: InternalFiberType | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_mapping(self, handler):
+        data = handler(self)
+        if self.fiber_type is None:
+            data.pop("fiber_type", None)
+        return data
 
 
 class BaseInternalLinkRequest(BaseModel):
@@ -1079,13 +1096,16 @@ class ModuleEndpointSnapshot(ModuleEndpointRequest):
     order_index: int = Field(ge=0)
 
 
+InternalFiberAssignment = tuple[tuple[str, int], tuple[str, int], InternalFiberType]
+
+
 class ModuleTemplateStructuralChange(BaseModel):
     model_config = ConfigDict(extra="forbid")
     section: Literal["properties", "endpoints", "module_places", "geometry"]
     key: str
     operation: Literal["added", "removed", "changed"]
-    before: str | ModuleEndpointSnapshot | ModulePlaceDefinition | ModuleGeometry | ModuleMount | TransceiverSpecifications | None
-    after: str | ModuleEndpointSnapshot | ModulePlaceDefinition | ModuleGeometry | ModuleMount | TransceiverSpecifications | None
+    before: str | ModuleEndpointSnapshot | ModulePlaceDefinition | ModuleGeometry | ModuleMount | TransceiverSpecifications | list[InternalFiberAssignment] | None
+    after: str | ModuleEndpointSnapshot | ModulePlaceDefinition | ModuleGeometry | ModuleMount | TransceiverSpecifications | list[InternalFiberAssignment] | None
 
     @model_validator(mode="after")
     def valid_change(self):
@@ -1093,7 +1113,8 @@ class ModuleTemplateStructuralChange(BaseModel):
         if self.section == "geometry":
             valid = self.key == "geometry" and self.operation == "changed" and len(values) == 2 and all(isinstance(v, ModuleGeometry) for v in values)
         elif self.section == "properties":
-            value_type = {"name": str, "mount": ModuleMount, "transceiver": TransceiverSpecifications}.get(self.key)
+            value_type = {"name": str, "mount": ModuleMount, "transceiver": TransceiverSpecifications,
+                          "fiber_types": list}.get(self.key)
             valid = value_type is not None and all(isinstance(v, value_type) for v in values) and (
                 self.key == "transceiver" or self.operation == "changed")
         elif self.section == "module_places":
@@ -1260,6 +1281,7 @@ class CreatePhysicalLinkRequest(BaseModel):
 
     source_interface_id: uuid.UUID
     target_interface_id: uuid.UUID
+    fiber_type: FiberType | None = None
     cable_label: str | None = None
     cable_label_template_id: uuid.UUID | None = None
     generate_cable_label: bool = False
@@ -1304,6 +1326,7 @@ class CreatePhysicalEndpointConnectionRequest(BaseModel):
 
     source: PhysicalEndpointRequest
     target: PhysicalEndpointRequest
+    fiber_type: FiberType | None = None
     cable_label: str | None = None
     cable_label_template_id: uuid.UUID | None = None
     generate_cable_label: bool = False
@@ -1314,6 +1337,7 @@ class BulkPhysicalPointPair(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source: ConnectionPointPhysicalEndpointRequest
     target: ConnectionPointPhysicalEndpointRequest
+    fiber_type: FiberType | None = None
 
 
 class CreateBulkPhysicalConnectionsRequest(BaseModel):

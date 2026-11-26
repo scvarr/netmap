@@ -36,7 +36,7 @@ export interface BlueprintSlot {
 }
 
 export interface BaseInternalLink {
-  member_mappings?: Array<{ from_member_index: number; to_member_index: number }>;
+  member_mappings?: import("../blueprints/memberMappings").MemberMapping[];
   from_slot_key: string;
   to_slot_key: string;
 }
@@ -110,7 +110,7 @@ export interface BaseTemplateDataSource {
   restoreDraftSource?(templateId: string, generation: number): Promise<BaseTemplateDraftDocument>;
   checkDraft?(templateId: string, generation: number): Promise<BaseTemplateDraftDocument>;
   publishCandidate?(templateId: string, candidateId: string): Promise<{ candidate_id: string; revision_id: string; version_number: number }>;
-  reconcileObjects?(templateId: string): Promise<BaseTemplateReconciliationResult>;
+  reconcileObjects?(templateId: string, objectIds?: string[]): Promise<BaseTemplateReconciliationResult>;
   loadBaseTemplates(): Promise<BaseTemplateListDocument>;
   loadBaseTemplateRevision(blueprintId: string, versionId: string): Promise<BaseTemplateRevisionDocument>;
   createBaseTemplate(request: CreateBaseTemplateRequest): Promise<BaseTemplateCreationDocument>;
@@ -132,6 +132,7 @@ export interface BaseTemplateReviewDocument {
   result: { changes: TemplateStructuralChange[]; objects: Array<{ physical_object_id: string; display_name?: string; source_revision_id: string; classification: 'requires_intervention' | 'potentially_safe'; reasons: TemplateImpactReason[]; proposed_placements: Record<string, string>; changes: TemplateStructuralChange[] }> };
 }
 export interface BaseTemplateDraftDocument {
+  fiber_types_changed?: boolean;
   template_id: string; source_revision_id: string; generation: number; definition: CreateBaseTemplateRequest; review: BaseTemplateReviewDocument | null;
   publication_state?: BaseTemplatePublicationState;
 }

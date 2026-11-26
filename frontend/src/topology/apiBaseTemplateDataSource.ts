@@ -66,10 +66,13 @@ const parseLink = (value: unknown, path: string): BaseInternalLink => {
   const link = requireObject(value, path);
   const { member_mappings: mappings } = link;
   if (mappings !== undefined && (!Array.isArray(mappings) || !mappings.length)) return malformed(`${path}.member_mappings must contain at least one mapping.`);
-  const member_mappings = mappings?.map((value, index) => {
+  const member_mappings = mappings?.map((value, index): NonNullable<BaseInternalLink["member_mappings"]>[number] => {
     const mapping = requireObject(value, `${path}.member_mappings[${index}]`);
     if (!validMemberIndex(mapping.from_member_index) || !validMemberIndex(mapping.to_member_index)) return malformed(`${path}.member_mappings[${index}] has an invalid index.`);
-    return { from_member_index: mapping.from_member_index, to_member_index: mapping.to_member_index };
+    const fiber = mapping.fiber_type;
+    if (fiber != null && fiber !== 'SM' && fiber !== 'MM' && fiber !== 'NO_FIBER') return malformed(path + '.member_mappings has an invalid fiber type.');
+    return { from_member_index: mapping.from_member_index, to_member_index: mapping.to_member_index,
+      ...(fiber && { fiber_type: fiber }) };
   });
   return { from_slot_key: requireString(link.from_slot_key, `${path}.from_slot_key`), to_slot_key: requireString(link.to_slot_key, `${path}.to_slot_key`),
     ...(member_mappings && { member_mappings }) };
@@ -166,8 +169,10 @@ export class ApiBaseTemplateDataSource implements BaseTemplateDataSource {
     let body: unknown; try { body = await response.json(); } catch { return malformed('response body must be valid JSON.'); }
     return parseBaseTemplateListDocument(body);
   }
-  async reconcileObjects(id: string) {
-    const response = await fetch(`${this.endpoint}/${encodeURIComponent(id)}/reconcile`, { method: 'POST' });
+  async reconcileObjects(id: string, objectIds?: string[]) {
+    const query = new URLSearchParams(objectIds?.map(value => ['object_ids', value]));
+    const suffix = query.size ? '?' + query : '';
+    const response = await fetch(`${this.endpoint}/${encodeURIComponent(id)}/reconcile${suffix}`, { method: 'POST' });
     if (!response.ok) throw await backendError(response);
     return response.json() as Promise<import('./baseTemplateTypes').BaseTemplateReconciliationResult>;
   }

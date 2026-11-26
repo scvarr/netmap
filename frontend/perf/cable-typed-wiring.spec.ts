@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 
 for (const verdict of ['ALLOW', 'DENY', 'UNKNOWN'] as const) {
 test(`typed line on the physical map · ${verdict}`, async ({ page, request }) => {
@@ -65,7 +66,8 @@ test(`typed line on the physical map · ${verdict}`, async ({ page, request }) =
   const dialog = page.getByRole('dialog', { name: 'Соединить порты' });
   const create = dialog.getByRole('button', { name: 'Создать кабель' });
   await expect(create).toBeEnabled();
-  await expect(dialog.getByLabel(/Тип кабеля|Тип волокна/)).toHaveCount(0);
+  await expect(dialog.getByLabel('Тип кабеля', { exact: true })).toHaveCount(0);
+  await dialog.getByRole('combobox', { name: 'Тип волокна' }).selectOption('SM');
   await expect(dialog.getByLabel(/Разъём [AB]/)).toHaveCount(0);
   await dialog.getByLabel('Имя кабеля').fill(cableLabel);
   let writes = 0;
@@ -119,8 +121,35 @@ test(`typed line on the physical map · ${verdict}`, async ({ page, request }) =
   const workspace = await packageResponse.json();
   expect(workspace.canonical.Cable.find((cable: { id: string }) => cable.id === cable_ref.entity_id)).toEqual({
     id: cable_ref.entity_id, connection_id: connection_ref.entity_id,
-    label: cableLabel,
+    label: cableLabel, fiber_type: 'SM',
   });
+  if (verdict === 'ALLOW') {
+    await page.goto('/infrastructure/objects');
+    await page.getByRole('tab', { name: /Кабели/ }).click();
+    const fiber = page.getByRole('row').filter({ hasText: cableLabel }).getByRole('button', { name: /Редактировать тип волокна/ });
+    await fiber.click();
+    const edit = page.getByRole('dialog', { name: /Редактировать тип волокна/ });
+    const select = edit.getByRole('combobox', { name: 'Тип волокна' });
+    await expect(select).toHaveValue('SM');
+    await select.selectOption('MM');
+    const folder = process.env.L1_OPTICAL_EVIDENCE_DIR;
+    if (folder) {
+      await page.screenshot({ path: join(folder, 'cable-edit-1440x900.png') });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(edit.getByRole('button', { name: 'Сохранить' })).toBeInViewport();
+      await page.screenshot({ path: join(folder, 'cable-edit-390x844.png') });
+    }
+    await edit.getByRole('button', { name: 'Сохранить' }).click();
+    await expect(edit).toBeHidden();
+    await expect(fiber).toBeFocused();
+    await page.reload();
+    await page.getByRole('tab', { name: /Кабели/ }).click();
+    await fiber.click();
+    await expect(select).toHaveValue('MM');
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/map?map=${mapId}&view=physical`);
+  }
   await port(pointIds[0]).click({ button: 'right' });
   const deletion = page.waitForResponse(result =>
     result.request().method() === 'DELETE' && result.url().endsWith(`/physical-connections/${connection_ref.entity_id}`));

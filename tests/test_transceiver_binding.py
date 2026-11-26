@@ -79,6 +79,7 @@ def test_transceiver_replacement_preserves_interface_and_reprojects(hardware, ne
         source, target = (local, point_end(peer)) if old_index == 1 else (point_end(peer), local)
         linked = created(post_confirmed_physical(client, "/v1/topology/physical-connections", json={
             "source": source, "target": target, "cable_label": f"Patch {old_index}",
+            "fiber_type": "SM" if old_index == 1 else "MM",
         }))
         cable_ids[old_index] = linked["cable_ref"]["entity_id"]
     before = package()
@@ -116,6 +117,7 @@ def test_transceiver_replacement_preserves_interface_and_reprojects(hardware, ne
     members = {row["connection_id"]: row for row in before["canonical"]["ConnectionMember"]}
     for old_index, cable_id in cable_ids.items():
         row, = [row for row in before["canonical"]["Cable"] if row["id"] == cable_id]
+        assert row["fiber_type"] == ("SM" if old_index == 1 else "MM")
         connection_id = row["connection_id"]
         side = "a" if old_index == 1 else "b"
         connections[connection_id][f"point_{side}_id"] = point_id

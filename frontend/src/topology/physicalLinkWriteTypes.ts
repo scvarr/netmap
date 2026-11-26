@@ -1,9 +1,11 @@
+import type { FiberType } from "./fiberTypes";
 import type { ProjectionSourceRef } from './types';
 import type { CableNamingInput } from './cableLabelTypes';
 
 import type { PhysicalCompatibilityConfirmation, PhysicalCompatibilityPreview } from './physicalCompatibility';
 
 export interface CreatePhysicalLinkRequest extends CableNamingInput {
+  fiber_type?: FiberType | null;
   source_interface_id: string;
   target_interface_id: string;
   compatibility?: PhysicalCompatibilityConfirmation;

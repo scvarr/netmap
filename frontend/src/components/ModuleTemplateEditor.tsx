@@ -1,6 +1,6 @@
 import { DestructiveConfirmationDialog } from './DestructiveConfirmationDialog';
 import { EndpointLinkWorkspace } from './EndpointLinkWorkspace';
-import { memberPairKey } from '../blueprints/memberMappings';
+import { assignMemberFiberTypes, memberPairKey } from '../blueprints/memberMappings';
 import { applyModuleMemberPairs, moduleLinkPairs, moduleWiringEndpoints, removeModuleMemberPairs, validateModuleMemberPairs } from '../topology/moduleMemberMappings';
 import { isModulePlaceMarker, isMountKind, moduleMount, mountTypeId, type ModuleMount, type ModulePlaceDefinition } from '../topology/hardwareModules';
 import { MountTypeSelect, mountKindLabels, useMountTypes } from './ModulePortTypeSelect';
@@ -203,7 +203,11 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false, publis
       selectedKeys={selected} onSelectionChange={setSelection} onChange={disabled || linksOpen ? undefined : changeGeometry} />
   </fieldset>
     {linksOpen && <EndpointLinkWorkspace endpoints={moduleWiringEndpoints(wiringDefinition, catalog.types)}
-      storedPairs={storedPairs} initialSelectedKeys={[...selected]} wiringReadOnly={wiringReadOnly || disabled}
+      storedPairs={publishedWiring?.draft_incompatible ? storedPairs : draftPairs}
+      onAssignFiber={disabled || publishedWiring?.draft_incompatible ? undefined : (keys, fiberType) =>
+        onChange({ ...value, internal_links: value.internal_links?.map(link =>
+          ({ ...link, member_mappings: assignMemberFiberTypes(moduleLinkPairs(link), keys, fiberType) })) })}
+      initialSelectedKeys={[...selected]} wiringReadOnly={wiringReadOnly || disabled}
       validate={pairs => validateModuleMemberPairs(value, catalog.types, pairs)}
       onApply={pairs => { if (!disabled && !wiringReadOnly) onChange(applyModuleMemberPairs(value, catalog.types, pairs)); }}
       onRemove={keys => { if (!disabled && !wiringReadOnly) onChange(removeModuleMemberPairs(value, keys)); }}

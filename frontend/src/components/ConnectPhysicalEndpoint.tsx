@@ -20,6 +20,8 @@ import { isAvailablePhysicalPort, physicalMemberLabel, selectedPhysicalMember } 
 import { useI18n } from "../i18n";
 import { usePhysicalCompatibilityConfirmation } from './PhysicalCompatibilityDialog';
 import { PhysicalCompatibilityError } from '../topology/physicalCompatibility';
+import { FiberTypeSelect } from './FiberTypeSelect';
+import type { FiberType } from '../topology/fiberTypes';
 import { CableNamingFields } from './CableNamingFields';
 import type { CableLabelDataSource, CableNamingInput } from '../topology/cableLabelTypes';
 
@@ -94,6 +96,7 @@ export function ConnectPhysicalEndpoint({
   const [submitting, setSubmitting] = useState(false);
   const { confirm, confirmationDialog } = usePhysicalCompatibilityConfirmation();
   const [error, setError] = useState<string | null>(null);
+  const [fiberType, setFiberType] = useState<FiberType | null>(null);
   const [cableNaming, setCableNaming] = useState<CableNamingInput>({ cable_label: null, cable_label_template_id: null, generate_cable_label: false });
   const reset = () => {
     setOpen(false);
@@ -105,6 +108,7 @@ export function ConnectPhysicalEndpoint({
     setQuery("");
     setTargetState({ kind: "idle" });
     setError(null);
+    setFiberType(null);
     setCableNaming({ cable_label: null, cable_label_template_id: null, generate_cable_label: false });
   };
   const candidates = useMemo(
@@ -242,6 +246,7 @@ export function ConnectPhysicalEndpoint({
         },
         target,
         ...cableNaming,
+        ...(fiberType && { fiber_type: fiberType }),
       };
       if (writeDataSource.previewPhysicalEndpointConnection) {
         const compatibility = await confirm(await writeDataSource.previewPhysicalEndpointConnection(request), summary);
@@ -424,6 +429,7 @@ export function ConnectPhysicalEndpoint({
           <PhysicalMemberSelect point={sourcePoint} label={t("connect.sourceMember")}
             value={sourceMember} onChange={setSourceMember} disabled={busy} />
           {summary && <p>{summary}</p>}
+          <label>{t('fiber.type')} <FiberTypeSelect value={fiberType} onChange={setFiberType} disabled={busy} /></label>
           <CableNamingFields dataSource={cableLabelDataSource} disabled={busy} value={cableNaming} onChange={setCableNaming} />
           <div className="connect-interface__actions">
             <button type="button" disabled={busy} onClick={reset}>

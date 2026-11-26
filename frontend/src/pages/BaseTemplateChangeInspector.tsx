@@ -103,7 +103,7 @@ function ChangeSummary({ review }: { review: BaseTemplateReviewDocument }) {
     slots: 'review.section.slots', bays: 'review.section.bays', internal_links: 'review.section.internal_links',
   };
   const properties: Record<string, MessageKey> = {
-    name: 'blueprint.editor.name', default_physical_object_class: 'blueprint.editor.class', body: 'changeInspector.body',
+    name: 'blueprint.editor.name', default_physical_object_class: 'blueprint.editor.class', body: 'changeInspector.body', fiber_types: 'fiber.type',
   };
   return <>
     <h3>{t('changeInspector.changes')}</h3>

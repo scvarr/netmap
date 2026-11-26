@@ -898,6 +898,10 @@ a { color: inherit; }
 .endpoint-workspace__link-table th:last-child { width: calc(5.5rem + 2 * var(--link-cell-padding-inline)); }
 .endpoint-workspace__link-table :is(th, td):first-child { text-align: center; }
 .endpoint-workspace__link-table :is(th, td):last-child { text-align: right; }
+.endpoint-workspace__link-table[data-structure-read-only="true"]:has(.endpoint-workspace__fiber-cell) th:first-child { width: auto; }
+.endpoint-workspace__link-table[data-structure-read-only="true"]:has(.endpoint-workspace__fiber-cell) :is(th, td):first-child { text-align: left; overflow-wrap: anywhere; }
+.endpoint-workspace__link-table th.endpoint-workspace__fiber-cell { width: min(42%, 13rem); }
+.endpoint-workspace__existing-links > select { align-self: flex-start; width: auto; max-width: 100%; }
 .endpoint-workspace .endpoint-workspace__link-table button { padding: 4px 8px; white-space: nowrap; }
 
 /* C-UX-13: keep information bounded and let the edit page scroll naturally. */
@@ -986,6 +990,8 @@ a { color: inherit; }
   color: #e4efef;
 }
 .base-template-inspector[open] { display: flex; flex-direction: column; }
+.cable-fiber-dialog { color: inherit; width: min(calc(100% - 32px), 420px); overflow-wrap: anywhere; }
+.cable-fiber-dialog::backdrop { background: #071315bb; }
 .base-template-inspector::backdrop { background: #071315bb; }
 .base-template-inspector__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #466268; }
 .base-template-inspector__header h2 { margin: 0; }

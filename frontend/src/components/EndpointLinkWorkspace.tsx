@@ -1,4 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { FiberTypeSelect } from './FiberTypeSelect';
+import type { InternalFiberType } from '../topology/fiberTypes';
 import { useI18n } from '../i18n';
 import { reorderOrderedKeys } from '../blueprints/editorModel';
 import { internalOccupancy, memberAddressKey, memberPairKey, pairSelectedMembers, replacePreviewMember, type MemberAddress, type MemberPair, type MemberPairError } from '../blueprints/memberMappings';
@@ -27,6 +29,7 @@ interface WorkspaceEndpoint {
   panel?: string;
   cardinality: number;
   designations?: readonly string[];
+  medium?: string | null;
 }
 
 interface PanelTools {
@@ -41,7 +44,7 @@ interface PanelTools {
 }
 
 export function EndpointLinkWorkspace({
-  endpoints, storedPairs, validate, onApply, onRemove, onClose,
+  endpoints, storedPairs, validate, onApply, onRemove, onClose, onAssignFiber,
   initialSelectedKeys, panelTools, wiringReadOnly = false,
 }: {
   endpoints: WorkspaceEndpoint[];
@@ -50,6 +53,7 @@ export function EndpointLinkWorkspace({
   onApply: (pairs: readonly MemberPair[]) => void;
   onRemove: (keys: ReadonlySet<string>) => void;
   onClose: () => void;
+  onAssignFiber?: (keys: ReadonlySet<string>, fiberType: InternalFiberType | null) => void;
   initialSelectedKeys?: string[];
   panelTools?: PanelTools;
   wiringReadOnly?: boolean;
@@ -86,6 +90,10 @@ export function EndpointLinkWorkspace({
   const previewList = useRef<HTMLDivElement>(null);
   const [allLinks, setAllLinks] = useState(wiringReadOnly);
   const visiblePairs = panelTools?.present(sides, allLinks) ?? storedPairs;
+  const fiberEligible = (pair: MemberPair) => [pair.a, pair.b].every(
+    end => markersByKey.get(end.endpointKey)?.medium === 'FIBER',
+  );
+  const fiberPairs = visiblePairs.filter(fiberEligible);
   const [removed, setRemoved] = useState<string[]>([]);
   const [status, setStatus] = useState('');
   const [memberSelections, setMemberSelections] = useState<string[][]>([[], []]);
@@ -275,13 +283,17 @@ export function EndpointLinkWorkspace({
     {tab === 'links' && <div role="tabpanel" id={`${tabId}-panel-links`} aria-labelledby={`${tabId}-links`} className="endpoint-workspace__existing-links">
     {panelTools && <label className="endpoint-workspace__filter"><input type="checkbox" checked={allLinks} onChange={e => { setAllLinks(e.target.checked); setRemoved([]); }} />{t('endpointWorkspace.allLinks')}</label>}
     {!panelTools && !visiblePairs.length && <p>{t('moduleReview.emptyWiring')}</p>}
+    {onAssignFiber && fiberPairs.length > 0 && <FiberTypeSelect internal action value={null}
+      label={t('fiber.applyAll')} onChange={value => onAssignFiber(new Set(fiberPairs.map(memberPairKey)), value)} />}
     <div ref={existingList} className="endpoint-workspace__link-list" role="region" aria-label={t('endpointWorkspace.existing')} tabIndex={0}>
-      <table className="catalog-table endpoint-workspace__link-table" aria-label={t('blueprint.composition.links')}>
+      <table className="catalog-table endpoint-workspace__link-table" data-structure-read-only={wiringReadOnly}
+        aria-label={t('blueprint.composition.links')}>
         <thead>
           <tr>
             {!wiringReadOnly && <th scope="col">{t('endpointWorkspace.linkSelection')}</th>}
             <th scope="col">{t('endpointWorkspace.linkPort', { side: 'A' })}</th>
             <th scope="col">{t('endpointWorkspace.linkPort', { side: 'B' })}</th>
+            {fiberPairs.length > 0 && <th scope="col" className="endpoint-workspace__fiber-cell">{t('fiber.type')}</th>}
             {!wiringReadOnly && <th scope="col">{t('catalog.actions')}</th>}
           </tr>
         </thead>
@@ -302,6 +314,10 @@ export function EndpointLinkWorkspace({
               /></td>}
               <td>{portA}</td>
               <td>{portB}</td>
+              {fiberPairs.length > 0 && <td className="endpoint-workspace__fiber-cell">{fiberEligible(pair) && (onAssignFiber
+                ? <FiberTypeSelect internal label={t('fiber.type') + ' · ' + portA + ' ↔ ' + portB}
+                    value={pair.fiberType ?? null} onChange={value => onAssignFiber(new Set([id]), value)} />
+                : pair.fiberType === 'NO_FIBER' ? t('fiber.none') : pair.fiberType ?? t('fiber.unknown'))}</td>}
               {!wiringReadOnly && <td><button type="button" onClick={() => removePairs([id])}>{t('blueprint.composition.remove')}</button></td>}
             </tr>;
           })}

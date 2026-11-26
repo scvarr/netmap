@@ -17,6 +17,19 @@ def validate_member_capacity(definition, capacities):
                                       {"reason": "INTERNAL_MEMBER_OUT_OF_RANGE"})
 
 
+def internal_fiber_types(definition, endpoint_suffix):
+    entries = []
+    for link in definition.get("internal_links", ()):
+        for mapping in link.get("member_mappings", ()):
+            fiber_type = mapping.get("fiber_type")
+            if fiber_type is None:
+                continue
+            ends = sorted((link[f"{side}_{endpoint_suffix}_key"], mapping[f"{side}_member_index"])
+                          for side in ("from", "to"))
+            entries.append([list(ends[0]), list(ends[1]), fiber_type])
+    return sorted(entries)
+
+
 def link_signature(left, right, members):
     if left > right:
         return (right, left), frozenset((b, a) for a, b in members)

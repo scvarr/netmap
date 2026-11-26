@@ -1,3 +1,4 @@
+import { CableFiberTypeDialog } from "../components/CableFiberTypeDialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { physicalClassPresentationForLocale } from "../topology/presentation";
@@ -107,6 +108,7 @@ export function InfrastructureObjectsPage({
   const [ports, setPorts] = useState("all");
   const [cableState, setCableState] = useState("all");
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [fiberTarget, setFiberTarget] = useState<{ id: string; label: string } | null>(null);
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [cableNaming, setCableNaming] = useState<CableNamingInput>({
@@ -485,6 +487,7 @@ export function InfrastructureObjectsPage({
             rows={cables}
             remove={cableDeleteDataSource ? remove : undefined}
             onRename={cableLabelDataSource ? openRename : undefined}
+            onFiber={setFiberTarget}
           />
         )}
       </section>
@@ -516,6 +519,7 @@ export function InfrastructureObjectsPage({
           {gap}
         </p>
       ))}
+      {fiberTarget && <CableFiberTypeDialog key={fiberTarget.id} {...fiberTarget} onClose={() => setFiberTarget(null)} />}
       {renameTarget?.cable && cableLabelDataSource ? (
         <CableRenameDialog
           cableId={renameTarget.id}
@@ -760,8 +764,10 @@ function Cables({
   rows,
   remove,
   onRename,
+  onFiber,
 }: {
   rows: CatalogInventoryDocument["cables"];
+  onFiber: (target: { id: string; label: string }) => void;
   remove?: (id: string, label: string, cable: boolean) => Promise<void>;
   onRename?: (target: RenameTarget) => void;
 }) {
@@ -809,6 +815,7 @@ function Cables({
                   id={id}
                   label={item.label}
                   cable
+                  onFiber={() => onFiber({ id, label: item.label })}
                   remove={remove}
                   onRename={
                     onRename
@@ -840,10 +847,12 @@ function Actions({
   cable,
   remove,
   onRename,
+  onFiber,
 }: {
   id: string;
   label: string;
   cable: boolean;
+  onFiber?: () => void;
   remove?: (id: string, label: string, cable: boolean) => Promise<void>;
   onRename?: (target: RenameTarget) => void;
 }) {
@@ -869,6 +878,7 @@ function Actions({
           {t("catalog.rename")}
         </button>
       )}
+      {onFiber && <button type="button" aria-label={t("fiber.edit") + " · " + label} onClick={onFiber}>{t("fiber.type")}</button>}
       {remove && (
         <button
           type="button"

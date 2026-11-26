@@ -12,6 +12,7 @@ from app import models as m
 from app.errors import ModelError, ValidationError
 from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.hardware_catalog import HardwareCatalog
+from app.module_continuity import internal_fiber_types
 from app.port_types import validate_port_type_assignments
 from app.module_port_types import base_assignments, mount_identity, mount_document, row_mount, validate_mount_types
 from app.module_placement_reconciliation import configuration_installations, validate_nested_placements
@@ -108,6 +109,10 @@ def structural_changes(before, after):
     for key in ("name", "default_physical_object_class", "body"):
         if before[key] != after[key]:
             changes.append({"section": "properties", "key": key, "operation": "changed", "before": before[key], "after": after[key]})
+    old_fiber, new_fiber = (internal_fiber_types(d, "slot") for d in (before, after))
+    if old_fiber != new_fiber:
+        changes.append({"section": "properties", "key": "fiber_types", "operation": "changed",
+                        "before": old_fiber, "after": new_fiber})
     return changes
 
 
@@ -325,6 +330,8 @@ class BaseTemplateReview:
                       "created_at": candidate.created_at.isoformat()}
         return {"template_id": str(draft.template_id), "source_revision_id": str(draft.source_revision_id),
                 "generation": draft.generation, "definition": draft.definition, "review": review,
+                "fiber_types_changed": internal_fiber_types(draft.definition, "slot") != internal_fiber_types(
+                    published_definition(self.session, draft.template_id, draft.source_revision_id), "slot"),
                 "publication_state": publication_state(self.session, draft.template_id)}
 
     def open(self, template_id):
@@ -338,7 +345,8 @@ class BaseTemplateReview:
         if draft.generation != expected_generation:
             raise ModelError("Draft changed in another session; reopen before saving", {"reason": "DRAFT_CONFLICT"})
         updated = validate_definition(definition)
-        validate_port_type_assignments(self.session, updated["slots"], draft.definition["slots"])
+        validate_port_type_assignments(self.session, updated["slots"], draft.definition["slots"],
+                                       internal_links=updated["internal_links"], endpoint_suffix="slot")
         validate_mount_types(self.session, base_assignments(updated), base_assignments(draft.definition))
         draft.definition = updated
         draft.generation += 1
@@ -350,7 +358,8 @@ class BaseTemplateReview:
         if draft.generation != expected_generation:
             raise ModelError("Draft changed in another session; reopen before restoring", {"reason": "DRAFT_CONFLICT"})
         published = published_definition(self.session, template_id, draft.source_revision_id)
-        if added_hardware_interfaces(published, draft.definition) is not None:
+        if (added_hardware_interfaces(published, draft.definition) is not None
+                and internal_fiber_types(published, "slot") == internal_fiber_types(draft.definition, "slot")):
             raise ModelError("Draft is compatible with its source revision", {"reason": "DRAFT_RESTORE_NOT_REQUIRED"})
         draft.definition = published
         draft.generation += 1
@@ -368,6 +377,8 @@ class BaseTemplateReview:
         published = published_definition(self.session, template_id, draft.source_revision_id)
         if added_hardware_interfaces(published, definition) is None:
             raise ModelError(_STRUCTURE_ERROR, {"reason": "PHYSICAL_STRUCTURE_IMMUTABLE"})
+        validate_port_type_assignments(self.session, definition["slots"], definition["slots"],
+                                       internal_links=definition["internal_links"], endpoint_suffix="slot")
         fingerprint = self._inputs()
         configs = self.session.scalars(select(m.ObjectConfiguration).join(m.BaseTemplateRevision, m.ObjectConfiguration.base_revision_id == m.BaseTemplateRevision.id).where(m.BaseTemplateRevision.template_id == template_id).order_by(m.ObjectConfiguration.physical_object_id)).all()
         candidate = m.BaseTemplateCandidate(template_id=template_id, source_revision_id=draft.source_revision_id,

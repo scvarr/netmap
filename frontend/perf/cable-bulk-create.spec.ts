@@ -11,7 +11,7 @@ test('reviews, creates, deletes and recreates 48 lines with the same labels', as
     expect(response.ok(), await response.text()).toBe(true);
     return response.json();
   };
-  const portType = await post('/port-types', { name, color: '#336699', medium: 'COPPER', members: ['1'], compatibility_mode: 'MATRIX' });
+  const portType = await post('/port-types', { name, color: '#336699', medium: 'FIBER', members: ['1'], compatibility_mode: 'MATRIX' });
   const labelTemplate = await post('/cable-label-templates', { name: `C01/##/48 · ${stamp}`, pattern: 'C01/##/48', start_at: 1 });
   const numbers = Array.from({ length: 48 }, (_, index) => index + 1);
   const labels = numbers.map(number => `C01/${String(number).padStart(2, '0')}/48`);
@@ -99,10 +99,10 @@ test('reviews, creates, deletes and recreates 48 lines with the same labels', as
 
   await button('К выбору портов').click();
   await expect(left.getByRole('checkbox', { name: 'P1', exact: true })).toBeChecked();
-  await right.getByLabel('Сортировка').selectOption('descending');
+  await right.getByLabel('Порядок окончаний').selectOption('descending');
   await button('Сопоставить').click();
-  await pairs.getByRole('combobox', { name: /Назначение для Bulk smoke A .* P1$/ }).selectOption(point(target, 47));
-  await expect(pairs.getByRole('combobox', { name: /Назначение для Bulk smoke A .* P2$/ })).toHaveValue(point(target, 48));
+  await pairs.getByRole('combobox', { name: /Назначение для Bulk smoke A .* P1 · 1$/ }).selectOption(point(target, 47) + "/1");
+  await expect(pairs.getByRole('combobox', { name: /Назначение для Bulk smoke A .* P2 · 1$/ })).toHaveValue(point(target, 48) + "/1");
   await button('Предпросмотр').click();
   const previewLabels = async () => {
     await dialog.getByLabel('Имена кабелей').selectOption(labelTemplate.id);
@@ -155,10 +155,14 @@ test('reviews, creates, deletes and recreates 48 lines with the same labels', as
 
   const runBatch = async (reverse: boolean) => {
     await open();
-    if (reverse) await right.getByLabel('Сортировка').selectOption('descending');
+    if (reverse) await right.getByLabel('Порядок окончаний').selectOption('descending');
     await button('Сопоставить').click();
     await button('Предпросмотр').click();
     await previewLabels();
+    await dialog.getByRole('combobox', { name: 'Назначить всем показанным парам' }).selectOption('MM');
+    await pairs.getByRole('combobox', { name: 'Тип волокна · 1', exact: true }).selectOption('SM');
+    await expect(pairs.getByRole('combobox', { name: 'Тип волокна · 2', exact: true })).toHaveValue('MM');
+    await capture('05-fiber-preview-1280x800.png');
     await checkUnknown();
     const mutation = page.waitForResponse(response => response.url().endsWith('/physical-connections/bulk'));
     await button('Подтвердить создание').click();
@@ -166,6 +170,10 @@ test('reviews, creates, deletes and recreates 48 lines with the same labels', as
     const response = await mutation;
     expect(response.status(), await response.text()).toBe(201);
     const { created } = await response.json();
+    for (const [index, row] of created.slice(0, 2).entries()) {
+      const fiber = await request.get('/api/v1/cables/' + row.cable_id + '/fiber-type');
+      expect(await fiber.json()).toEqual({ fiber_type: index === 0 ? 'SM' : 'MM' });
+    }
     expect(created.map((row: { target_connection_point_id: string }) => row.target_connection_point_id)).toEqual(
       numbers.map(number => point(target, reverse ? 49 - number : number)),
     );

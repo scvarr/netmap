@@ -21,7 +21,7 @@ from app.database import Base
 from app import models
 from app.errors import ValidationError as ModelValidationError
 from app.module_continuity import expected_links, matching_connections, preserves_internal_links, validate_member_capacity
-from app.port_types import MountTypeInput, PortTypeInput, supports_transceiver_termination
+from app.port_types import MountTypeInput, PortTypeInput, supports_transceiver_termination, validate_internal_fiber_types
 from app.module_port_types import MOUNT_CATALOGS, MOUNT_FIELDS, mount_identity, result_mounts
 from app.schemas import ModuleBayRequest, ModuleMount, AutomaticLocationLayout
 from app.hardware_interfaces import declared_interfaces
@@ -43,7 +43,7 @@ ENTITIES = (
     ("canonical", "InterfacePhysicalBinding", "InterfacePhysicalBinding", "id interface_id point_id point_member"),
     ("canonical", "Connection", "Connection", "id point_a_id point_b_id cardinality"),
     ("canonical", "ConnectionMember", "ConnectionMember", "id connection_id index point_a_member point_b_member"),
-    ("canonical", "Cable", "Cable", "id connection_id label"),
+    ("canonical", "Cable", "Cable", "id connection_id label fiber_type"),
     ("canonical", "EntityMetadata", "EntityMetadata", "id physical_object_id network_interface_id connection_point_id key value"),
     ("canonical", "L2ForwardingContext", "L2ForwardingContext", "id"),
     ("canonical", "L2Binding", "L2Binding", "id interface_id forwarding_context_id"),
@@ -209,6 +209,8 @@ def validate_package(package: object) -> dict:
         required_fields = expected_fields = set(fields)
         if model is models.ModuleTemplateRevision:
             required_fields = expected_fields - {"transceiver", "internal_links"}
+        if model is models.Cable:
+            required_fields = expected_fields - {"fiber_type"}
         for record in records:
             if not isinstance(record, dict) or not required_fields <= record.keys() <= expected_fields:
                 raise PackageError(f"{name} has incomplete or unknown fields")
@@ -356,12 +358,14 @@ def _validate_module_template_reviews(rows):
         raise PackageError("Every noninitial module revision requires one publication receipt")
     definitions = {}
     capacities = {str(row["id"]): len(row["members"]) for row in rows["port_types"]}
+    copper_types = {str(row["id"]) for row in rows["port_types"] if row["medium"] == "COPPER"}
     for revision in revisions.values():
         try:
             definition = validate_definition({**{k: revision[k] for k in ("name", "geometry", "module_places", "transceiver", "internal_links", *MOUNT_FIELDS)}, "endpoints": [
                 {"key": e["definition_key"], "display_name": e["display_name"], "kind": e["kind"], "port_type_id": str(e["port_type_id"])}
                 for e in sorted(rows["module_endpoint_definitions"], key=lambda e: e["order_index"]) if e["module_revision_id"] == revision["id"]]})
             validate_member_capacity(definition, capacities)
+            validate_internal_fiber_types(definition.get("internal_links", ()), definition["endpoints"], copper_types, "endpoint")
         except (SchemaError, TypeError, ModelValidationError) as exc:
             raise PackageError("Invalid module revision definition") from exc
         definitions[revision["id"]] = definition
@@ -390,6 +394,7 @@ def _validate_module_template_reviews(rows):
             try:
                 definition = validate_definition(row["definition"])
                 validate_member_capacity(definition, capacities)
+                validate_internal_fiber_types(definition.get("internal_links", ()), definition["endpoints"], copper_types, "endpoint")
                 if table == "module_template_candidates":
                     ModuleTemplateImpactResult.model_validate(row["result"])
                     if not preserves_internal_links(definitions[row["source_revision_id"]], definition):
@@ -409,8 +414,16 @@ def _validate_module_template_reviews(rows):
 
 
 def _validate_template_reviews(rows):
-    from app.base_template_review import validate_definition
+    from app.base_template_review import validate_definition as validate_base_definition
     from app.schemas import BaseTemplateImpactResult
+
+    copper_types = {str(row["id"]) for row in rows["port_types"] if row["medium"] == "COPPER"}
+
+    def validate_definition(value):
+        definition = validate_base_definition(value)
+        validate_internal_fiber_types(definition["internal_links"], definition["slots"], copper_types, "slot")
+        return definition
+
     from pydantic import ValidationError as SchemaError
     from app.errors import NetMapError as DefinitionError
     revisions = {r["id"]: r for r in rows["base_template_revisions"]}
@@ -497,8 +510,16 @@ def _validate_hardware_configuration(rows):
         if not isinstance(link["member_mappings"], list) or not link["member_mappings"]:
             raise PackageError("Internal mappings must be nonempty")
         for mapping in link["member_mappings"]:
-            if not isinstance(mapping, dict) or set(mapping) != {"from_member_index", "to_member_index"}:
+            if (not isinstance(mapping, dict)
+                    or not {"from_member_index", "to_member_index"} <= mapping.keys()
+                    or mapping.keys() - {"from_member_index", "to_member_index", "fiber_type"}
+                    or mapping.get("fiber_type") not in (None, "SM", "MM", "NO_FIBER")):
                 raise PackageError("Invalid internal member mapping")
+            if mapping.get("fiber_type") is not None and any(
+                port_types[definitions[link[key]]["port_type_id"]]["medium"] == "COPPER"
+                for key in ("slot_a_id", "slot_b_id")
+            ):
+                raise PackageError("Copper internal wiring cannot have a fiber type")
             for key, field in (("slot_a_id", "from_member_index"), ("slot_b_id", "to_member_index")):
                 index = mapping[field]
                 member = (link["base_revision_id"], link[key], index)
@@ -691,6 +712,8 @@ def _validate_physical_connections(rows):
                         raise PackageError("EXTERNAL_MEMBER_OCCUPANCY: an endpoint member is already occupied")
                     occupied.add(address)
     for cable in rows["cables"]:
+        if cable["fiber_type"] not in (None, "SM", "MM"):
+            raise PackageError("Invalid Cable fiber type")
         connection = connections[cable["connection_id"]]
         members = members_by_connection[connection["id"]]
         point_a = points[connection["point_a_id"]]

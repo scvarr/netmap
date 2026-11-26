@@ -235,10 +235,10 @@ def test_bulk_rolls_back_after_a_write_error(monkeypatch):
     add_cable = PhysicalConnectionCatalog._add_cable
     calls = 0
 
-    def fail_second(catalog, connection_id):
+    def fail_second(catalog, connection_id, fiber_type):
         nonlocal calls
         calls += 1
-        cable = add_cable(catalog, connection_id)
+        cable = add_cable(catalog, connection_id, fiber_type)
         if calls == 2:
             raise ValidationError("Injected second Cable write failure")
         return cable

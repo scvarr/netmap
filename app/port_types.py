@@ -105,7 +105,18 @@ SNAPSHOT_SECTIONS = (
 )
 
 
-def validate_port_type_assignments(session, endpoints, previous=(), *, transceiver=None):
+def validate_internal_fiber_types(links, endpoints, copper_types, endpoint_suffix):
+    types_by_key = {endpoint["key"]: endpoint["port_type_id"] for endpoint in endpoints}
+    for link in links:
+        if not any(mapping.get("fiber_type") is not None for mapping in link["member_mappings"]):
+            continue
+        if any(types_by_key.get(link[f"{side}_{endpoint_suffix}_key"]) in copper_types for side in ("from", "to")):
+            raise ValidationError("Для медной разводки характеристика волокна не задаётся.",
+                                  {"reason": "INTERNAL_FIBER_ON_COPPER"})
+
+
+def validate_port_type_assignments(session, endpoints, previous=(), *, transceiver=None,
+                                   internal_links=(), endpoint_suffix="endpoint"):
     retained = {(endpoint["key"], endpoint["port_type_id"]) for endpoint in previous}
     ids = {uuid.UUID(endpoint["port_type_id"]) for endpoint in endpoints}
     if not ids:
@@ -133,6 +144,9 @@ def validate_port_type_assignments(session, endpoints, previous=(), *, transceiv
             raise ValidationError("NETWORK_PORT requires a single-member port type")
         if "cardinality" in endpoint and endpoint["cardinality"] != item.cardinality:
             raise ValidationError("Endpoint cardinality must match its port type")
+    validate_internal_fiber_types(internal_links, endpoints,
+                                  {str(identifier) for identifier, item in types.items() if item.medium == "COPPER"},
+                                  endpoint_suffix)
     return {str(identifier): item.cardinality for identifier, item in types.items()}
 
 

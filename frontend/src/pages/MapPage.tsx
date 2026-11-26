@@ -85,6 +85,8 @@ import type { CreatePhysicalEndpointConnectionRequest, PhysicalEndpointConnectio
 import { usePhysicalCompatibilityConfirmation } from "../components/PhysicalCompatibilityDialog";
 import { PhysicalCompatibilityError } from "../topology/physicalCompatibility";
 import type { CableLabelDataSource, CableNamingInput } from "../topology/cableLabelTypes";
+import { FiberTypeSelect } from "../components/FiberTypeSelect";
+import type { FiberType } from "../topology/fiberTypes";
 import { CableNamingFields } from "../components/CableNamingFields";
 import { PhysicalMemberSelect } from "../components/PhysicalMemberSelect";
 import { isAvailablePhysicalPort, physicalMemberLabel, selectedPhysicalMember, type PhysicalPortAvailability } from "../topology/physicalPortAvailability";
@@ -159,7 +161,7 @@ interface PresentationVariantDeletionOperation {
 interface CreationRefreshOperation { mapId: string; variantId: string; status: "refresh-failed"; }
 interface WiringEndpoint extends PhysicalPortAvailability { memberIndex?: number; physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
 interface WiringDraft { mapId: string; source: WiringEndpoint; }
-interface WiringOperation extends WiringDraft { target: WiringEndpoint; naming: CableNamingInput; error: string | null; }
+interface WiringOperation extends WiringDraft { target: WiringEndpoint; naming: CableNamingInput; fiberType?: FiberType | null; error: string | null; }
 type WiringState = { status: "idle" } | { status: "selecting-source"; mapId: string } | ({ status: "selecting-target" } & WiringDraft) | ({ status: "confirming" | "checking" | "creating" | "refresh-failed" } & WiringOperation);
 const view = (value: string | null): TopologyViewMode =>
   value === "physical" ? "physical" : "logical";
@@ -978,6 +980,7 @@ function MapPageContent({
       const request: CreatePhysicalEndpointConnectionRequest = {
         source: { kind: "CONNECTION_POINT", connection_point_id: operation.source.connectionPointId, member_index: sourceMember },
         target: { kind: "CONNECTION_POINT", connection_point_id: operation.target.connectionPointId, member_index: targetMember },
+        ...(operation.fiberType && { fiber_type: operation.fiberType }),
         cable_label: operation.naming.cable_label?.trim() || null,
         cable_label_template_id: operation.naming.cable_label_template_id ?? null,
         generate_cable_label: operation.naming.generate_cable_label === true,
@@ -1902,6 +1905,8 @@ function MapPageContent({
             onChange={memberIndex => setWiring(current => current.status === "confirming"
               ? { ...current, [side]: { ...current[side], memberIndex }, error: null } : current)} />)}
           <p>{wiringSummary(wiring)}</p>
+          <label>{t("fiber.type")} <FiberTypeSelect value={wiring.fiberType ?? null} disabled={wiring.status !== "confirming"}
+            onChange={fiberType => setWiring(current => current.status === "confirming" ? { ...current, fiberType } : current)} /></label>
           <CableNamingFields dataSource={cableLabelDataSource} disabled={wiring.status === "checking" || wiring.status === "creating"} value={wiring.naming} onChange={(naming) => { setWiring((current) => current.status === "confirming" ? { ...current, naming } : current); }} />{wiring.error && <p role="alert">{wiring.error}</p>}<div className="map-dialog__actions map-dialog__actions--wiring"><button type="button" disabled={wiring.status === "checking" || wiring.status === "creating"} onClick={() => { setWiring({ status: "selecting-target", mapId: wiring.mapId, source: wiring.source }); }}>{t("map.back")}</button><button type="button" disabled={wiring.status === "checking" || wiring.status === "creating"} onClick={() => { setWiring({ status: "idle" }); }}>{t("map.cancel")}</button><button type="button" disabled={wiring.status === "checking" || wiring.status === "creating" || !selectedPhysicalMember(wiring.source, wiring.source.memberIndex) || !selectedPhysicalMember(wiring.target, wiring.target.memberIndex) || (wiring.naming.generate_cable_label === true && !wiring.naming.cable_label_template_id)} onClick={() => void createWiring()}>{wiring.status === "creating" ? t("map.creating") : wiring.status === "checking" ? t("compatibility.checking") : wiring.error ? t("action.retry") : t("map.createCable")}</button></div></>}
         {wiring.status === "refresh-failed" && <><p role="alert">{t("map.cableCreatedRefreshFailed")}</p><button type="button" onClick={() => void retryWiringRefresh()}>{t("map.retryRefresh")}</button></>}
       </div></section>}

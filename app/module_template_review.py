@@ -12,7 +12,7 @@ from app.errors import ModelError, ValidationError
 from app.hardware_catalog import HardwareCatalog
 from app.hardware_interfaces import preserves_associations
 from app.module_continuity import (
-    installation_internal_connections, preserves_internal_links,
+    installation_internal_connections, internal_fiber_types, preserves_internal_links,
     require_unchanged_internal_links, validate_member_capacity,
 )
 from app.port_types import validate_port_type_assignments
@@ -60,6 +60,10 @@ def structural_changes(before, after):
     if old_spec != new_spec:
         changes.append({"section": "properties", "key": "transceiver", "before": old_spec, "after": new_spec,
                         "operation": "added" if old_spec is None else "removed" if new_spec is None else "changed"})
+    old_fiber, new_fiber = (internal_fiber_types(d, "endpoint") for d in (before, after))
+    if old_fiber != new_fiber:
+        changes.append({"section": "properties", "key": "fiber_types", "operation": "changed",
+                        "before": old_fiber, "after": new_fiber})
     return changes
 
 
@@ -191,6 +195,8 @@ class ModuleTemplateReview:
                 "internal_links": published.get("internal_links", []),
                 "draft_incompatible": _board_draft_incompatible(published, draft.definition),
             }
+            if internal_fiber_types(published, "endpoint") != internal_fiber_types(draft.definition, "endpoint"):
+                source_wiring["fiber_types_changed"] = True
         review = None
         if candidate:
             publication = self.session.get(m.ModuleTemplatePublication, candidate.id)
@@ -222,7 +228,8 @@ class ModuleTemplateReview:
         published = published_definition(self.session, template_id, draft.source_revision_id)
         validate_transceiver_authoring(updated, published)
         capacities = validate_port_type_assignments(self.session, updated["endpoints"], draft.definition["endpoints"],
-                                                   transceiver=updated.get("transceiver"))
+                                                   transceiver=updated.get("transceiver"),
+                                                   internal_links=updated.get("internal_links", ()))
         validate_member_capacity(updated, capacities)
         validate_mount_types(self.session, module_assignments(updated), module_assignments(draft.definition))
         draft.definition = updated
@@ -236,7 +243,8 @@ class ModuleTemplateReview:
             raise ModelError("Draft changed in another session; reopen before restoring", {"reason": "DRAFT_CONFLICT"})
         published = published_definition(self.session, template_id, draft.source_revision_id)
         definition = validate_definition(draft.definition)
-        if not _board_draft_incompatible(published, definition):
+        if (not _board_draft_incompatible(published, definition)
+                and internal_fiber_types(published, "endpoint") == internal_fiber_types(definition, "endpoint")):
             raise ModelError("Draft is compatible with its source revision", {"reason": "DRAFT_RESTORE_NOT_REQUIRED"})
         draft.definition = published
         draft.generation += 1
@@ -255,7 +263,8 @@ class ModuleTemplateReview:
         _require_unchanged_structure(published, definition)
         if definition.get("transceiver") is not None or definition.get("internal_links"):
             endpoints = definition["endpoints"]
-            capacities = validate_port_type_assignments(self.session, endpoints, endpoints, transceiver=definition.get("transceiver"))
+            capacities = validate_port_type_assignments(self.session, endpoints, endpoints, transceiver=definition.get("transceiver"),
+                                                       internal_links=definition.get("internal_links", ()))
             validate_member_capacity(definition, capacities)
         fingerprint = self._inputs()
         installations = self.session.scalars(select(m.ModuleInstallation).join(m.ModuleTemplateRevision,
@@ -323,7 +332,8 @@ class ModuleTemplateReview:
         _require_unchanged_structure(published, candidate.definition)
         if candidate.definition.get("transceiver") is not None or candidate.definition.get("internal_links"):
             endpoints = candidate.definition["endpoints"]
-            capacities = validate_port_type_assignments(self.session, endpoints, endpoints, transceiver=candidate.definition.get("transceiver"))
+            capacities = validate_port_type_assignments(self.session, endpoints, endpoints, transceiver=candidate.definition.get("transceiver"),
+                                                       internal_links=candidate.definition.get("internal_links", ()))
             validate_member_capacity(candidate.definition, capacities)
         revision = HardwareCatalog(self.session)._create_module_revision(template_id, latest.version_number + 1, query)
         self.session.get(m.ModuleTemplate, template_id).name = query.name

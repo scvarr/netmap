@@ -103,7 +103,6 @@ class HardwareCatalog:
             raise ValidationError("Создавайте отсеки для плат как логические места без координат",
                                   {"reason": "MODULE_BAY_MUST_BE_LOGICAL"})
         definition = query.model_dump(mode="json")
-        validate_port_type_assignments(self.session, definition["slots"])
         validate_mount_types(self.session, base_assignments(definition))
         blueprint = BaseTemplate(name=query.name)
         self.session.add(blueprint)
@@ -112,6 +111,10 @@ class HardwareCatalog:
         return CreatedBlueprint(blueprint.id, version.id)
 
     def _create_version(self, template_id: uuid.UUID, version_number: int, query: object) -> BaseTemplateRevision:
+        definition = query.model_dump(mode="json")
+        slots = definition["slots"]
+        validate_port_type_assignments(self.session, slots, slots if version_number > 1 else (),
+                                       internal_links=definition["internal_links"], endpoint_suffix="slot")
         version = BaseTemplateRevision(
             template_id=template_id,
             name=query.name,
@@ -176,7 +179,12 @@ class HardwareCatalog:
                 base_revision_id=version.id,
                 slot_a_id=slot_a.id,
                 slot_b_id=slot_b.id,
-                member_mappings=[dict(from_member_index=m.from_member_index, to_member_index=m.to_member_index) if slot_a.slot_key == link_query.from_slot_key else dict(from_member_index=m.to_member_index, to_member_index=m.from_member_index) for m in link_query.member_mappings],
+                member_mappings=[
+                    mapping.model_dump(mode="json") if slot_a.slot_key == link_query.from_slot_key
+                    else {**mapping.model_dump(mode="json"), "from_member_index": mapping.to_member_index,
+                          "to_member_index": mapping.from_member_index}
+                    for mapping in link_query.member_mappings
+                ],
             ))
         self.session.flush()
         for bay in query.bays:
@@ -395,7 +403,8 @@ class HardwareCatalog:
         definition = query.model_dump(mode="json")
         validate_module_authoring(definition)
         validate_transceiver_authoring(definition)
-        capacities = validate_port_type_assignments(self.session, definition["endpoints"], transceiver=definition.get("transceiver"))
+        capacities = validate_port_type_assignments(self.session, definition["endpoints"], transceiver=definition.get("transceiver"),
+                                                   internal_links=definition.get("internal_links", ()))
         validate_member_capacity(definition, capacities)
         validate_mount_types(self.session, module_assignments(definition))
         template = ModuleTemplate(name=query.name)

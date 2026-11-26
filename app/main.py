@@ -2,9 +2,9 @@ from app.schemas import SaveModuleLayoutRequest, AutomaticLocationLayout
 import logging
 import json
 import uuid
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import Body, Depends, FastAPI, HTTPException, Request
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import text
@@ -25,7 +25,7 @@ from app.interface_resolver import InterfacePhysicalResolver
 from app.l2_resolver import L2ReachabilityResolver
 from app.l2_catalog import L2Catalog, L2ForwardingContextBindingInput
 from app.l3_resolver import SelectedTableRouteDecisionResolver
-from app.models import MapViewKey
+from app.models import Cable, MapViewKey
 from app.l3_reachability_resolver import ConfiguredL3ReachabilityResolver
 from app.location_catalog import LocationCatalog
 from app.next_hop_resolver import SelectedTableNextHopResolver
@@ -62,7 +62,7 @@ from app.schemas import (
     CreateBaseTemplateRequest,
     CreateModuleTemplateRequest, InstallModuleRequest, ReplaceTransceiverRequest,
     CreateDeviceInterfaceRequest,
-    CreatePhysicalEndpointConnectionRequest,
+    CableFiberTypeDocument, CreatePhysicalEndpointConnectionRequest,
     CreateBulkPhysicalConnectionsRequest,
     BulkCableDeletePreview,
     BulkCableDeleteRequest,
@@ -913,9 +913,12 @@ def publish_base_template_candidate(template_id: uuid.UUID, candidate_id: uuid.U
 
 
 @app.post("/v1/library/base-templates/{template_id}/reconcile")
-def reconcile_base_template_objects(template_id: uuid.UUID, session: Session = Depends(get_session)):
+def reconcile_base_template_objects(
+    template_id: uuid.UUID, session: Session = Depends(get_session), *,
+    object_ids: Annotated[list[uuid.UUID] | None, Query()] = None,
+):
     from app.object_reconciliation import reconcile_objects
-    return reconcile_objects(session, template_id)
+    return reconcile_objects(session, template_id, object_ids)
 
 
 @app.delete(
@@ -1081,6 +1084,7 @@ def create_physical_link(
         created = PhysicalConnectionCatalog(session).create_atomic_link(
             query.source_interface_id,
             query.target_interface_id,
+            fiber_type=query.fiber_type,
             cable_label=query.cable_label,
             cable_label_template_id=query.cable_label_template_id,
             generate_cable_label=query.generate_cable_label,
@@ -1161,6 +1165,7 @@ def create_physical_endpoint_connection(
         created = PhysicalConnectionCatalog(session).create_endpoint_link(
             endpoint(query.source),
             endpoint(query.target),
+            fiber_type=query.fiber_type,
             cable_label=query.cable_label,
             cable_label_template_id=query.cable_label_template_id,
             generate_cable_label=query.generate_cable_label,
@@ -1204,6 +1209,7 @@ def create_bulk_physical_connections(
         created = PhysicalConnectionCatalog(session).create_bulk_point_links(
             pairs, template_id=query.template_id,
             expected_generated_labels=query.expected_generated_labels,
+            fiber_types=[pair.fiber_type for pair in query.pairs],
             preview=preview, compatibility=query.compatibility,
         )
         if isinstance(created, PhysicalCompatibilityPreview):
@@ -1306,6 +1312,27 @@ def set_cable_label(
 ) -> None:
     with session.begin():
         CableLabelCatalog(session).set_label(cable_id, query.label)
+
+
+@app.get("/v1/cables/{cable_id}/fiber-type")
+def get_cable_fiber_type(
+    cable_id: uuid.UUID, session: Session = Depends(get_session),
+) -> CableFiberTypeDocument:
+    cable = session.get(Cable, cable_id)
+    if cable is None:
+        raise ValidationError("Cable does not exist")
+    return CableFiberTypeDocument(fiber_type=cable.fiber_type)
+
+
+@app.put("/v1/cables/{cable_id}/fiber-type", status_code=204)
+def set_cable_fiber_type(
+    cable_id: uuid.UUID, query: CableFiberTypeDocument, session: Session = Depends(get_session),
+) -> None:
+    with session.begin():
+        cable = session.get(Cable, cable_id, with_for_update=True)
+        if cable is None:
+            raise ValidationError("Cable does not exist")
+        cable.fiber_type = query.fiber_type
 
 
 @app.post(
@@ -1780,9 +1807,12 @@ def publish_module_template_candidate(template_id: uuid.UUID, candidate_id: uuid
 
 
 @app.post("/v1/library/module-templates/{template_id}/reconcile")
-def reconcile_module_installations(template_id: uuid.UUID, session: Session = Depends(get_session)):
+def reconcile_module_installations(
+    template_id: uuid.UUID, session: Session = Depends(get_session), *,
+    installation_ids: Annotated[list[uuid.UUID] | None, Query()] = None,
+):
     from app.module_reconciliation import reconcile_installations
-    return reconcile_installations(session, template_id)
+    return reconcile_installations(session, template_id, installation_ids)
 
 
 @app.put("/v1/topology/physical-objects/{physical_object_id}/module-installations/{installation_id}/layout")

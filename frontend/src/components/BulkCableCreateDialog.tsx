@@ -1,3 +1,5 @@
+import { FiberTypeSelect } from './FiberTypeSelect';
+import type { FiberType } from '../topology/fiberTypes';
 import { usePhysicalCompatibilityConfirmation } from './PhysicalCompatibilityDialog';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
@@ -33,7 +35,7 @@ type Channel = {
   label: string;
   occupied: boolean;
 };
-type Pair = { source: string; target: string };
+type Pair = { source: string; target: string; fiberType?: FiberType | null };
 const emptySide: Side = { panel: undefined, sort: 'ascending', memberSort: 'ascending', selected: [] };
 const maxBatch = 256;
 const pointId = (point: ConnectionPointDetails) => point.connection_point_ref.entity_id;
@@ -426,7 +428,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
     pairs: pairs.flatMap(pair => {
       const from = left.byId.get(pair.source);
       const to = right.byId.get(pair.target);
-      return from && to ? [{ source: endpoint(from), target: endpoint(to) }] : [];
+      return from && to ? [{ source: endpoint(from), target: endpoint(to), ...(pair.fiberType && { fiber_type: pair.fiberType }) }] : [];
     }),
     template_id: templateId || null,
     expected_generated_labels: labels,
@@ -528,6 +530,8 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
           <h3>{t(pairing ? 'map.bulk.pairs' : 'map.bulk.preview', { count: pairs.length })}</h3>
           {pairing && <p>{t('map.bulk.adjust')}</p>}
           {pairing && hasOccupied && <p role="alert">{t('map.bulk.resolveOccupied')}</p>}
+          {!pairing && <FiberTypeSelect action value={null} label={t('fiber.applyAll')} disabled={busy}
+            onChange={fiberType => setPairs(current => current.map(pair => ({ ...pair, fiberType })))} />}
           <div className="catalog-table-wrap map-dialog-table bulk-create-pairs" ref={pairTable} tabIndex={0}
             role="region" aria-label={t('map.bulk.pairs', { count: pairs.length })}>
             <table className="catalog-table">
@@ -535,6 +539,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
                 <th scope="col" className="bulk-create-pair-number">{t('map.bulk.detailPair')}</th>
                 <th scope="col">{t('map.bulk.source')}</th>
                 <th scope="col">{t('map.bulk.destination')}</th>
+                {!pairing && <th scope="col">{t('fiber.type')}</th>}
                 <th scope="col">{t(pairing ? 'physical.actions' : 'physical.cable')}</th>
               </tr></thead>
               <tbody>{pairs.map((pair, index) => <tr key={pair.source}>
@@ -556,6 +561,9 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
                   : <>{right.labels.get(pair.target)}
                     {channelOccupied(right, pair.target) && <div>{t('map.bulk.occupiedChannel')}</div>}
                   </>}</td>
+                {!pairing && <td><FiberTypeSelect label={t('fiber.type') + ' · ' + (index + 1)}
+                  value={pair.fiberType ?? null} disabled={busy} onChange={fiberType => setPairs(current =>
+                    current.map(item => item.source === pair.source ? { ...item, fiberType } : item))} /></td>}
                 <td>{pairing
                   ? <button type="button" onClick={() => setPairs(current => current.filter(item => item.source !== pair.source))}>
                     {t('map.bulk.exclude')}
