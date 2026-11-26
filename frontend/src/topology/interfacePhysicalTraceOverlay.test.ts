@@ -140,7 +140,7 @@ it('marks the exact interval and local transition, and removes optical evidence 
   result.branches[1].optical_diagnostic = { status: 'CONSISTENT', facts: [fact('MM', [point('shared', 1)], result.edges[1])], conflicts: [] };
   const selected = physicalTraceOverlayFor(result, document, 'first');
   expect(selected.opticalLocalPointIds).toEqual(new Set(['junction']));
-  expect(selected.opticalCableHighlights).toEqual(new Map([['first-cable', 'END_TO_END'], ['second-cable', 'UNKNOWN']]));
+  expect(selected.opticalCableHighlights).toEqual(new Map([['first-cable', 'END_TO_END'], ['second-cable', 'END_TO_END']]));
   expect(physicalTraceOverlayFor(result, document, 'second').opticalCableHighlights?.size).toBe(0);
   const incomplete = exactTraceOverlayFor({
     edges: [result.edges[0]], optical_diagnostics: [{ ...diagnostic, reason: 'INCOMPLETE_PATH' }],
@@ -151,4 +151,37 @@ it('marks the exact interval and local transition, and removes optical evidence 
     evidence_refs: [], optical_diagnostic: diagnostic }];
   expect(physicalTraceOverlayFor(result, document, 'first').opticalCableHighlights).toBeUndefined();
   expect(physicalTraceOverlayFor(result, document, 'cycle').opticalLocalPointIds).toEqual(new Set(['junction']));
+});
+
+
+it('highlights an end-to-end conflict when every intermediate characteristic is unknown', () => {
+  const edges = ['before', 'first', 'second'].map((id, index) => ({
+    id, from_node_id: `node-${index}`, to_node_id: `node-${index + 1}`,
+    evidence_refs: [ref('Cable', `cable-${id}`), ref('ConnectionMember', `member-${id}`)],
+  }));
+  const point = (index: number) => ({ point_id: `point-${index}`, member_index: 1 });
+  const unknown = (index: number): OpticalFact => ({
+    source: 'CABLE', value: null, unknown_reason: 'FIBER_TYPE_UNSPECIFIED',
+    points: [point(index), point(index + 1)], trace_edge_id: edges[index].id,
+    canonical_refs: edges[index].evidence_refs,
+  });
+  const diagnostic: OpticalDiagnostic = {
+    status: 'CONFLICT',
+    facts: [
+      unknown(0),
+      { source: 'TRANSCEIVER', value: 'SM', points: [point(1)], canonical_refs: [] },
+      unknown(1),
+      unknown(2),
+      { source: 'TRANSCEIVER', value: 'MM', points: [point(3)], canonical_refs: [] },
+    ],
+    conflicts: [{ kind: 'END_TO_END', left_fact: 1, right_fact: 4, unknown_facts: [2, 3] }],
+  };
+
+  const overlay = exactTraceOverlayFor({ edges, optical_diagnostics: [diagnostic] }, physical);
+  expect(overlay.opticalCableHighlights).toEqual(new Map([
+    ['cable-before', 'UNKNOWN'], ['cable-first', 'END_TO_END'], ['cable-second', 'END_TO_END'],
+  ]));
+  expect(overlay.opticalMemberHighlights).toEqual(new Map([
+    ['member-before', 'UNKNOWN'], ['member-first', 'END_TO_END'], ['member-second', 'END_TO_END'],
+  ]));
 });

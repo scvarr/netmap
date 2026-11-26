@@ -86,7 +86,7 @@ function projectOpticalEvidence(
   const cableHighlights = new Map<string, OpticalHighlight>();
   const memberHighlights = new Map<string, OpticalHighlight>();
   const localPoints = new Set<string>();
-  const priority = { END_TO_END: 1, UNKNOWN: 2, LOCAL: 3 };
+  const priority = { UNKNOWN: 1, END_TO_END: 2, LOCAL: 3 };
   const assign = (map: Map<string, OpticalHighlight>, id: string, kind: OpticalHighlight) => {
     const prior = map.get(id);
     if (!prior || priority[kind] > priority[prior]) map.set(id, kind);
