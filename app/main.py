@@ -1492,6 +1492,7 @@ def trace_interface_physical(
     query: InterfacePhysicalTraceQuery,
     session: Session = Depends(get_session),
 ) -> InterfacePhysicalTraceArtifact:
+    session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
     repository = CanonicalRepository(session)
     return InterfacePhysicalResolver(repository).resolve(query, EvaluationView())
 
@@ -1505,6 +1506,7 @@ def trace_physical_objects_l1(
     query: PhysicalObjectL1TraceQuery,
     session: Session = Depends(get_session),
 ) -> PhysicalObjectL1TraceArtifact:
+    session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
     return PhysicalObjectL1Resolver(CanonicalRepository(session)).resolve(
         query, EvaluationView()
     )

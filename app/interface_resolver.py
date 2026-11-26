@@ -5,9 +5,10 @@ from app.errors import ModelError
 from app.repository import (
     CanonicalRepository,
     PhysicalBindingRecord,
+    PointMember,
     RealizationRecord,
 )
-from app.resolver import L1Resolver
+from app.resolver import L1PathEvidence, L1Resolver
 from app.schemas import (
     EvaluationView,
     EvidenceRef,
@@ -18,7 +19,6 @@ from app.schemas import (
     InterfaceTraceEdge,
     InterfaceTraceGap,
     InterfaceTraceNode,
-    L1TraceQuery,
     PhysicalBindingCandidate,
     PointMemberAddress,
     RealizationCandidateStep,
@@ -93,16 +93,16 @@ class InterfacePhysicalResolver:
         branches: list[InterfacePhysicalTraceBranch] = []
         l1_resolver = L1Resolver(self.repository)
 
-        for source_candidate in source_resolution.candidates:
-            for target_candidate in target_resolution.candidates:
-                l1_artifact = l1_resolver.resolve(
-                    self._l1_query(source_candidate, target_candidate),
-                    evaluation_view,
-                )
-                if l1_artifact.verdict != "REACHABLE":
+        source_points = [self._point(candidate) for candidate in source_resolution.candidates]
+        targets = [(candidate, self._point(candidate)) for candidate in target_resolution.candidates]
+        walks = l1_resolver.walk_sources(source_points)
+        for source_candidate, source in zip(source_resolution.candidates, source_points, strict=True):
+            for target_candidate, target in targets:
+                path = l1_resolver.evidence_to(walks[source], target)
+                if path is None:
                     continue
                 branch_nodes, branch_edges, branch_refs = self._build_branch(
-                    source_candidate, target_candidate, l1_artifact
+                    source_candidate, target_candidate, path
                 )
                 nodes.update({node.id: node for node in branch_nodes})
                 edges.update({edge.id: edge for edge in branch_edges})
@@ -197,7 +197,7 @@ class InterfacePhysicalResolver:
         return resolution
 
     def _build_branch(
-        self, source: ResolvedPhysicalCandidate, target: ResolvedPhysicalCandidate, l1_artifact
+        self, source: ResolvedPhysicalCandidate, target: ResolvedPhysicalCandidate, path: L1PathEvidence
     ) -> tuple[list[InterfaceTraceNode], list[InterfaceTraceEdge], list[EvidenceRef]]:
         nodes: list[InterfaceTraceNode] = []
         edges: list[InterfaceTraceEdge] = []
@@ -208,7 +208,7 @@ class InterfacePhysicalResolver:
         target_interface_nodes = self._path_interface_nodes(target, "target")
         nodes.extend(source_interface_nodes)
         l1_node_ids = {
-            node.id: f"{node.id}:branch:{branch_key}" for node in l1_artifact.nodes
+            node.id: f"{node.id}:branch:{branch_key}" for node in path.nodes
         }
         nodes.extend(
             InterfaceTraceNode(
@@ -217,7 +217,7 @@ class InterfacePhysicalResolver:
                 payload=node.payload,
                 canonical_refs=node.canonical_refs,
             )
-            for node in l1_artifact.nodes
+            for node in path.nodes
         )
         nodes.extend(target_interface_nodes)
 
@@ -253,7 +253,7 @@ class InterfacePhysicalResolver:
         )
         refs.extend(source_binding_refs)
 
-        for edge in l1_artifact.edges:
+        for edge in path.edges:
             edges.append(
                 InterfaceTraceEdge(
                     id=f"{edge.id}:branch:{branch_key}",
@@ -264,7 +264,7 @@ class InterfacePhysicalResolver:
                     evidence_refs=edge.evidence_refs,
                 )
             )
-        refs.extend(l1_artifact.evidence_refs)
+        refs.extend(path.refs)
 
         target_binding_refs = [
             self._binding_ref(target.binding.binding_id),
@@ -371,21 +371,8 @@ class InterfacePhysicalResolver:
         return self._deduplicate_refs(refs)
 
     @staticmethod
-    def _l1_query(
-        source: ResolvedPhysicalCandidate, target: ResolvedPhysicalCandidate
-    ) -> L1TraceQuery:
-        return L1TraceQuery(
-            **{
-                "from": {
-                    "point_id": source.binding.point_id,
-                    "member_index": source.binding.point_member,
-                },
-                "to": {
-                    "point_id": target.binding.point_id,
-                    "member_index": target.binding.point_member,
-                },
-            }
-        )
+    def _point(candidate: ResolvedPhysicalCandidate) -> PointMember:
+        return PointMember(candidate.binding.point_id, candidate.binding.point_member)
 
     @staticmethod
     def _candidate_schema(candidate: ResolvedPhysicalCandidate) -> PhysicalBindingCandidate:

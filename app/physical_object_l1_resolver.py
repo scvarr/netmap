@@ -1,11 +1,10 @@
 from app.repository import CanonicalRepository, PointMember
-from app.resolver import L1Resolver
+from app.resolver import L1Resolver, SourceTraversal
 from app.schemas import (
     EvaluationView,
     EvidenceEdge,
     EvidenceNode,
     EvidenceRef,
-    L1TraceQuery,
     PhysicalObjectL1TraceArtifact,
     PhysicalObjectL1TraceBranch,
     PhysicalObjectL1TraceCycle,
@@ -38,28 +37,29 @@ class PhysicalObjectL1Resolver:
         branches: list[PhysicalObjectL1TraceBranch] = []
         refs = self._endpoint_refs(query, sources, targets)
 
-        for source in sources:
+        walks = l1.walk_sources(sources)
+        for source, walk in walks.items():
             for target in targets:
-                artifact = l1.resolve(self._query(source, target), evaluation_view)
-                if artifact.verdict != "REACHABLE":
+                path = l1.evidence_to(walk, target)
+                if path is None:
                     continue
-                for node in artifact.nodes:
+                for node in path.nodes:
                     nodes[node.id] = node
-                for edge in artifact.edges:
+                for edge in path.edges:
                     edges[edge.id] = edge
-                branch_refs = self._deduplicate_refs(artifact.evidence_refs)
+                branch_refs = self._deduplicate_refs(path.refs)
                 refs.extend(branch_refs)
                 branches.append(
                     PhysicalObjectL1TraceBranch(
                         branch_id=f"physical-object-branch:{source.point_id}:{source.member_index}:{target.point_id}:{target.member_index}",
                         source=self._address(source),
                         target=self._address(target),
-                        edge_ids=[edge.id for edge in artifact.edges],
+                        edge_ids=[edge.id for edge in path.edges],
                         evidence_refs=branch_refs,
                     )
                 )
 
-        cycles = self._cycles(l1, sources, nodes, edges)
+        cycles = self._cycles(l1, walks, nodes, edges)
         for cycle in cycles:
             refs.extend(cycle.evidence_refs)
         gaps = [] if branches else [
@@ -87,14 +87,14 @@ class PhysicalObjectL1Resolver:
     def _cycles(
         self,
         l1: L1Resolver,
-        sources: tuple[PointMember, ...],
+        walks: dict[PointMember, SourceTraversal],
         nodes: dict[str, EvidenceNode],
         edges: dict[str, EvidenceEdge],
     ) -> list[PhysicalObjectL1TraceCycle]:
         result: list[PhysicalObjectL1TraceCycle] = []
         seen: set[tuple[str, ...]] = set()
-        for source in sources:
-            for steps in l1.find_cycles(source):
+        for walk in walks.values():
+            for steps in l1.find_cycles(walk):
                 edge_ids = tuple(sorted(str(step.edge.connection_member_id) for step in steps))
                 if edge_ids in seen:
                     continue
@@ -117,10 +117,6 @@ class PhysicalObjectL1Resolver:
                     )
                 )
         return result
-
-    @staticmethod
-    def _query(source: PointMember, target: PointMember) -> L1TraceQuery:
-        return L1TraceQuery(**{"from": PhysicalObjectL1Resolver._address(source), "to": PhysicalObjectL1Resolver._address(target)})
 
     @staticmethod
     def _address(point: PointMember) -> PointMemberAddress:

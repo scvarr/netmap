@@ -1,4 +1,6 @@
-from dataclasses import dataclass
+from collections.abc import Callable, Iterator, Sequence
+from dataclasses import dataclass, field
+from itertools import batched
 from typing import Literal
 
 from app.errors import ModelError, ValidationError
@@ -25,6 +27,26 @@ class TraversalStep:
     edge: L1AdjacencyEdge
 
 
+@dataclass
+class L1PathEvidence:
+    nodes: list[EvidenceNode]
+    edges: list[EvidenceEdge]
+    refs: list[EvidenceRef]
+
+
+@dataclass
+class SourceTraversal:
+    source: PointMember
+    predecessors: dict[PointMember, TraversalStep] = field(default_factory=dict)
+    visited: set[PointMember] = field(default_factory=set)
+    closures: list[TraversalStep] = field(default_factory=list)
+    terminations: list[L1TraceTermination] = field(default_factory=list)
+    visits: Iterator[PointMember] = field(init=False, repr=False)
+
+    def reaches(self, target: PointMember) -> bool:
+        return target in self.visited or any(current == target for current in self.visits)
+
+
 class L1Resolver:
     VERSION = "l1-traversal/2.0"
 
@@ -39,14 +61,55 @@ class L1Resolver:
         target = PointMember(query.to.point_id, query.to.member_index)
         self.repository.validate_point_member(source)
         self.repository.validate_point_member(target)
-        reached, predecessors, closures, terminations = self._traverse(
-            source, target, localize_model_errors=localize_model_errors
-        )
-        if reached:
-            steps = self._path(source, target, predecessors)
+        walk = self._traverse(source, target=target, localize_model_errors=localize_model_errors)
+        if walk.reaches(target):
+            evidence = self._evidence(source, self._path(source, target, walk.predecessors))
+            terminations = [L1TraceTermination(node_id=self._node_id(target), reason="EXPECTED_MEMBER")]
+            verdict = "REACHABLE"
         else:
-            steps = [*predecessors.values(), *closures]
+            evidence = self._evidence(source, [*walk.predecessors.values(), *walk.closures])
+            terminations = walk.terminations
+            verdict = "UNKNOWN"
+        return TraceArtifact(
+            query=query,
+            evaluation_view=evaluation_view,
+            verdict=verdict,
+            nodes=evidence.nodes,
+            edges=evidence.edges,
+            evidence_refs=evidence.refs,
+            gaps=[] if verdict == "REACHABLE" else [
+                TraceGap(code="L1_TOPOLOGY_INCOMPLETE", node_id=end.node_id, evidence_refs=[])
+                for end in terminations
+            ],
+            warnings=[],
+            terminations=terminations,
+        )
 
+    def walk_sources(self, sources: Sequence[PointMember]) -> dict[PointMember, SourceTraversal]:
+        # One memo per composed request. Only candidate sources and actually visited peers are read.
+        unique = list(dict.fromkeys(sources))
+        links: dict[PointMember, tuple[bool, list[L1AdjacencyEdge]]] = {}
+        for batch in batched(unique, 128):
+            try:
+                links.update(self.repository.get_l1_member_links_batch(list(batch)))
+            except ModelError:
+                # A prefetch cannot decide which corrupt address the ordered walk encounters first.
+                # The normal per-address read raises only when that address is visited.
+                continue
+
+        def read_links(address: PointMember) -> tuple[bool, list[L1AdjacencyEdge]]:
+            if address not in links:
+                links[address] = self.repository.get_l1_member_links(address)
+            return links[address]
+
+        return {source: self._traverse(source, read_links=read_links) for source in unique}
+
+    def evidence_to(self, walk: SourceTraversal, target: PointMember) -> L1PathEvidence | None:
+        if not walk.reaches(target):
+            return None
+        return self._evidence(walk.source, self._path(walk.source, target, walk.predecessors))
+
+    def _evidence(self, source: PointMember, steps: list[TraversalStep]) -> L1PathEvidence:
         states = dict.fromkeys([source, *(step.target for step in steps)])
         nodes = [
             EvidenceNode(
@@ -64,20 +127,7 @@ class L1Resolver:
                 *(ref for edge in edges for ref in edge.evidence_refs),
             ]
         }
-        return TraceArtifact(
-            query=query,
-            evaluation_view=evaluation_view,
-            verdict="REACHABLE" if reached else "UNKNOWN",
-            nodes=nodes,
-            edges=edges,
-            evidence_refs=list(refs.values()),
-            gaps=[] if reached else [
-                TraceGap(code="L1_TOPOLOGY_INCOMPLETE", node_id=end.node_id, evidence_refs=[])
-                for end in terminations
-            ],
-            warnings=[],
-            terminations=terminations,
-        )
+        return L1PathEvidence(nodes, edges, list(refs.values()))
 
     def resolve_group(
         self, query: L1TraceGroupQuery, evaluation_view: EvaluationView
@@ -108,24 +158,32 @@ class L1Resolver:
         return L1TraceGroupArtifact(completeness=completeness, results=results)
 
     def _traverse(
-        self, source: PointMember, target: PointMember | None, *,
+        self, source: PointMember, *, target: PointMember | None = None,
+        read_links: Callable[[PointMember], tuple[bool, list[L1AdjacencyEdge]]] | None = None,
         localize_model_errors: bool = False,
-    ) -> tuple[
-        bool,
-        dict[PointMember, TraversalStep],
-        list[TraversalStep],
-        list[L1TraceTermination],
-    ]:
-        predecessors: dict[PointMember, TraversalStep] = {}
+    ) -> SourceTraversal:
+        traversal = SourceTraversal(source)
+        traversal.visits = self._walk(
+            traversal, read_links or self.repository.get_l1_member_links, target, localize_model_errors,
+        )
+        return traversal
+
+    def _walk(
+        self, traversal: SourceTraversal,
+        read_links: Callable[[PointMember], tuple[bool, list[L1AdjacencyEdge]]],
+        target: PointMember | None, localize_model_errors: bool,
+    ) -> Iterator[PointMember]:
+        source = traversal.source
+        predecessors = traversal.predecessors
+        terminations = traversal.terminations
         traversed_members = set()
         terminal_members: set[PointMember] = set()
         closures: list[TraversalStep] = []
-        terminations: list[L1TraceTermination] = []
         frontier = [source]
         for current in frontier:
             node_id = self._node_id(current)
             try:
-                active, edges = self.repository.get_l1_member_links(current)
+                active, edges = read_links(current)
             except ModelError as error:
                 if not localize_model_errors:
                     raise
@@ -137,10 +195,10 @@ class L1Resolver:
                 ))
                 continue
 
-            if current == target:
-                return True, predecessors, [], [
-                    L1TraceTermination(node_id=node_id, reason="EXPECTED_MEMBER")
-                ]
+            # Pause after canonical validation and before expanding this member. A
+            # successful target never forces validation of topology beyond it.
+            traversal.visited.add(current)
+            yield current
 
             arrival = predecessors.get(current)
             if active:
@@ -179,19 +237,19 @@ class L1Resolver:
                 predecessors[peer] = step
                 frontier.append(peer)
 
-        cycles = [
+        traversal.closures = [
             step for step in closures
             if all(hop.source not in terminal_members for hop in self._cycle_steps(step, predecessors))
         ]
         terminations.extend(
             L1TraceTermination(node_id=self._node_id(step.target), reason="CYCLE")
-            for step in cycles
+            for step in traversal.closures
         )
-        return False, predecessors, cycles, terminations
 
-    def find_cycles(self, source: PointMember) -> list[list[TraversalStep]]:
-        _, predecessors, closures, _ = self._traverse(source, None)
-        return [self._cycle_steps(step, predecessors) for step in closures]
+    def find_cycles(self, traversal: SourceTraversal) -> list[list[TraversalStep]]:
+        for _ in traversal.visits:
+            pass
+        return [self._cycle_steps(step, traversal.predecessors) for step in traversal.closures]
 
     def _cycle_steps(
         self,

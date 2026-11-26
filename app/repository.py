@@ -2,7 +2,7 @@ import uuid
 from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_address, ip_network
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.orm import Session, aliased
 
 from app.errors import ModelError, ValidationError
@@ -2434,36 +2434,22 @@ class CanonicalRepository:
         point_b = aliased(ConnectionPoint)
         module_a = aliased(ModuleEndpointMapping)
         module_b = aliased(ModuleEndpointMapping)
-        member_counts = (
-            select(
-                ConnectionMember.connection_id,
-                func.count(ConnectionMember.id).label("member_count"),
-            )
-            .group_by(ConnectionMember.connection_id)
-            .subquery()
+        counted_member = aliased(ConnectionMember)
+        member_count = (
+            select(func.count(counted_member.id))
+            .where(counted_member.connection_id == Connection.id)
+            .correlate(Connection)
+            .scalar_subquery()
         )
         point_ids = {address.point_id for address in addresses}
-        conditions = [
-            ConnectionMember.id.is_(None)
-            & or_(Connection.point_a_id.in_(point_ids), Connection.point_b_id.in_(point_ids))
-        ]
-        for address in addresses:
-            conditions.extend(
-                [
-                    (Connection.point_a_id == address.point_id)
-                    & (ConnectionMember.point_a_member == address.member_index),
-                    (Connection.point_b_id == address.point_id)
-                    & (ConnectionMember.point_b_member == address.member_index),
-                ]
-            )
-
+        keys = [(address.point_id, address.member_index) for address in addresses]
         rows = self.session.execute(
             select(
                 Connection,
                 ConnectionMember,
                 point_a.cardinality.label("a_capacity"),
                 point_b.cardinality.label("b_capacity"),
-                member_counts.c.member_count,
+                member_count.label("member_count"),
                 Cable.id.label("cable_id"),
                 (point_a.physical_object_id == point_b.physical_object_id).label("same_object"),
                 (
@@ -2472,13 +2458,17 @@ class CanonicalRepository:
                 ).label("internal_scope_matches"),
             )
             .outerjoin(ConnectionMember, ConnectionMember.connection_id == Connection.id)
-            .outerjoin(member_counts, member_counts.c.connection_id == Connection.id)
             .join(point_a, point_a.id == Connection.point_a_id)
             .join(point_b, point_b.id == Connection.point_b_id)
             .outerjoin(Cable, Cable.connection_id == Connection.id)
             .outerjoin(module_a, module_a.connection_point_id == point_a.id)
             .outerjoin(module_b, module_b.connection_point_id == point_b.id)
-            .where(or_(*conditions))
+            .where(or_(
+                tuple_(Connection.point_a_id, ConnectionMember.point_a_member).in_(keys),
+                tuple_(Connection.point_b_id, ConnectionMember.point_b_member).in_(keys),
+                ConnectionMember.id.is_(None)
+                & or_(Connection.point_a_id.in_(point_ids), Connection.point_b_id.in_(point_ids)),
+            ))
             .order_by(ConnectionMember.id)
             .execution_options(populate_existing=True)
         ).all()
@@ -2542,6 +2532,29 @@ class CanonicalRepository:
             )
         ) is not None
         edges = self.get_l1_adjacency([address])[address]
+        self._validate_l1_roles(edges)
+        return active, edges
+
+    def get_l1_member_links_batch(
+        self, addresses: list[PointMember],
+    ) -> dict[PointMember, tuple[bool, list[L1AdjacencyEdge]]]:
+        if not addresses:
+            return {}
+        keys = [(address.point_id, address.member_index) for address in addresses]
+        active = {
+            PointMember(point_id, member_index)
+            for point_id, member_index in self.session.execute(
+                select(InterfacePhysicalBinding.point_id, InterfacePhysicalBinding.point_member)
+                .where(tuple_(InterfacePhysicalBinding.point_id, InterfacePhysicalBinding.point_member).in_(keys))
+            )
+        }
+        adjacency = self.get_l1_adjacency(addresses)
+        for edges in adjacency.values():
+            self._validate_l1_roles(edges)
+        return {address: (address in active, edges) for address, edges in adjacency.items()}
+
+    @staticmethod
+    def _validate_l1_roles(edges: list[L1AdjacencyEdge]) -> None:
         roles: set[bool] = set()
         for edge in edges:
             if not edge.external and not edge.internal_scope_matches:
@@ -2555,7 +2568,6 @@ class CanonicalRepository:
                     {"connection_id": str(edge.connection_id), "role": "EXTERNAL" if edge.external else "INTERNAL"},
                 )
             roles.add(edge.external)
-        return active, edges
 
     @staticmethod
     def _binding_record(binding: InterfacePhysicalBinding) -> PhysicalBindingRecord:
