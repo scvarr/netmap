@@ -1576,6 +1576,26 @@ class OpticalProposedEnding(BaseModel):
     member_index: int
 
 
+OpticalModelErrorDetail = Literal[
+    "INVALID_INTERNAL_LINKS", "INVALID_MEMBER_MAPPINGS", "INVALID_MEMBER_FIBER_TYPE",
+    "AMBIGUOUS_MEMBER_MAPPING", "MISSING_MEMBER_MAPPING",
+]
+
+
+class OpticalModelError(BaseModel):
+    code: Literal["MODEL_ERROR"] = "MODEL_ERROR"
+    reason: Literal["INVALID_CANONICAL_DATA"] = "INVALID_CANONICAL_DATA"
+    detail: OpticalModelErrorDetail
+
+
+class OpticalEndingMedium(BaseModel):
+    side: Literal["A", "B"]
+    medium: Literal["COPPER"] = "COPPER"
+    port_type_id: uuid.UUID
+    revision_id: uuid.UUID
+    mapping_id: uuid.UUID | None
+
+
 class OpticalFact(BaseModel):
     source: Literal[
         "CABLE", "PROPOSED_CABLE", "BASE_MEMBER_MAPPING", "MODULE_MEMBER_MAPPING",
@@ -1585,11 +1605,14 @@ class OpticalFact(BaseModel):
     unknown_reason: Literal[
         "FIBER_TYPE_UNSPECIFIED", "DIRECT_CONSTRUCTION_UNKNOWN", "INTERNAL_PROVENANCE_UNKNOWN",
         "TRANSCEIVER_FIBER_TYPE_UNKNOWN", "ACTIVE_ENDING_CHARACTERISTIC_UNKNOWN",
+        "CABLE_ENDING_MEDIUM_MISMATCH",
     ] | None = None
     points: list[PointMemberAddress]
     trace_edge_id: str | None = None
     canonical_refs: list[EvidenceRef]
     provenance: OpticalProvenance | None = None
+    ending_media: list[OpticalEndingMedium] = Field(default_factory=list)
+    model_error: OpticalModelError | None = None
     proposed_endings: list[OpticalProposedEnding] = Field(default_factory=list)
 
 

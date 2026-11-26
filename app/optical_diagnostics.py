@@ -1,6 +1,6 @@
 """Read optical evidence from the same snapshot as the canonical L1 result."""
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import pairwise
 from typing import Literal
 from uuid import UUID
@@ -13,7 +13,8 @@ from app.repository import CanonicalRepository, PointMember
 from app.resolver import L1Resolver, TraversalStep
 from app.schemas import (
     EvidenceEdge, EvidenceRef, FiberType, InterfacePhysicalTraceArtifact, L1TraceTermination,
-    OpticalConflict, OpticalDiagnostic, OpticalFact, OpticalProposedEnding, OpticalProvenance,
+    InternalFiberType, OpticalConflict, OpticalDiagnostic, OpticalEndingMedium, OpticalFact,
+    OpticalModelError, OpticalModelErrorDetail, OpticalProposedEnding, OpticalProvenance,
     PhysicalObjectL1TraceArtifact, PointMemberAddress, TraceArtifact,
 )
 
@@ -34,7 +35,37 @@ class Ending:
     revision_id: UUID
     key: UUID | str
     medium: str
+    port_type_id: UUID
     transceiver: dict | None = None
+
+
+MemberKey = tuple[UUID | str, int]
+
+
+@dataclass(frozen=True)
+class IndexedMemberMapping:
+    value: InternalFiberType | None = None
+    link_id: UUID | None = None
+    error: OpticalModelErrorDetail | None = None
+
+
+@dataclass
+class IndexedInternalPair:
+    link_id: UUID | None
+    members: dict[frozenset[MemberKey], IndexedMemberMapping] = field(default_factory=dict)
+    malformed_members: set[MemberKey] = field(default_factory=set)
+    malformed_collection: bool = False
+    unlocated_member: bool = False
+
+    def resolve(self, left: MemberKey, right: MemberKey) -> IndexedMemberMapping:
+        if self.malformed_collection or left in self.malformed_members or right in self.malformed_members:
+            return IndexedMemberMapping(link_id=self.link_id, error="INVALID_MEMBER_MAPPINGS")
+        match = self.members.get(frozenset((left, right)))
+        if match is not None:
+            return match
+        return IndexedMemberMapping(link_id=self.link_id, error=(
+            "INVALID_MEMBER_MAPPINGS" if self.unlocated_member else "MISSING_MEMBER_MAPPING"
+        ))
 
 
 @dataclass(frozen=True)
@@ -49,7 +80,8 @@ class OpticalPreviewLine:
 def diagnose(
     facts: list[OpticalFact], termination: L1TraceTermination | None = None, *, cycle: bool = False,
 ) -> OpticalDiagnostic:
-    modes = [index for index, fact in enumerate(facts) if fact.value in ("SM", "MM")]
+    modes = [index for index, fact in enumerate(facts)
+             if fact.value in ("SM", "MM") and fact.unknown_reason is None]
     comparisons = list(pairwise(modes))
     if cycle and len(modes) > 1:
         comparisons.append((modes[-1], modes[0]))
@@ -62,7 +94,8 @@ def diagnose(
         ]
         if any(facts[index].value == "COPPER" for index in between):
             continue
-        unknown = [index for index in between if facts[index].value is None]
+        unknown = [index for index in between
+                   if facts[index].value is None or facts[index].unknown_reason is not None]
         conflicts.append(OpticalConflict(
             kind="END_TO_END" if unknown else "LOCAL",
             left_fact=left, right_fact=right, unknown_facts=unknown,
@@ -78,7 +111,7 @@ def diagnose(
 
     if conflicts:
         status = "CONFLICT"
-    elif reason or any(fact.value is None for fact in facts):
+    elif reason or any(fact.value is None or fact.unknown_reason is not None for fact in facts):
         status = "UNKNOWN"
     elif all(fact.value == "COPPER" for fact in facts):
         status = "NOT_APPLICABLE"
@@ -112,7 +145,8 @@ class OpticalEvidence:
             self.active = {PointMember(point, member): EvidenceRef(entity_type="InterfacePhysicalBinding", entity_id=identifier)
                            for point, member, identifier in rows}
 
-        self.mappings = {}
+        self.mappings: dict[tuple[str, UUID, frozenset[UUID | str]], IndexedInternalPair] = {}
+        self.malformed_module_links: set[tuple[UUID, str | None]] = set()
         self.owners = {}
         if any(not any(ref.entity_type == "Cable" for ref in edge.evidence_refs) for edge in edges):
             self.owners = dict(session.execute(select(m.ConnectionPoint.id, m.ConnectionPoint.physical_object_id)
@@ -123,9 +157,7 @@ class OpticalEvidence:
                                      link.slot_a_id, link.slot_b_id, link.member_mappings, link.id)
         if edges:
             for revision, links in module_links.items():
-                for link in links:
-                    self._index_mappings("MODULE_MEMBER_MAPPING", revision, link["from_endpoint_key"],
-                                         link["to_endpoint_key"], link["member_mappings"], None)
+                self._index_module_links(revision, links)
         identifiers = (cable_ids or set()) | {
             ref.entity_id for edge in edges for ref in edge.evidence_refs if ref.entity_type == "Cable"
         }
@@ -137,7 +169,7 @@ class OpticalEvidence:
         rows = session.execute(select(
             m.BuiltInEndpointMapping.connection_point_id, m.BuiltInEndpointMapping.id,
             m.ObjectConfiguration.id, m.ObjectConfiguration.base_revision_id,
-            m.BuiltInEndpointDefinition.id, m.PortType.medium,
+            m.BuiltInEndpointDefinition.id, m.PortType.medium, m.PortType.id,
         ).select_from(m.BuiltInEndpointMapping)
             .join(m.ConnectionPoint, m.ConnectionPoint.id == m.BuiltInEndpointMapping.connection_point_id)
             .join(m.ObjectConfiguration, m.ObjectConfiguration.id == m.BuiltInEndpointMapping.configuration_id)
@@ -147,15 +179,15 @@ class OpticalEvidence:
                    m.ConnectionPoint.physical_object_id == m.ObjectConfiguration.physical_object_id,
                    m.ConnectionPoint.cardinality == m.BuiltInEndpointDefinition.cardinality,
                    m.ObjectConfiguration.base_revision_id == m.BuiltInEndpointDefinition.base_revision_id))
-        for point, mapping, scope, revision, key, medium in rows:
-            self.endings[point] = Ending("BASE_MEMBER_MAPPING", mapping, scope, revision, key, medium)
+        for point, mapping, scope, revision, key, medium, port_type in rows:
+            self.endings[point] = Ending("BASE_MEMBER_MAPPING", mapping, scope, revision, key, medium, port_type)
             revisions.add(revision)
 
     def _read_module_endings(self, session, point_ids, links):
         rows = session.execute(select(
             m.ModuleEndpointMapping.connection_point_id, m.ModuleEndpointMapping.id,
             m.ModuleInstallation.id, m.ModuleEndpointDefinition.definition_key, m.PortType.medium,
-            m.ModuleTemplateRevision,
+            m.PortType.id, m.ModuleTemplateRevision,
         ).select_from(m.ModuleEndpointMapping)
             .join(m.ConnectionPoint, m.ConnectionPoint.id == m.ModuleEndpointMapping.connection_point_id)
             .join(m.ModuleInstallation, m.ModuleInstallation.id == m.ModuleEndpointMapping.installation_id)
@@ -167,26 +199,82 @@ class OpticalEvidence:
                    m.ConnectionPoint.physical_object_id == m.ObjectConfiguration.physical_object_id,
                    m.ModuleEndpointDefinition.module_revision_id == m.ModuleInstallation.module_revision_id,
                    m.ConnectionPoint.cardinality == func.jsonb_array_length(m.PortType.members)))
-        for point, mapping, scope, key, medium, revision in rows:
+        for point, mapping, scope, key, medium, port_type, revision in rows:
             if point in self.endings:
                 del self.endings[point]  # Ambiguous provenance supplies no characteristic.
                 continue
             self.endings[point] = Ending("MODULE_MEMBER_MAPPING", mapping, scope, revision.id, key, medium,
-                                         revision.transceiver)
+                                         port_type, revision.transceiver)
             links[revision.id] = revision.internal_links
 
-    def _index_mappings(self, source, revision, left, right, mappings, link):
-        for member in mappings:
-            a = (left, member["from_member_index"])
-            b = (right, member["to_member_index"])
-            value = member.get("fiber_type")
-            self.mappings[source, revision, frozenset((a, b))] = (
-                value if value in ("SM", "MM", "NO_FIBER") else None, link,
-            )
+    def _index_module_links(self, revision: UUID, links: object) -> None:
+        if not isinstance(links, list):
+            self.malformed_module_links.add((revision, None))
+            return
+        for link in links:
+            if not isinstance(link, dict):
+                self.malformed_module_links.add((revision, None))
+                continue
+            left, right = (link.get(f"{side}_endpoint_key") for side in ("from", "to"))
+            if not isinstance(left, str) or not left or not isinstance(right, str) or not right or left == right:
+                located = {key for key in (left, right) if isinstance(key, str) and key}
+                self.malformed_module_links.update((revision, key) for key in (located or {None}))
+                continue
+            self._index_mappings("MODULE_MEMBER_MAPPING", revision, left, right, link.get("member_mappings"), None)
 
-    def _copper(self, points: tuple[PointMember | None, PointMember | None]) -> bool:
-        return all(point is not None and (ending := self.endings.get(point.point_id)) is not None
-                   and ending.medium == "COPPER" for point in points)
+    def _index_mappings(self, source, revision, left, right, mappings, link):
+        key = (source, revision, frozenset((left, right)))
+        pair = self.mappings.setdefault(key, IndexedInternalPair(link))
+        if not isinstance(mappings, list) or not mappings:
+            pair.malformed_collection = True
+            return
+        for member in mappings:
+            ends = []
+            if isinstance(member, dict):
+                for endpoint, side in ((left, "from"), (right, "to")):
+                    index = member.get(f"{side}_member_index")
+                    if type(index) is int and index > 0:
+                        ends.append((endpoint, index))
+            if len(ends) < 2:
+                if ends:
+                    pair.malformed_members.update(ends)
+                else:
+                    pair.unlocated_member = True
+                continue
+            member_key = frozenset(ends)
+            value = member.get("fiber_type")
+            if member_key in pair.members:
+                pair.members[member_key] = IndexedMemberMapping(error="AMBIGUOUS_MEMBER_MAPPING")
+            elif value not in (None, "SM", "MM", "NO_FIBER"):
+                pair.members[member_key] = IndexedMemberMapping(link_id=link, error="INVALID_MEMBER_FIBER_TYPE")
+            else:
+                pair.members[member_key] = IndexedMemberMapping(value=value, link_id=link)
+
+    def _copper_endings(self, points: tuple[PointMember | None, PointMember | None]) -> tuple[Ending, Ending] | None:
+        left, right = (self.endings.get(point.point_id) if point is not None else None for point in points)
+        if left is not None and right is not None and left.medium == right.medium == "COPPER":
+            return left, right
+        return None
+
+    def cable_fact(self, members, value, *, source, proposed_endings=(), **location) -> OpticalFact:
+        copper = self._copper_endings(members)
+        ending_media = []
+        reason = None
+        if value is None:
+            if copper is not None:
+                value = "COPPER"
+            else:
+                reason = "FIBER_TYPE_UNSPECIFIED"
+        elif copper is not None:
+            reason = "CABLE_ENDING_MEDIUM_MISMATCH"
+            prospective_sides = {ending.side for ending in proposed_endings}
+            ending_media = [
+                OpticalEndingMedium(side=side, port_type_id=ending.port_type_id, revision_id=ending.revision_id,
+                                    mapping_id=None if side in prospective_sides else ending.mapping_id)
+                for side, ending in zip(("A", "B"), copper, strict=True)
+            ]
+        return OpticalFact(source=source, value=value, unknown_reason=reason, ending_media=ending_media,
+                           proposed_endings=list(proposed_endings), **location)
 
     def segment(self, edge: EvidenceEdge, left: PointMember, right: PointMember) -> OpticalFact:
         member_id = next(ref.entity_id for ref in edge.evidence_refs if ref.entity_type == "ConnectionMember")
@@ -200,25 +288,27 @@ class OpticalEvidence:
         facts = dict(points=[address(left), address(right)], trace_edge_id=edge.id, canonical_refs=edge.evidence_refs)
         cable_id = next((ref.entity_id for ref in edge.evidence_refs if ref.entity_type == "Cable"), None)
         if cable_id is not None:
-            value = self.cables[cable_id]
-            if value is None and self._copper((left, right)):
-                value = "COPPER"
-            return OpticalFact(source="CABLE", value=value,
-                               unknown_reason="FIBER_TYPE_UNSPECIFIED" if value is None else None, **facts)
+            return self.cable_fact((left, right), self.cables[cable_id], source="CABLE", **facts)
         a, b = (self.endings.get(point.point_id) for point in (left, right))
         if a is not None and b is not None and (a.source, a.scope_id) == (b.source, b.scope_id):
-            mapping = self.mappings.get((a.source, a.revision_id, frozenset(
-                ((a.key, left.member_index), (b.key, right.member_index))
-            )))
+            pair = self.mappings.get((a.source, a.revision_id, frozenset((a.key, b.key))))
+            mapping = None
+            if pair is not None:
+                mapping = pair.resolve((a.key, left.member_index), (b.key, right.member_index))
+            elif a.source == "MODULE_MEMBER_MAPPING" and any(
+                (a.revision_id, key) in self.malformed_module_links for key in (a.key, b.key, None)
+            ):
+                mapping = IndexedMemberMapping(error="INVALID_INTERNAL_LINKS")
             if mapping is not None:
-                value, link_id = mapping
-                if value is None and self._copper((left, right)):
+                value = mapping.value
+                error = OpticalModelError(detail=mapping.error) if mapping.error is not None else None
+                if value is None and error is None and self._copper_endings((left, right)) is not None:
                     value = "COPPER"
                 return OpticalFact(
-                    source=a.source, value=value,
-                    unknown_reason="FIBER_TYPE_UNSPECIFIED" if value is None else None,
-                    provenance=OpticalProvenance(revision_id=a.revision_id,
-                                                 mapping_ids=[a.mapping_id, b.mapping_id], internal_link_id=link_id),
+                    source=a.source, value=value, model_error=error,
+                    unknown_reason="FIBER_TYPE_UNSPECIFIED" if value is None and error is None else None,
+                    provenance=OpticalProvenance(revision_id=a.revision_id, mapping_ids=[a.mapping_id, b.mapping_id],
+                                                 internal_link_id=mapping.link_id),
                     **facts,
                 )
         if self.owners[left.point_id] == self.owners[right.point_id]:
@@ -355,8 +445,6 @@ def diagnose_preview(session: Session, lines: list[OpticalPreviewLine]) -> list[
     results = []
     for line in lines:
         value = evidence.cables[line.cable_id] if line.cable_id is not None else line.fiber_type
-        if value is None and evidence._copper(line.members):
-            value = "COPPER"
         sides = list(zip(line.members, line.interfaces, ("A", "B"), strict=True))
         proposed = {side: OpticalProposedEnding(side=side, interface_id=interface,
                                                 member_index=point.member_index if point else 1)
@@ -369,9 +457,8 @@ def diagnose_preview(session: Session, lines: list[OpticalPreviewLine]) -> list[
                 refs.append(EvidenceRef(entity_type="ConnectionPoint", entity_id=point.point_id))
         if line.cable_id is not None:
             refs.append(EvidenceRef(entity_type="Cable", entity_id=line.cable_id))
-        cable = OpticalFact(
-            source="CABLE" if line.cable_id is not None else "PROPOSED_CABLE", value=value,
-            unknown_reason="FIBER_TYPE_UNSPECIFIED" if value is None else None,
+        cable = evidence.cable_fact(
+            line.members, value, source="CABLE" if line.cable_id is not None else "PROPOSED_CABLE",
             points=[address(point) for point, interface, _ in sides if point is not None and interface is None],
             canonical_refs=refs, proposed_endings=list(proposed.values()),
         )
