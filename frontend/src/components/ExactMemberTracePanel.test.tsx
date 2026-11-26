@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ExactMemberTracePanel, InterfaceTracePanel } from './ExactMemberTracePanel';
 import type { ExactMemberTrace, ExpectedMemberPair } from '../topology/exactMemberTrace';
+import type { TopologyProjectionDocument } from '../topology/types';
 import type { PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
 
 const ref = (entity_type: string, entity_id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type, entity_id });
@@ -163,3 +164,65 @@ it('shows only the selected interface branch and never includes a disconnected c
   expect(onEvidence).toHaveBeenLastCalledWith({ edges: [levels[1]] });
   expect(fetch).toHaveBeenCalledTimes(1);
 });
+
+
+it.each(['on-map', 'off-map', 'details unavailable'] as const)(
+  'resolves intermediate canonical addresses and preserves evidence (%s)', async availability => {
+    const user = userEvent.setup();
+    const onEvidence = vi.fn();
+    const first = address('799ee601-4c36-44ff-9ec4-f2aa7499e169', 2);
+    const second = address('799ee601-4c36-44ff-9ec4-f2aa7499e170', 3);
+    const passive = {
+      id: 'passive', kind: 'PHYSICAL_OBJECT', label: 'Passive shelf', source_refs: [ref('PhysicalObject', 'passive')],
+      attributes: { connection_points: [first, second].map(({ point_id }) => ({
+        connection_point_id: point_id, display_name: 'MPO', cardinality: 3, external_connection_count: 0,
+      })) },
+    };
+    const projection: TopologyProjectionDocument = {
+      schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [passive], edges: [], gaps: [], warnings: [],
+    };
+    const loadProjection = vi.fn().mockResolvedValue(projection);
+    const loadPhysicalObjectDetails = vi.fn(async (id: string) => {
+      const doc = await details.loadPhysicalObjectDetails(id);
+      if (id !== 'passive') return doc;
+      if (availability === 'details unavailable') throw new Error('Address lookup failed');
+      return {
+        ...doc,
+        physical_object: { ...doc.physical_object, label: passive.label },
+        connection_points: doc.connection_points.map((point, index) => ({
+          ...point, connection_point_ref: ref('ConnectionPoint', [first, second][index].point_id),
+        })),
+      };
+    });
+    const result = {
+      ...trace(pair(), 'MISSING_EXTERNAL_CONNECTION'),
+      nodes: [
+        trace(pair()).nodes[0],
+        { id: 'entry', payload: first, canonical_refs: [ref('ConnectionPoint', first.point_id)] },
+        { id: 'ending', payload: second, canonical_refs: [ref('ConnectionPoint', second.point_id)] },
+      ],
+      edges: [edge('incoming', 'entry'), { ...edge('internal', 'ending'), from_node_id: 'entry' }],
+      terminations: [{ node_id: 'ending', reason: 'MISSING_EXTERNAL_CONNECTION' }],
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(result)));
+    render(<ExactMemberTracePanel equipment={equipment} details={{ loadPhysicalObjectDetails }} group={false}
+      onEvidence={onEvidence} projection={availability === 'off-map' ? { ...projection, nodes: [] } : projection}
+      projectionSource={{ loadProjection }} />);
+    await user.selectOptions(screen.getByLabelText('Откуда'), 'a');
+    await user.selectOptions(screen.getByLabelText('Куда'), 'b');
+    await select(user, 'a2:1', 'b1:2');
+    await user.click(screen.getByRole('button', { name: 'Трассировать' }));
+    expect(await screen.findByText('Подтверждённые участки: 2')).toBeVisible();
+    const segment = 'Passive shelf / Rear / Bay 1 / Cassette / MPO · #2 → Passive shelf / Rear / Bay 2 / Cassette / MPO · #3';
+    if (availability === 'details unavailable') {
+      expect(await screen.findByText(`Отсутствует внешнее соединение · Адрес недоступен · ${second.point_id} · #3`)).toBeVisible();
+      expect(screen.getByText(new RegExp(`Адрес недоступен · ${first.point_id} · #2 →`))).toBeVisible();
+    } else {
+      expect(await screen.findByText(segment)).toBeVisible();
+      expect(screen.getByText('Отсутствует внешнее соединение · Passive shelf / Rear / Bay 2 / Cassette / MPO · #3')).toBeVisible();
+    }
+    expect(onEvidence).toHaveBeenLastCalledWith(result);
+    expect(loadPhysicalObjectDetails.mock.calls.filter(([id]) => id === 'passive')).toHaveLength(1);
+    expect(loadProjection).toHaveBeenCalledTimes(availability === 'off-map' ? 1 : 0);
+  },
+);

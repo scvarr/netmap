@@ -2,11 +2,12 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { CableDeleteRequestError } from '../topology/apiCableDeleteDataSource';
 import { MapPage } from './MapPage';
-import { createMapPageHarness } from './MapPage.testHarness';
+import { createMapPageHarness, objectTraceFixture } from './MapPage.testHarness';
 
 vi.mock('../components/TopologyCanvas', () => ({
-  TopologyCanvas: ({ onPhysicalNodeContextMenu, document }: any) => <>
+  TopologyCanvas: ({ onPhysicalNodeContextMenu, document, traceOwnsFaces }: any) => <>
     <button onClick={() => onPhysicalNodeContextMenu(document.nodes[0], { x: 20, y: 20 })}>Object menu</button>
+    <output data-testid="trace-faces">{String(traceOwnsFaces)}</output>
     <output data-testid="scene">{document.warnings.join()}</output>
   </>,
 }));
@@ -26,17 +27,21 @@ const candidates = [1, 2].map(i => ({
 const click = (name: string, role = 'button') => fireEvent.click(screen.getByRole(role, { name }));
 const pair = { source_object_id: 'a', target_object_id: 'b' };
 
-async function start() {
+async function start(tracing?: ReturnType<typeof objectTraceFixture>) {
   const preview = vi.fn().mockResolvedValue({ cables: candidates });
   const remove = vi.fn().mockResolvedValue(undefined);
   const projection = vi.fn().mockResolvedValue(doc);
   const loadMap = vi.fn().mockResolvedValue(map);
   createMapPageHarness(MapPage)({
+    traceDataSource: tracing?.traceDataSource,
+    catalogInventoryDataSource: tracing?.catalogInventoryDataSource,
     dataSource: { loadProjection: projection },
     savedMapDataSource: { listMaps: vi.fn().mockResolvedValue([map]), loadMap } as any,
     cableDeleteDataSource: { deleteCable: vi.fn(), previewBulkDelete: preview, bulkDelete: remove },
   }, '/map?map=map&view=physical');
-  fireEvent.click(await screen.findByRole('button', { name: 'Object menu' }));
+  const menu = await screen.findByRole('button', { name: 'Object menu' });
+  if (tracing) { await tracing.submit(); await screen.findByText('Физический L1-путь доказан'); }
+  fireEvent.click(menu);
   click('Массовое удаление кабелей', 'menuitem');
   fireEvent.change(screen.getByLabelText('Второй физический объект'), { target: { value: 'b' } });
   click('Показать кабели');
@@ -76,12 +81,13 @@ it('keeps selection by Cable ID through sorting and confirms only the previewed 
 });
 
 it('asks for a fresh preview on conflict and retries only reads after acknowledged deletion', async () => {
-  const { remove, projection } = await start();
+  const { remove, projection } = await start(objectTraceFixture('a', 'b'));
   remove.mockRejectedValueOnce(new CableDeleteRequestError(409));
   click('Выбрать все');
   click('Проверить выбранные');
   click('Подтвердить удаление');
   expect(await screen.findByRole('alert')).toHaveTextContent('Загрузите список заново');
+  expect(screen.getByTestId('trace-faces')).toHaveTextContent('true');
   expect(screen.queryByRole('button', { name: 'Подтвердить удаление' })).toBeNull();
   click('Показать кабели');
   await screen.findByRole('table');
@@ -90,6 +96,8 @@ it('asks for a fresh preview on conflict and retries only reads after acknowledg
   projection.mockRejectedValueOnce(new Error('refresh failed'));
   click('Подтвердить удаление');
   expect(await screen.findByRole('alert')).toHaveTextContent('Кабели удалены, но карту не удалось обновить');
+  expect(screen.queryByText('Физический L1-путь доказан')).not.toBeInTheDocument();
+  expect(screen.getByTestId('trace-faces')).toHaveTextContent('false');
   click('Повторить обновление');
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Массовое удаление кабелей' })).toBeNull());
   expect(remove).toHaveBeenCalledTimes(2);

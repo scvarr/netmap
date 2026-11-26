@@ -41,7 +41,7 @@ async function open(documents = docs, previewCompatibility: CableReconnectDataSo
   const loadDetails = vi.fn(async (id: string) => documents[id as keyof typeof docs]);
   render(<CableReconnectDialog cableId="cable" objects={Object.keys(documents).map(id => ({ id, label: id }))}
     details={{ loadPhysicalObjectDetails: loadDetails }}
-    writer={{ preview, previewCompatibility, reconnect }} refresh={refresh} close={close} />);
+    writer={{ preview, previewCompatibility, reconnect }} onCommitted={() => {}} refresh={refresh} close={close} />);
   await screen.findByText('B / Без панели / b1 · 1');
   return { preview, loadDetails, reconnect, refresh, close };
 }

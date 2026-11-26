@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { MapPage } from "./MapPage";
-import { createMapPageHarness } from "./MapPage.testHarness";
+import { createMapPageHarness, objectTraceFixture } from "./MapPage.testHarness";
 import type { CableReconnectDataSource } from "../topology/apiCableReconnectDataSource";
 
 vi.mock("../components/TopologyCanvas", () => ({ TopologyCanvas: (props: any) => <div data-testid="canvas">
@@ -9,6 +9,7 @@ vi.mock("../components/TopologyCanvas", () => ({ TopologyCanvas: (props: any) =>
   <button onClick={() => props.onPhysicalCableContextMenu?.(cable, { x: 20, y: 20 })}>cable menu</button>
   <button onClick={() => props.onPhysicalPortContextMenu?.({ physicalObjectId: "object", connectionPointId: "port", label: "P1" }, { x: 20, y: 20 })}>port menu</button>
   <button onClick={() => props.onPhysicalPaneContextMenu?.({ x: 41, y: 52 }, { x: 20, y: 20 })}>empty menu</button>
+  <output data-testid="trace-faces">{String(props.traceOwnsFaces)}</output>
   <output data-testid="selected-node">{props.selection?.item?.id}</output>
   <output data-testid="projected-member">{props.document.edges[0]?.attributes.endpoint_pairs?.[0]?.from_member_index}</output>
 </div> }));
@@ -19,17 +20,21 @@ const object: any = { id: "object-node", kind: "PHYSICAL_OBJECT", label: "Object
 const cable: any = { id: "cable-node", kind: "CABLE", label: "Cable", source_refs: [ref("Cable", "cable")], attributes: {} };
 const document: any = { schema_version: "1.0", layer: "L1", detail_level: "PHYSICAL_OBJECT", nodes: [object, cable], edges: [], gaps: [], warnings: [] };
 const map: any = { map_ref: { entity_type: "SavedMap", entity_id: "map" }, name: "Map", active_variant_ref: ref("SavedMapVariant", "variant"), variants: [], placements: [{ physical_object_ref: ref("PhysicalObject", "object"), positions: { "L1/PHYSICAL_OBJECT": { x: 1, y: 2, locked: false, display_width: 240 } } }] };
-const renderPage = (details: any, disconnect = vi.fn(), projection = vi.fn().mockResolvedValue(document), cableReconnectDataSource?: CableReconnectDataSource) => {
+const renderPage = (details: any, disconnect = vi.fn(), projection = vi.fn().mockResolvedValue(document), cableReconnectDataSource?: CableReconnectDataSource, tracing?: ReturnType<typeof objectTraceFixture>) => {
   const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), createMap: vi.fn(), addPlacement: vi.fn(), removePlacement: vi.fn(), movePosition: vi.fn().mockResolvedValue(undefined), setPositionLock: vi.fn() };
-  const catalog = vi.fn().mockResolvedValue({ schema_version: "1.0", equipment: [], cables: [{ cable_ref: ref('Cable', 'cable'), connection_ref: ref('Connection', 'connection'), label: 'Cable deadbeef', label_source: 'TECHNICAL_FALLBACK', resolution: 'RESOLVED', endpoint_a: { remote_physical_object_ref: ref('PhysicalObject', 'object'), remote_physical_object_label: 'Object', remote_connection_point_ref: ref('ConnectionPoint', 'port-a'), remote_connection_point_label: 'P1', evidence_refs: [] }, endpoint_b: { remote_physical_object_ref: ref('PhysicalObject', 'other-object'), remote_physical_object_label: 'Other object', remote_connection_point_ref: ref('ConnectionPoint', 'port-b'), remote_connection_point_label: 'P2', evidence_refs: [] }, gaps: [], warnings: [] }], gaps: [], warnings: [] });
+  const catalog = vi.fn().mockResolvedValue({ schema_version: "1.0", equipment: tracing?.inventory.equipment ?? [], cables: [{ cable_ref: ref('Cable', 'cable'), connection_ref: ref('Connection', 'connection'), label: 'Cable deadbeef', label_source: 'TECHNICAL_FALLBACK', resolution: 'RESOLVED', endpoint_a: { remote_physical_object_ref: ref('PhysicalObject', 'object'), remote_physical_object_label: 'Object', remote_connection_point_ref: ref('ConnectionPoint', 'port-a'), remote_connection_point_label: 'P1', evidence_refs: [] }, endpoint_b: { remote_physical_object_ref: ref('PhysicalObject', 'other-object'), remote_physical_object_label: 'Other object', remote_connection_point_ref: ref('ConnectionPoint', 'port-b'), remote_connection_point_label: 'P2', evidence_refs: [] }, gaps: [], warnings: [] }], gaps: [], warnings: [] });
   const cableLabels = { setCableLabel: vi.fn().mockResolvedValue(undefined), generateCableLabel: vi.fn().mockResolvedValue(undefined), loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [{ id: 'template', name: 'FC', description: 'Fiber', pattern: 'FC####', start_at: 1 }] }), loadCableLabelSettings: vi.fn(), setCableLabelSettings: vi.fn(), createCableLabelTemplate: vi.fn(), updateCableLabelTemplate: vi.fn(), deleteCableLabelTemplate: vi.fn() };
-  renderMapPage({ dataSource: { loadProjection: projection }, savedMapDataSource: maps, catalogInventoryDataSource: { loadCatalogInventory: catalog }, cableLabelDataSource: cableLabels, cableReconnectDataSource, physicalObjectDetailsDataSource: { loadPhysicalObjectDetails: vi.fn().mockImplementation(async id => typeof details === "function" ? details(id) : details) }, physicalEndpointConnectionWriteDataSource: { createPhysicalEndpointConnection: vi.fn(), deleteExternalPhysicalConnection: disconnect } }, "/map?map=map&view=physical");
+  renderMapPage({ traceDataSource: tracing?.traceDataSource, dataSource: { loadProjection: projection }, savedMapDataSource: maps, catalogInventoryDataSource: { loadCatalogInventory: catalog }, cableLabelDataSource: cableLabels, cableReconnectDataSource, physicalObjectDetailsDataSource: { loadPhysicalObjectDetails: vi.fn().mockImplementation(async id => typeof details === "function" ? details(id) : details) }, physicalEndpointConnectionWriteDataSource: { createPhysicalEndpointConnection: vi.fn(), deleteExternalPhysicalConnection: disconnect } }, "/map?map=map&view=physical");
   return { maps, disconnect, catalog, cableLabels, projection };
 };
 const detail = (attachments: any[] | undefined) => ({ schema_version: "1.0", physical_object: { source_ref: ref("PhysicalObject", "object"), label: "Object" }, connection_points: [{ connection_point_ref: ref("ConnectionPoint", "port"), label: "P1", cardinality: 1, external_physical_attachments: attachments }], owned_interface_count: 0, gaps: [], warnings: [] });
 
 describe("MapPage UX.7 context menu", () => {
-  it.each([true, false])("uses Cable lifecycle for reconnect eligibility (%s)", async canReconnect => {
+  it.each([
+    { canReconnect: false, failRefresh: false },
+    { canReconnect: true, failRefresh: false },
+    { canReconnect: true, failRefresh: true },
+  ])("uses Cable lifecycle for reconnect (eligible: $canReconnect, refresh fails: $failRefresh)", async ({ canReconnect, failRefresh }) => {
     const members = [{ index: 1, designation: "Alpha", occupied: true }, { index: 2, designation: "Beta", occupied: false }];
     const nodes = [{ ...object, attributes: { ...object.attributes, connection_points: [{
       ...object.attributes.connection_points[0], cardinality: 2, external_connection_count: 1, members,
@@ -49,13 +54,15 @@ describe("MapPage UX.7 context menu", () => {
       previewCompatibility: vi.fn().mockResolvedValue({ verdict: "ALLOW", token: "token", pairs: [] }),
       reconnect: vi.fn().mockImplementation(async () => { projection.mockResolvedValue(projected(2)); }),
     };
+    const tracing = failRefresh ? objectTraceFixture("object", "other") : undefined;
     const { catalog } = renderPage((id: string) => {
       const result = detail([]);
       return { ...result, connection_points: id === "object"
         ? [{ ...result.connection_points[0], cardinality: 2, members, external_connection_count: 1 }]
         : [{ ...result.connection_points[0], connection_point_ref: ref("ConnectionPoint", "other-port") }] };
-    }, vi.fn(), projection, writer);
+    }, vi.fn(), projection, writer, tracing);
     await screen.findByTestId("canvas");
+    if (tracing) { await tracing.submit(); await screen.findByText("Физический L1-путь доказан"); }
     fireEvent.click(screen.getByText("cable menu"));
     const action = screen.queryByRole("menuitem", { name: "Переподключить" });
     if (!canReconnect) {
@@ -71,7 +78,15 @@ describe("MapPage UX.7 context menu", () => {
     fireEvent.click(dialog.getByRole("button", { name: "Предпросмотр" }));
     const submit = await dialog.findByRole("button", { name: "Подтвердить переподключение" });
     catalog.mockClear();
+    if (failRefresh) projection.mockRejectedValueOnce(new Error("refresh failed"));
     fireEvent.click(submit);
+    if (failRefresh) {
+      const retry = await dialog.findByRole("button", { name: "Повторить обновление" });
+      expect(screen.queryByText("Физический L1-путь доказан")).not.toBeInTheDocument();
+      expect(screen.getByTestId("trace-faces")).toHaveTextContent("false");
+      expect(screen.getByTestId("projected-member")).toHaveTextContent("1");
+      fireEvent.click(retry);
+    }
     await waitFor(() => expect(screen.getByTestId("projected-member")).toHaveTextContent("2"));
     expect(screen.getByTestId("selected-node")).toHaveTextContent(cable.id);
     await waitFor(() => expect(catalog).toHaveBeenCalled());

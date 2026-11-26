@@ -1,15 +1,18 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import type { CatalogInventoryDataSource, CatalogInventoryEquipmentItem } from '../topology/catalogInventoryTypes';
 import type { ConnectionPointDetails, PhysicalObjectDetailsDataSource } from '../topology/physicalObjectDetailsTypes';
 import type { PhysicalObjectL1TraceArtifact, PhysicalObjectL1TraceDataSource, PhysicalObjectL1TraceQuery } from '../topology/physicalObjectL1TraceTypes';
 import { ExactMemberTracePanel, InterfaceTracePanel } from './ExactMemberTracePanel';
 import type { ExactMemberTrace } from '../topology/exactMemberTrace';
+import type { TopologyDataSource, TopologyProjectionDocument } from '../topology/types';
 import { useI18n } from '../i18n';
 
 interface TraceCommandBarProps {
   catalogInventoryDataSource?: CatalogInventoryDataSource;
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
-  exactScope?: string;
+  traceScopeKey?: string;
+  projection?: TopologyProjectionDocument | null;
+  projectionSource?: TopologyDataSource;
   onExactEvidence?: (trace: Pick<ExactMemberTrace, 'edges'> | null) => void;
   traceDataSource?: PhysicalObjectL1TraceDataSource;
   traceArtifact: PhysicalObjectL1TraceArtifact | null;
@@ -45,7 +48,7 @@ function PortRefinement({ endpoint, objectId, state, selectedPortId, onSelect }:
   return <label>{label}<select aria-label={label} value={selectedPortId} onChange={(event) => onSelect(event.target.value)} disabled={!objectId || state.objectId !== objectId}><option value="">{t('trace.anyPort')}</option>{ports.map((port) => <option key={port.connection_point_ref.entity_id} value={port.connection_point_ref.entity_id}>{portName(port)}</option>)}</select>{state.error && <small className="trace-command__refinement-error">{t('trace.portLoadFailed', { error: state.error })}</small>}</label>;
 }
 
-export function TraceCommandBar({ catalogInventoryDataSource, physicalObjectDetailsDataSource, exactScope, onExactEvidence, traceDataSource, traceArtifact, selectedBranchId, onSelectedBranchId, onTraceArtifact }: TraceCommandBarProps) {
+export function TraceCommandBar({ catalogInventoryDataSource, physicalObjectDetailsDataSource, traceScopeKey, projection, projectionSource, onExactEvidence, traceDataSource, traceArtifact, selectedBranchId, onSelectedBranchId, onTraceArtifact }: TraceCommandBarProps) {
   const { t } = useI18n();
   const [mode, setMode] = useState<'object' | 'member' | 'group' | 'interface'>('object');
   const objectRequest = useRef(0);
@@ -55,6 +58,12 @@ export function TraceCommandBar({ catalogInventoryDataSource, physicalObjectDeta
   const [sourcePortId, setSourcePortId] = useState(''); const [destinationPortId, setDestinationPortId] = useState('');
   const [sourcePorts, setSourcePorts] = useState<EndpointPortState>(emptyPorts); const [destinationPorts, setDestinationPorts] = useState<EndpointPortState>(emptyPorts);
   const [message, setMessage] = useState<string | null>(null); const [loading, setLoading] = useState(false);
+
+  useLayoutEffect(() => {
+    setLoading(false);
+    setMessage(null);
+    return () => { objectRequest.current += 1; };
+  }, [traceScopeKey]);
 
   useEffect(() => { if (!catalogInventoryDataSource) return; let active = true; void Promise.resolve(catalogInventoryDataSource.loadCatalogInventory()).then((document) => active && document && setEquipment(sortedEquipment(document.equipment)), (reason) => active && setMessage(reason instanceof Error ? reason.message : t('trace.inventoryLoadFailed'))); return () => { active = false; }; }, [catalogInventoryDataSource, t]);
   useEffect(() => { if (!sourceId || !physicalObjectDetailsDataSource) { setSourcePorts(emptyPorts()); return; } let active = true; setSourcePorts({ objectId: sourceId, ports: [], error: null }); void physicalObjectDetailsDataSource.loadPhysicalObjectDetails(sourceId).then((document) => active && setSourcePorts({ objectId: sourceId, ports: document.connection_points, error: null }), (reason) => active && setSourcePorts({ objectId: sourceId, ports: [], error: reason instanceof Error ? reason.message : t('canvas.layoutFailed') })); return () => { active = false; }; }, [physicalObjectDetailsDataSource, sourceId, t]);
@@ -90,8 +99,9 @@ export function TraceCommandBar({ catalogInventoryDataSource, physicalObjectDeta
   </label>}
   {mode !== 'object' && physicalObjectDetailsDataSource && onExactEvidence
     ? mode === 'interface'
-      ? <InterfaceTracePanel key={exactScope} equipment={equipment} details={physicalObjectDetailsDataSource} onEvidence={onExactEvidence} />
-      : <ExactMemberTracePanel key={exactScope + mode} group={mode === 'group'} equipment={equipment}
-        details={physicalObjectDetailsDataSource} onEvidence={onExactEvidence} />
+      ? <InterfaceTracePanel key={traceScopeKey} equipment={equipment} details={physicalObjectDetailsDataSource} onEvidence={onExactEvidence} />
+      : <ExactMemberTracePanel key={`${traceScopeKey}/${mode}`} group={mode === 'group'} equipment={equipment}
+        details={physicalObjectDetailsDataSource} projection={projection} projectionSource={projectionSource}
+        onEvidence={onExactEvidence} />
     : <><form onSubmit={(event) => void submit(event)}><label>{t('trace.source')}<select aria-label={t('trace.source')} value={sourceId} onChange={(event) => selectSource(event.target.value)} disabled={loading || !equipment}><option value="">{t('trace.selectObject')}</option>{(equipment ?? []).map((item) => <option key={item.physical_object_ref.entity_id} value={item.physical_object_ref.entity_id}>{item.label}</option>)}</select></label><PortRefinement endpoint="source" objectId={sourceId} state={sourcePorts} selectedPortId={sourcePortId} onSelect={id => { clearObject(); setSourcePortId(id); }} /><label>{t('trace.destination')}<select aria-label={t('trace.destination')} value={destinationId} onChange={(event) => selectDestination(event.target.value)} disabled={loading || !equipment}><option value="">{t('trace.selectObject')}</option>{(equipment ?? []).map((item) => <option key={item.physical_object_ref.entity_id} value={item.physical_object_ref.entity_id}>{item.label}</option>)}</select></label><PortRefinement endpoint="destination" objectId={destinationId} state={destinationPorts} selectedPortId={destinationPortId} onSelect={id => { clearObject(); setDestinationPortId(id); }} /><span className="trace-command__level">{t('trace.level')}</span><button type="submit" disabled={loading || !equipment}>{t('trace.run')}</button></form>{message && <p className="trace-command__message" role="alert">{message}</p>}{traceArtifact && <div className={`trace-result trace-result--${traceArtifact.verdict.toLowerCase()}`} aria-label={t('trace.result')}><strong>{traceArtifact.verdict === 'REACHABLE' ? t('trace.reachable') : t('trace.unknown')}</strong>{traceArtifact.verdict === 'REACHABLE' && <><span>{t('trace.alternatives', { count: traceArtifact.branches.length })}</span>{traceArtifact.branches.length > 0 && <label>{t('trace.showAlternative')}<select aria-label={t('trace.showAlternative')} value={selectedBranchId ?? ''} onChange={(event) => onSelectedBranchId(event.target.value)}>{traceArtifact.branches.map((branch, index) => <option key={branch.branch_id} value={branch.branch_id}>{t('trace.alternative', { index: index + 1 })}</option>)}</select></label>}</>}{traceArtifact.cycles.length > 0 && <p>{t('trace.cycles', { cycles: traceArtifact.cycles.map((cycle) => cycle.cycle_id).join(', ') })}</p>}{traceArtifact.gaps.length > 0 && <p>{t('trace.gaps', { gaps: traceArtifact.gaps.map((gap) => gap.code).join(', ') })}</p>}{traceArtifact.warnings.length > 0 && <p>{t('trace.warnings', { warnings: traceArtifact.warnings.map(warningText).join('; ') })}</p>}<button type="button" className="trace-result__clear" onClick={() => { onTraceArtifact(null); onSelectedBranchId(null); }}>{t('trace.clear')}</button></div>}</>}{mode !== 'object' && !equipment && message && <p className="trace-command__message" role="alert">{message}</p>}</section>;
 }

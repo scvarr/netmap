@@ -271,20 +271,26 @@ function MapPageContent({
   const [traceArtifact, setTraceArtifact] =
     useState<PhysicalObjectL1TraceArtifact | null>(null);
   const [exactTrace, setExactTrace] = useState<Pick<ExactMemberTrace, 'edges'> | null>(null);
-  const [exactScopeRevision, setExactScopeRevision] = useState(0);
+  const [traceRevision, setTraceRevision] = useState(0);
+  const currentTraceRevision = useRef(0);
   const [selectedTraceBranchId, setSelectedTraceBranchId] = useState<string | null>(null);
   const [traceViewNotice, setTraceViewNotice] = useState<string | null>(null);
   const [selection, setSelection] = useState<TopologySelection>(null);
   const traceScope = useMemo(() => ({}), [mapId, variantId, viewMode]);
   const currentTraceScope = useRef(traceScope);
   currentTraceScope.current = traceScope;
-  const clearTrace = useCallback(() => {
+  const clearTraceResult = useCallback(() => {
     setExactTrace(null);
-    setExactScopeRevision(current => current + 1);
     setTraceArtifact(null);
     setSelectedTraceBranchId(null);
     setTraceViewNotice(null);
   }, []);
+  const clearTrace = useCallback(() => {
+    setTraceRevision(++currentTraceRevision.current);
+    clearTraceResult();
+  }, [clearTraceResult]);
+  const acceptsTraceResult = () =>
+    currentTraceScope.current === traceScope && currentTraceRevision.current === traceRevision;
   useLayoutEffect(clearTrace, [mapId, variantId, clearTrace]);
   useLayoutEffect(() => {
     if (viewMode === 'logical') clearTrace();
@@ -1539,7 +1545,6 @@ function MapPageContent({
     if (inventory) setCatalogInventory(inventory);
     setSceneDocument({ sceneKey: presentationSceneKey, document: next });
     setSelection(null);
-    clearTrace();
   };
   const openPortContext = (port: { physicalObjectId: string; connectionPointId: string; label: string }, screen: XYPosition) => {
     if (contextBusy || !physicalObjectDetailsDataSource) return;
@@ -1857,6 +1862,7 @@ function MapPageContent({
             const id = physicalObjectIdForNode(node);
             return id ? [{ id, label: displayNodeLabel(node) }] : [];
           })}
+          onCommitted={clearTrace}
           refresh={async () => {
             const currentMap = latestActiveMap.current;
             if (!currentMap || currentTraceScope.current !== traceScope) throw new Error('Map changed');
@@ -1866,7 +1872,6 @@ function MapPageContent({
             if (currentTraceScope.current !== traceScope) throw new Error('Map changed');
             setSceneDocument({ sceneKey: presentationSceneKey, document: next });
             setReconnectRevision(revision => revision + 1);
-            clearTrace();
           }}
           close={() => { if (currentTraceScope.current === traceScope) setReconnectCableId(null); }} />}
       {bulkSourceId && activeMap && document && physicalObjectDetailsDataSource &&
@@ -1874,13 +1879,13 @@ function MapPageContent({
         <BulkCableCreateDialog sourceId={bulkSourceId} nodes={document.nodes}
           details={physicalObjectDetailsDataSource} writer={physicalEndpointConnectionWriteDataSource}
           labelCatalog={cableLabelDataSource}
+          onCommitted={clearTrace}
           refresh={async () => {
             const next = await dataSource.loadProjection(projectionRequestFor(
               'physical', activeMap.placements.map(item => item.physical_object_ref.entity_id), true,
             ));
             if (currentTraceScope.current === traceScope) {
               setSceneDocument({ sceneKey: presentationSceneKey, document: next });
-              clearTrace();
             }
           }}
           close={() => { if (currentTraceScope.current === traceScope) setBulkSourceId(null); }} />}
@@ -1905,6 +1910,7 @@ function MapPageContent({
         <BulkCableDeleteDialog sourceId={bulkDeleteSourceId} nodes={document.nodes}
           preview={pair => cableDeleteDataSource.previewBulkDelete!(pair)}
           remove={(pair, cables) => cableDeleteDataSource.bulkDelete!(pair, cables)}
+          onCommitted={clearTrace}
           refresh={refreshBulkCableDelete}
           close={() => { if (currentTraceScope.current === traceScope) setBulkDeleteSourceId(null); }} />}
       {contextAnchor && viewMode === "physical" && !contextBusy && <MapContextMenu
@@ -1975,9 +1981,11 @@ function MapPageContent({
             catalogInventoryDataSource={catalogInventoryDataSource}
             physicalObjectDetailsDataSource={physicalObjectDetailsDataSource}
             traceDataSource={traceDataSource}
-            exactScope={`${mapId}/${variantId}/${exactScopeRevision}`}
+            traceScopeKey={`${mapId}/${variantId}/${traceRevision}`}
+            projection={document}
+            projectionSource={dataSource}
             onExactEvidence={(artifact) => {
-              if (currentTraceScope.current !== traceScope) return;
+              if (!acceptsTraceResult()) return;
               setExactTrace(artifact);
               if (!artifact) setTraceViewNotice(null);
               if (artifact && viewMode === "logical") {
@@ -1992,12 +2000,12 @@ function MapPageContent({
             traceArtifact={traceArtifact}
             selectedBranchId={selectedTraceBranchId}
             onSelectedBranchId={(id) => {
-              if (currentTraceScope.current === traceScope) setSelectedTraceBranchId(id);
+              if (acceptsTraceResult()) setSelectedTraceBranchId(id);
             }}
             onTraceArtifact={(artifact) => {
-              if (currentTraceScope.current !== traceScope) return;
+              if (!acceptsTraceResult()) return;
               if (!artifact) {
-                clearTrace();
+                clearTraceResult();
                 return;
               }
               setTraceArtifact(artifact);

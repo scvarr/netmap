@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useI18n } from '../i18n';
 import type { CatalogInventoryEquipmentItem } from '../topology/catalogInventoryTypes';
 import type { ConnectionPointDetails, PhysicalObjectDetailsDataSource } from '../topology/physicalObjectDetailsTypes';
@@ -8,7 +8,8 @@ import {
 } from '../topology/exactMemberTrace';
 import { ApiInterfacePhysicalTraceDataSource } from '../topology/apiInterfacePhysicalTraceDataSource';
 import type { InterfacePhysicalTraceArtifact } from '../topology/interfacePhysicalTraceTypes';
-import { traceObjectNames, tracePointNames } from '../topology/traceAddresses';
+import type { TopologyDataSource, TopologyProjectionDocument } from '../topology/types';
+import { resolveTraceMemberNames, traceMemberLabel, traceObjectNames, tracePointNames } from '../topology/traceAddresses';
 
 interface MemberChoice {
   address: MemberAddress;
@@ -22,6 +23,8 @@ interface Props {
   equipment: CatalogInventoryEquipmentItem[] | null;
   details: PhysicalObjectDetailsDataSource;
   group: boolean;
+  projection?: TopologyProjectionDocument | null;
+  projectionSource?: TopologyDataSource;
   onEvidence: (trace: ExactMemberTrace | null) => void;
 }
 
@@ -91,7 +94,7 @@ function memberChoices(objectName: string, points: ConnectionPointDetails[]): Me
       const designation = member?.designation;
       return {
         address: { point_id, member_index },
-        label: `${names.get(point_id)} · #${member_index}${designation && designation !== String(member_index) ? ` (${designation})` : ''}`,
+        label: traceMemberLabel(names.get(point_id) ?? point.label, member_index, designation),
         free: member?.occupied === false,
       };
     });
@@ -99,12 +102,13 @@ function memberChoices(objectName: string, points: ConnectionPointDetails[]): Me
 }
 const memberKey = (choice: MemberChoice) => memberAddressKey(choice.address);
 
-export function ExactMemberTracePanel({ equipment, details, group, onEvidence }: Props) {
+export function ExactMemberTracePanel({ equipment, details, group, projection, projectionSource, onEvidence }: Props) {
   const { t } = useI18n();
   const [source, setSource] = useState<MemberChoice | null>(null);
   const [destination, setDestination] = useState<MemberChoice | null>(null);
   const [pairs, setPairs] = useState<PairChoice[]>([]);
   const [result, setResult] = useState<{ results: ExactMemberTrace[]; completeness?: ExactMemberGroup['completeness'] } | null>(null);
+  const [resolvedNames, setResolvedNames] = useState<Map<string, string>>(new Map());
   const [selected, setSelected] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -113,13 +117,14 @@ export function ExactMemberTracePanel({ equipment, details, group, onEvidence }:
   const rememberNames = useCallback((choices: MemberChoice[]) => {
     for (const choice of choices) knownNames.current.set(memberKey(choice), choice.label);
   }, []);
-  useEffect(() => () => request.current?.abort(), []);
+  useLayoutEffect(() => () => request.current?.abort(), []);
 
   const reset = () => {
     request.current?.abort();
     setLoading(false);
     setError(null);
     setResult(null);
+    setResolvedNames(new Map());
     onEvidence(null);
   };
   const draft = source && destination ? { from: source, to: destination } : null;
@@ -158,6 +163,16 @@ export function ExactMemberTracePanel({ equipment, details, group, onEvidence }:
       setSelected(0);
       setResult(response);
       onEvidence(response.results[0]);
+      const missing = new Map<string, MemberAddress>();
+      for (const trace of response.results) {
+        for (const { payload } of trace.nodes) {
+          const key = memberAddressKey(payload);
+          if (!knownNames.current.has(key)) missing.set(key, payload);
+        }
+      }
+      const addresses = [...missing.values()];
+      void resolveTraceMemberNames(addresses, equipment ?? [], details, projection, projectionSource, controller.signal)
+        .then(names => { if (!controller.signal.aborted) setResolvedNames(names); });
     } catch (reason) {
       if (!controller.signal.aborted) setError(t(reason instanceof ExactTraceRequestError
         ? reason.code === 'MODEL_ERROR' ? 'trace.modelError' : 'trace.invalidPairs' : 'trace.failed'));
@@ -168,7 +183,11 @@ export function ExactMemberTracePanel({ equipment, details, group, onEvidence }:
 
   const names = new Map((group ? pairs : draft ? [draft] : []).flatMap(({ from, to }) =>
     [from, to].map(member => [memberAddressKey(member.address), member.label])));
-  const address = (value: MemberAddress) => names.get(memberAddressKey(value)) ?? knownNames.current.get(memberAddressKey(value)) ?? `${value.point_id} · #${value.member_index}`;
+  const address = (value: MemberAddress) => {
+    const key = memberAddressKey(value);
+    return names.get(key) ?? resolvedNames.get(key) ?? knownNames.current.get(key)
+      ?? t('trace.addressUnavailable', { point: value.point_id, index: value.member_index });
+  };
   const trace = result?.results[selected];
   const nodes = new Map(trace?.nodes.map(node => [node.id, address(node.payload)]));
   const verdict = (value: ExactMemberTrace['verdict']) => t(value === 'REACHABLE' ? 'trace.reachable' : 'trace.unknown');
@@ -237,7 +256,7 @@ export function InterfaceTracePanel({ equipment, details, onEvidence }: {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const generation = useRef(0);
-  useEffect(() => () => { generation.current += 1; }, []);
+  useLayoutEffect(() => () => { generation.current += 1; }, []);
 
   function reset() {
     generation.current += 1;

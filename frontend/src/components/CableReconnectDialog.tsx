@@ -13,6 +13,7 @@ interface Props {
   objects: { id: string; label: string }[];
   details: PhysicalObjectDetailsDataSource;
   writer: CableReconnectDataSource;
+  onCommitted: () => void;
   refresh: () => Promise<void>;
   close: () => void;
 }
@@ -20,7 +21,7 @@ interface Props {
 const pointId = (point: ConnectionPointDetails) => point.connection_point_ref.entity_id;
 const panelKey = (point: ConnectionPointDetails) => point.panel_context?.panel_key ?? '';
 
-export function CableReconnectDialog({ cableId, objects, details, writer, refresh, close }: Props) {
+export function CableReconnectDialog({ cableId, objects, details, writer, onCommitted, refresh, close }: Props) {
   const { t } = useI18n();
   const [current, setCurrent] = useState<{ snapshot: CableReconnectSnapshot; ends: [string, string] }>();
   const [side, setSide] = useState<CableEnd>('A');
@@ -179,6 +180,7 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
       }
       return;
     }
+    onCommitted();
     await refreshMap();
   };
 

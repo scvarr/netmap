@@ -18,6 +18,7 @@ interface Props {
   details: PhysicalObjectDetailsDataSource;
   writer: PhysicalEndpointConnectionWriteDataSource;
   labelCatalog?: CableLabelDataSource;
+  onCommitted: () => void;
   refresh: () => Promise<void>;
   close: () => void;
 }
@@ -303,7 +304,7 @@ function BulkCompatibilitySummary({ preview }: { preview: PhysicalCompatibilityP
   </section>;
 }
 
-export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelCatalog, refresh, close }: Props) {
+export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelCatalog, onCommitted, refresh, close }: Props) {
   const i18n = useI18n();
   const { t, collator } = i18n;
   const [targetId, setTargetId] = useState('');
@@ -451,6 +452,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
       }
       setSubmitting(true);
       await writer.createBulkPhysicalConnections(operation);
+      onCommitted();
       await refreshAfterCreate();
     } catch (reason) {
       setCompatibilityReview(undefined);

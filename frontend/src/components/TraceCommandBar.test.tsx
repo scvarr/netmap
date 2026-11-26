@@ -1,5 +1,5 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
-import { useState } from 'react'; import userEvent from '@testing-library/user-event'; import { describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react'; import userEvent from '@testing-library/user-event'; import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TraceCommandBar } from './TraceCommandBar';
 import type { PhysicalObjectL1TraceArtifact, PhysicalObjectL1TraceQuery } from '../topology/physicalObjectL1TraceTypes';
 const one = '00000000-0000-0000-0000-000000000001'; const two = '00000000-0000-0000-0000-000000000002'; const three = '00000000-0000-0000-0000-000000000003';
@@ -86,3 +86,68 @@ it.each([false, true])('qualifies both selectors from panel context and preserve
   await run();
   expect(trace).toHaveBeenCalledWith({ from_physical_object_id: one, to_physical_object_id: two, from_connection_point_id: 'module2', to_connection_point_id: 'rear1' });
 });
+
+
+afterEach(() => vi.unstubAllGlobals());
+
+it.each(['member', 'group', 'interface'] as const)(
+  'drops a late %s response after a topology revision', async mode => {
+    const user = userEvent.setup();
+    const inventorySource = { loadCatalogInventory: vi.fn().mockResolvedValue(inventory) };
+    const objectDetails = {
+      loadPhysicalObjectDetails: vi.fn(async (id: string) => {
+        const doc = details(id, [[id === one ? sourcePort : targetPort, 'MPO']]);
+        return {
+          ...doc,
+          connection_points: doc.connection_points.map(point => ({
+            ...point,
+            direct_interface_bindings: [{
+              interface_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'NetworkInterface', entity_id: id + '-interface' },
+              label: 'MPO', evidence_refs: [],
+            }],
+          })),
+        };
+      }),
+    };
+    const onExactEvidence = vi.fn();
+    let complete!: (response: Response) => void;
+    const fetch = vi.fn(() => new Promise<Response>(resolve => { complete = resolve; }));
+    vi.stubGlobal('fetch', fetch);
+    const bar = (traceScopeKey: string) => <TraceCommandBar catalogInventoryDataSource={inventorySource}
+      physicalObjectDetailsDataSource={objectDetails} traceScopeKey={traceScopeKey}
+      onExactEvidence={onExactEvidence} traceArtifact={null} selectedBranchId={null}
+      onSelectedBranchId={() => {}} onTraceArtifact={() => {}} />;
+    const view = render(bar('before'));
+    await openTrace();
+    await user.selectOptions(screen.getByLabelText('Режим трассировки'), mode);
+    await user.selectOptions(screen.getByLabelText('Откуда'), one);
+    await user.selectOptions(screen.getByLabelText('Куда'), two);
+    const from = { point_id: sourcePort, member_index: 1 };
+    const to = { point_id: targetPort, member_index: 1 };
+    const trace = { schema_version: 1, verdict: 'REACHABLE', query: { from, to }, nodes: [], edges: [], terminations: [] };
+    let response: unknown = trace;
+    if (mode === 'interface') {
+      await user.selectOptions(screen.getByLabelText('Интерфейс источника'), one + '-interface');
+      await user.selectOptions(screen.getByLabelText('Интерфейс назначения'), two + '-interface');
+      response = {
+        ...trace, query: { from_interface_id: one + '-interface', to_interface_id: two + '-interface' },
+        branches: [{ branch_id: 'branch', source_candidate_id: 'from', target_candidate_id: 'to', edge_ids: [], evidence_refs: [] }],
+        gaps: [], warnings: [],
+      };
+    } else {
+      await user.selectOptions(screen.getByLabelText('Канал источника'), sourcePort + ':1');
+      await user.selectOptions(screen.getByLabelText('Канал назначения'), targetPort + ':1');
+      if (mode === 'group') {
+        await user.click(screen.getByRole('button', { name: 'Добавить пару' }));
+        response = { completeness: 'COMPLETE', results: [trace] };
+      }
+    }
+    await user.click(screen.getByRole('button', { name: mode === 'group' ? 'Проверить группу' : 'Трассировать' }));
+    expect(fetch).toHaveBeenCalledOnce();
+    view.rerender(bar('after'));
+    await act(async () => complete(new Response(JSON.stringify(response))));
+    expect(screen.queryByRole('region', { name: 'Результат трассировки L1' })).not.toBeInTheDocument();
+    expect(onExactEvidence.mock.calls.every(([evidence]) => evidence === null)).toBe(true);
+    expect(screen.getByLabelText('Откуда')).toHaveValue('');
+  },
+);

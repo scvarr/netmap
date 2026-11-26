@@ -1,16 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { BulkPhysicalConnectionError } from '../topology/apiPhysicalEndpointConnectionWriteDataSource';
 import type { PhysicalEndpointConnectionWriteDataSource } from '../topology/physicalEndpointConnectionWriteTypes';
 import type { ConnectionPointDetails, PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
 import type { TopologyProjectionDocument } from '../topology/types';
 import { MapPage } from './MapPage';
-import { createMapPageHarness } from './MapPage.testHarness';
+import { createMapPageHarness, objectTraceFixture } from './MapPage.testHarness';
 
 afterEach(() => vi.unstubAllGlobals());
 
 vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => <div data-testid="bulk-canvas">
   <button onClick={() => props.onPhysicalNodeContextMenu?.(nodes[0], { x: 20, y: 20 })}>source object menu</button>
+  <output data-testid="trace-visual">{String(props.traceOwnsFaces)}:{props.traceOverlay?.highlightedNodeIds.size}</output>
   <output data-testid="port-count">{props.document?.nodes?.length}</output>
 </div> }));
 
@@ -48,12 +49,15 @@ const renderPage = createMapPageHarness(MapPage);
 function setup(
   previewCompatibility?: PhysicalEndpointConnectionWriteDataSource['previewBulkPhysicalConnections'],
   objectDetails = details,
+  tracing?: ReturnType<typeof objectTraceFixture>,
 ) {
   const projection = vi.fn().mockResolvedValue(doc);
   const create = vi.fn().mockResolvedValue({ created: [] });
   const preview = vi.fn().mockResolvedValue({ labels: ['B001'] });
   const loadDetails = vi.fn(async (id: string) => objectDetails(id));
   renderPage({
+    traceDataSource: tracing?.traceDataSource,
+    catalogInventoryDataSource: tracing?.catalogInventoryDataSource,
     dataSource: { loadProjection: projection },
     savedMapDataSource: { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map) } as any,
     physicalObjectDetailsDataSource: { loadPhysicalObjectDetails: loadDetails },
@@ -261,13 +265,28 @@ describe('MapPage bulk cable editor', () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
-  it('retries only the projection read after acknowledged creation', async () => {
-    const { create, projection } = setup();
+  it.each([false, true])('invalidates trace at acknowledged creation and retries only reads (pending trace: %s)', async pending => {
+    const tracing = objectTraceFixture('a', 'b');
+    let finishTrace!: (artifact: typeof tracing.artifact) => void;
+    if (pending) tracing.trace.mockReturnValueOnce(new Promise(resolve => { finishTrace = resolve; }));
+    const { create, projection } = setup(undefined, details, tracing);
+    await screen.findByTestId('bulk-canvas');
+    await tracing.submit();
+    if (!pending) {
+      expect(await screen.findByText('Физический L1-путь доказан')).toBeVisible();
+      expect(screen.getByTestId('trace-visual')).toHaveTextContent('true:1');
+    }
     await start();
     await selectOne();
-    projection.mockRejectedValueOnce(new Error('refresh failed'));
+    let failRefresh!: (reason: Error) => void;
+    projection.mockReturnValueOnce(new Promise((_, reject) => { failRefresh = reject; }));
     await waitFor(() => expect(button('Подтвердить создание')).toBeEnabled());
     confirm();
+    await waitFor(() => expect(failRefresh).toBeDefined());
+    if (pending) await act(async () => finishTrace(tracing.artifact));
+    expect(screen.queryByText('Физический L1-путь доказан')).not.toBeInTheDocument();
+    expect(screen.getByTestId('trace-visual')).toHaveTextContent('false:0');
+    await act(async () => failRefresh(new Error('refresh failed')));
     expect(await screen.findByRole('alert')).toHaveTextContent('Соединения созданы, но карту не удалось обновить.');
     expect(screen.queryByRole('button', { name: 'Подтвердить создание' })).not.toBeInTheDocument();
     fireEvent.click(button('Повторить обновление'));

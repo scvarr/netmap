@@ -10,13 +10,14 @@ interface Props {
   nodes: TopologyProjectionNode[];
   preview: NonNullable<CableDeleteDataSource['previewBulkDelete']>;
   remove: NonNullable<CableDeleteDataSource['bulkDelete']>;
+  onCommitted: () => void;
   refresh: () => Promise<void>;
   close: () => void;
 }
 
 const maxBatch = 256;
 
-export function BulkCableDeleteDialog({ sourceId, nodes, preview, remove, refresh, close }: Props) {
+export function BulkCableDeleteDialog({ sourceId, nodes, preview, remove, onCommitted, refresh, close }: Props) {
   const { t, collator } = useI18n();
   const [targetId, setTargetId] = useState('');
   const [rows, setRows] = useState<CableDeleteCandidate[] | null>(null);
@@ -78,6 +79,7 @@ export function BulkCableDeleteDialog({ sourceId, nodes, preview, remove, refres
       }
       return;
     }
+    onCommitted();
     await refreshAfterDelete();
   });
 
