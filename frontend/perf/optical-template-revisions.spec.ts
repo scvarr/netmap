@@ -38,10 +38,13 @@ for (const kind of ['base', 'module'] as const) {
       bays: [{ bay_key: 'board', display_name: 'Board', mount_kind: 'MODULE_BAY', module_bay_type_id: bayType, panel_key: 'p', kind: 'LOGICAL' }],
     } : base);
     const baseId = host.blueprint_ref.entity_id;
-    for (const letter of ['A', 'B']) {
+    const ids = new Map<string, string>();
+    for (const letter of ['A', 'B', 'C']) {
       const object = await post('/topology/physical-objects', { base_template_id: baseId, display_name: name + ' ' + letter });
-      if (moduleId) await post('/topology/physical-objects/' + object.physical_object_ref.entity_id + '/module-installations',
+      const objectId = object.physical_object_ref.entity_id;
+      const installed = moduleId && await post('/topology/physical-objects/' + objectId + '/module-installations',
         { module_template_id: moduleId, bay_key: 'board', orientation: 'HORIZONTAL' });
+      ids.set(letter, installed ? installed.bays[0].installation.id : objectId);
     }
     const path = '/library/' + kind + '-templates/' + (moduleId ?? baseId);
     const viewport = kind === 'base' ? { width: 1440, height: 900 } : { width: 1024, height: 768 };
@@ -75,8 +78,53 @@ for (const kind of ['base', 'module'] as const) {
     await expect(page.getByText(/Публикация завершена/)).toBeVisible();
     await page.getByText('Выбор экземпляров', { exact: true }).click();
     const selection = page.getByRole('group', { name: 'Выбор экземпляров' });
-    await selection.getByRole('checkbox').first().check();
-    await page.getByRole('button', { name: 'Обновить выбранные' }).click();
-    await expect(selection.getByRole('checkbox')).toHaveCount(1);
+    const row = (letter: string) => selection.getByRole('checkbox', { name: name + ' ' + letter });
+    const selected = page.getByRole('button', { name: 'Обновить выбранные', exact: true });
+    const all = page.getByRole('button', { name: kind === 'base' ? 'Обновить все совместимые объекты' : 'Обновить все совместимые установки' });
+    const api = '/api/v1' + path;
+    const param = kind === 'base' ? 'object_ids' : 'installation_ids';
+    const writes: string[][] = [];
+    page.on('request', req => {
+      const url = new URL(req.url());
+      if (url.pathname === api + '/reconcile' && req.method() === 'POST') writes.push(url.searchParams.getAll(param));
+    });
+
+    await expect(selected).toBeDisabled();
+    await row('A').check();
+    await expect(selected).toBeEnabled();
+    await row('A').uncheck();
+    await expect(selected).toBeDisabled();
+    await row('A').check();
+
+    // Another session updates the only selected instance while B and C remain outdated.
+    const concurrent = await request.post(api + '/reconcile', { params: { [param]: ids.get('A')! } });
+    expect(concurrent.ok(), await concurrent.text()).toBe(true);
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(row('A')).toHaveCount(0);
+    await expect(row('B')).not.toBeChecked();
+    await expect(selected).toBeDisabled();
+    expect(writes).toEqual([]);
+
+    await row('B').check();
+    if (evidence) await page.screenshot({ path: join(evidence, kind + '-reconcile-scope.png') });
+    await page.route('**' + api + '/draft', route => route.fulfill({ status: 503, body: 'Read unavailable' }), { times: 1 });
+    await selected.click();
+    const retry = page.getByRole('button', { name: 'Перечитать список экземпляров' });
+    await expect(retry).toBeVisible();
+    await expect(selected).toBeDisabled();
+    await expect(all).toBeDisabled();
+    expect(writes).toEqual([[ids.get('B')]]);
+    await retry.scrollIntoViewIfNeeded();
+    await expect(retry).toBeInViewport();
+    if (evidence) await page.screenshot({ path: join(evidence, kind + '-reconcile-retry-read.png') });
+
+    await retry.click();
+    await expect(retry).toHaveCount(0);
+    await expect(row('B')).toHaveCount(0);
+    await expect(row('C')).not.toBeChecked();
+    expect(writes).toEqual([[ids.get('B')]]);
+    await all.click();
+    await expect(selection).toHaveCount(0);
+    expect(writes).toEqual([[ids.get('B')], []]);
   });
 }

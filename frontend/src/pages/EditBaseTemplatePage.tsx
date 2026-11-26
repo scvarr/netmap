@@ -27,6 +27,7 @@ const signature = (d?: CreateBaseTemplateRequest) => d ? JSON.stringify(
 export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateDataSource }) {
   const { templateId = '' } = useParams(); const { t } = useI18n();
   const [selectionOpen, setSelectionOpen] = useState(false);
+  const [reconciliationRefreshError, setReconciliationRefreshError] = useState("");
   const [selectedInstances, setSelectedInstances] = useState<string[]>([]);
   const [document, setDocument] = useState<BaseTemplateDraftDocument>();
   const [reconciliation, setReconciliation] = useState<BaseTemplateReconciliationResult>();
@@ -65,7 +66,7 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
     let pending = false;
     setRevalidating(false);
     const validate = () => {
-      if (generation === undefined || busy || pending) return;
+      if (generation === undefined || busy || pending || reconciliationRefreshError) return;
       pending = true;
       setRevalidating(true);
       void refresh().then(doc => { if (active) setDocument(doc); }).catch(e => { if (active) setError(String(e)); }).finally(() => {
@@ -76,7 +77,7 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
     const timer = window.setInterval(validate, 15000);
     window.addEventListener('focus', validate);
     return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', validate); };
-  }, [generation, busy, refresh]);
+  }, [generation, busy, refresh, reconciliationRefreshError]);
   const changed = useCallback((state: BlueprintEditorState) => { setEditing(signature(createBlueprintRequest(state).request)); setNotice(''); }, []);
   const dirty = editing !== saved;
   const canRestore = document !== undefined && (incompatibleGeneration === generation || document.fiber_types_changed) && !!dataSource.restoreDraftSource;
@@ -109,6 +110,42 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
   useEffect(() => { if (notice === t('review.sourceRestored')) restoredNotice.current?.focus(); }, [notice, t]);
   const outdated = document?.publication_state?.objects ?? [];
   const selection = outdated.filter(item => selectedInstances.includes(item.physical_object_id)).map(item => item.physical_object_id);
+  useEffect(() => {
+    const available = new Set(document?.publication_state?.objects.map(item => item.physical_object_id));
+    setSelectedInstances(previous => {
+      const retained = previous.filter(id => available.has(id));
+      return retained.length === previous.length ? previous : retained;
+    });
+  }, [document?.publication_state, templateId]);
+
+  const reconciliationBlocked = busy || revalidating || !!reconciliationRefreshError || !dataSource.reconcileObjects;
+  const refreshAfterReconciliation = async () => {
+    try {
+      setDocument(await refresh());
+      setReconciliationRefreshError("");
+    } catch (cause) {
+      setReconciliationRefreshError(String(cause));
+    }
+  };
+  const reconcile = async (scope: 'all' | 'selected') => {
+    if (reconciliationBlocked || (scope === 'selected' && !selection.length)) return;
+    setBusy(true); setError(''); setReconciliation(undefined);
+    try {
+      const result = scope === 'all'
+        ? await dataSource.reconcileObjects!(templateId)
+        : await dataSource.reconcileObjects!(templateId, selection);
+      setReconciliation(result);
+      setSelectedInstances([]);
+      await refreshAfterReconciliation();
+    } catch (cause) { setError(String(cause)); }
+    finally { setBusy(false); }
+  };
+  const retryReconciliationRefresh = async () => {
+    if (busy || revalidating || !reconciliationRefreshError) return;
+    setBusy(true);
+    try { await refreshAfterReconciliation(); }
+    finally { setBusy(false); }
+  };
   const review = document?.review;
   const current = review?.current && !review.published_revision_id && review.draft_generation === generation && !dirty && !busy && !revalidating && !error;
   const { safe, intervention } = reviewCounts(review?.result.objects ?? []);
@@ -128,7 +165,7 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
       </div>
       {outdated.length > 0 && <details onToggle={event => setSelectionOpen(event.currentTarget.open)}>
         <summary>{t('reconciliation.selection')}</summary>
-        {selectionOpen && <fieldset aria-label={t('reconciliation.selection')} disabled={busy || revalidating}>
+        {selectionOpen && <fieldset aria-label={t('reconciliation.selection')} disabled={reconciliationBlocked}>
         {outdated.map(item => <label key={item.physical_object_id}>
           <input type="checkbox" checked={selection.includes(item.physical_object_id)} onChange={event => {
             const checked = event.target.checked;
@@ -138,15 +175,20 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
         </label>)}
         </fieldset>}
       </details>}
-      <button className="primary-action" type="button" disabled={busy || revalidating || !dataSource.reconcileObjects} onClick={() => {
-        setBusy(true); setError(''); setReconciliation(undefined);
-        void (selection.length ? dataSource.reconcileObjects!(templateId, selection) : dataSource.reconcileObjects!(templateId)).then(async result => {
-          setReconciliation(result);
-          setSelectedInstances([]);
-          // Refresh only server facts: unsaved authoring edits stay in the editor.
-          setDocument(await refresh());
-        }).catch(e => setError(String(e))).finally(() => setBusy(false));
-      }}>{t(selection.length ? 'reconciliation.applySelected' : 'reconciliation.run')}</button>
+      <div className="base-template-review__actions">
+        <button className="primary-action" type="button" disabled={reconciliationBlocked || !selection.length} onClick={() => void reconcile('selected')}>
+          {t('reconciliation.applySelected')}
+        </button>
+        <button className="secondary-action" type="button" disabled={reconciliationBlocked} onClick={() => void reconcile('all')}>
+          {t('reconciliation.run')}
+        </button>
+      </div>
+      {reconciliationRefreshError && <>
+        <p role="alert">{t('reconciliation.refreshFailed')} {reconciliationRefreshError}</p>
+        <button className="primary-action" type="button" disabled={busy || revalidating} onClick={() => void retryReconciliationRefresh()}>
+          {t('reconciliation.retryRefresh')}
+        </button>
+      </>}
     </section>}
     {error && <p role="alert">{error}</p>}
     {document && <section className="base-template-review" aria-label={t('review.impacts')}>

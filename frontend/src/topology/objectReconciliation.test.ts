@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiBaseTemplateDataSource } from './apiBaseTemplateDataSource';
+import { moduleReviewDataSource } from './hardwareModules';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -20,5 +21,24 @@ describe('object reconciliation API', () => {
     vi.stubGlobal('fetch', fetcher);
     await expect(new ApiBaseTemplateDataSource().reconcileObjects('base')).rejects.toThrow('Retry update');
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe.each([
+  { kind: 'base', parameter: 'object_ids', reconcile: (ids?: string[]) => new ApiBaseTemplateDataSource().reconcileObjects('template/id', ids) },
+  { kind: 'module', parameter: 'installation_ids', reconcile: (ids?: string[]) => moduleReviewDataSource.reconcileInstallations!('template/id', ids) },
+])('$kind reconcile scope', ({ kind, parameter, reconcile }) => {
+  it('rejects empty selection before fetching and preserves the distinction between selected and all', async () => {
+    const fetcher = vi.fn(async () => Response.json({ revision_id: 'latest' }));
+    vi.stubGlobal('fetch', fetcher);
+    await expect(reconcile([])).rejects.toThrow();
+    expect(fetcher).not.toHaveBeenCalled();
+    const root = '/api/v1/library/' + kind + '-templates/template%2Fid/reconcile';
+    await reconcile(['a', 'b']);
+    await reconcile();
+    expect(fetcher.mock.calls).toEqual([
+      [root + '?' + parameter + '=a&' + parameter + '=b', { method: 'POST' }],
+      [root, { method: 'POST' }],
+    ]);
   });
 });

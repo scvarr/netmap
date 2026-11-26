@@ -224,7 +224,8 @@ export const hardwareModuleDataSource: HardwareModuleDataSource = {
   installModule: (id, input) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations`, input),
 };
 export const moduleReviewDataSource: ModuleReviewDataSource = {
-  reconcileInstallations: (id, installationIds) => {
+  reconcileInstallations: async (id, installationIds) => {
+    if (installationIds?.length === 0) throw new Error("Select at least one installation to reconcile.");
     const query = new URLSearchParams(installationIds?.map(value => ['installation_ids', value]));
     const suffix = query.size ? '?' + query : '';
     return request('/api/v1/library/module-templates/' + encodeURIComponent(id) + '/reconcile' + suffix, undefined, 'POST');

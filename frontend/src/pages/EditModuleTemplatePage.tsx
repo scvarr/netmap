@@ -17,6 +17,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
   const { templateId = '' } = useParams(); const { t } = useI18n();
   const [results, setResults] = useState<ModuleReconciliationResult>();
   const [selectionOpen, setSelectionOpen] = useState(false);
+  const [reconciliationRefreshError, setReconciliationRefreshError] = useState("");
   const [selectedInstances, setSelectedInstances] = useState<string[]>([]);
   const [document, setDocument] = useState<ModuleDraftDocument>();
   const [definition, setDefinition] = useState<ModuleTemplateInput>();
@@ -37,7 +38,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
     let validating = false;
     setRevalidating(false);
     const validate = () => {
-      if (!document || busy || restorePhase || validating) return;
+      if (!document || busy || restorePhase || validating || reconciliationRefreshError) return;
       validating = true; setRevalidating(true);
       void dataSource.loadDraft(templateId).then(doc => {
         if (!active) return;
@@ -49,7 +50,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
     };
     const timer = window.setInterval(validate, 15000); window.addEventListener('focus', validate);
     return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', validate); };
-  }, [dataSource, templateId, document?.generation, busy, restorePhase, t]);
+  }, [dataSource, templateId, document?.generation, busy, restorePhase, reconciliationRefreshError, t]);
   const dirty = !!document && !!definition && signature(document.definition) !== signature(definition);
 
   const incompatible = document?.source_wiring?.draft_incompatible;
@@ -85,6 +86,44 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
   };
   const outdated = document?.publication_state?.installations ?? [];
   const selection = outdated.filter(item => selectedInstances.includes(item.installation_id)).map(item => item.installation_id);
+  useEffect(() => {
+    const available = new Set(document?.publication_state?.installations.map(item => item.installation_id));
+    setSelectedInstances(previous => {
+      const retained = previous.filter(id => available.has(id));
+      return retained.length === previous.length ? previous : retained;
+    });
+  }, [document?.publication_state, templateId]);
+
+  const reconciliationBlocked = busy || revalidating || !!reconciliationRefreshError || !dataSource.reconcileInstallations;
+  const refreshAfterReconciliation = async () => {
+    try {
+      const refreshed = await dataSource.loadDraft(templateId);
+      if (refreshed.generation !== document?.generation) throw new Error(t('review.conflict'));
+      setDocument(refreshed);
+      setReconciliationRefreshError("");
+    } catch (cause) {
+      setReconciliationRefreshError(String(cause));
+    }
+  };
+  const reconcile = async (scope: 'all' | 'selected') => {
+    if (reconciliationBlocked || (scope === 'selected' && !selection.length)) return;
+    setBusy(true); setError(''); setResults(undefined);
+    try {
+      const result = scope === 'all'
+        ? await dataSource.reconcileInstallations!(templateId)
+        : await dataSource.reconcileInstallations!(templateId, selection);
+      setResults(result);
+      setSelectedInstances([]);
+      await refreshAfterReconciliation();
+    } catch (cause) { setError(String(cause)); }
+    finally { setBusy(false); }
+  };
+  const retryReconciliationRefresh = async () => {
+    if (busy || revalidating || !reconciliationRefreshError) return;
+    setBusy(true);
+    try { await refreshAfterReconciliation(); }
+    finally { setBusy(false); }
+  };
   const review = document?.review;
   const transceiver = definition ? definition.mount_kind === 'MODULE_PORT' : transceiverRoute;
   const title = t(transceiver ? 'transceiver.edit' : 'review.edit');
@@ -138,7 +177,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
       <p>{t('publication.intervention', { count: document.publication_state.requires_intervention_count })}</p>
       {outdated.length > 0 && <details onToggle={event => setSelectionOpen(event.currentTarget.open)}>
         <summary>{t('reconciliation.selection')}</summary>
-        {selectionOpen && <fieldset aria-label={t('reconciliation.selection')} disabled={busy || revalidating}>
+        {selectionOpen && <fieldset aria-label={t('reconciliation.selection')} disabled={reconciliationBlocked}>
         {outdated.map(item => <label key={item.installation_id}>
           <input type="checkbox" checked={selection.includes(item.installation_id)} onChange={event => {
             const checked = event.target.checked;
@@ -148,16 +187,20 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource, tr
         </label>)}
         </fieldset>}
       </details>}
-      <button type="button" disabled={busy || revalidating || !dataSource.reconcileInstallations} onClick={async () => {
-        setBusy(true); setError(''); setResults(undefined);
-        try {
-          setResults(await (selection.length ? dataSource.reconcileInstallations!(templateId, selection) : dataSource.reconcileInstallations!(templateId)));
-          setSelectedInstances([]);
-          const refreshed = await dataSource.loadDraft(templateId);
-          if (refreshed.generation !== document.generation) throw new Error(t('review.conflict'));
-          setDocument(refreshed);
-        } catch (e) { setError(String(e)); } finally { setBusy(false); }
-      }}>{t(selection.length ? 'reconciliation.applySelected' : 'moduleReconciliation.action')}</button>
+      <div className="base-template-review__actions">
+        <button className="primary-action" type="button" disabled={reconciliationBlocked || !selection.length} onClick={() => void reconcile('selected')}>
+          {t('reconciliation.applySelected')}
+        </button>
+        <button className="secondary-action" type="button" disabled={reconciliationBlocked} onClick={() => void reconcile('all')}>
+          {t('moduleReconciliation.action')}
+        </button>
+      </div>
+      {reconciliationRefreshError && <>
+        <p role="alert">{t('reconciliation.refreshFailed')} {reconciliationRefreshError}</p>
+        <button className="primary-action" type="button" disabled={busy || revalidating} onClick={() => void retryReconciliationRefresh()}>
+          {t('reconciliation.retryRefresh')}
+        </button>
+      </>}
       {results && <ul>{results.installations.map(i => <li key={i.installation_id}>
         {i.physical_object_id && <Link to={'/infrastructure/objects/' + i.physical_object_id}>{i.display_name || i.physical_object_id}</Link>}
         <p>{i.bay_key} {i.source_revision_id}</p>

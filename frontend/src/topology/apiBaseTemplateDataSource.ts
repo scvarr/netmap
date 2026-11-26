@@ -170,6 +170,7 @@ export class ApiBaseTemplateDataSource implements BaseTemplateDataSource {
     return parseBaseTemplateListDocument(body);
   }
   async reconcileObjects(id: string, objectIds?: string[]) {
+    if (objectIds?.length === 0) throw new Error("Select at least one object to reconcile.");
     const query = new URLSearchParams(objectIds?.map(value => ['object_ids', value]));
     const suffix = query.size ? '?' + query : '';
     const response = await fetch(`${this.endpoint}/${encodeURIComponent(id)}/reconcile${suffix}`, { method: 'POST' });

@@ -288,7 +288,7 @@ it('reconciles installations and refreshes diagnostics preserving unsaved edits'
   };
   render(<I18nProvider><MemoryRouter><EditModuleTemplatePage dataSource={source} /></MemoryRouter></I18nProvider>);
   fireEvent.change(await screen.findByDisplayValue('Сохранённый модуль'), { target: { value: 'Unsaved' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Обновить совместимые установки' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Обновить все совместимые установки' }));
   expect(await screen.findByText(/installation: Обновлён/)).toBeInTheDocument();
   expect(screen.getByDisplayValue('Unsaved')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'object-result' })).toHaveAttribute('href', '/infrastructure/objects/object-result');

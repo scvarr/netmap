@@ -86,7 +86,7 @@ test('assign interfaces to published SFP sockets, reconcile an existing object, 
   await page.getByRole('button', { name: 'Опубликовать', exact: true }).click();
   await expect(page.getByText(/Публикация завершена/)).toBeVisible();
   expect(await config()).toEqual(original);
-  await page.getByRole('button', { name: 'Обновить совместимые объекты' }).click();
+  await page.getByRole('button', { name: 'Обновить все совместимые объекты' }).click();
   await expect(page.getByText(/Результаты обновления объектов/)).toBeVisible();
   const updated = await config();
   expect(updated.configuration_id).toBe(original.configuration_id);

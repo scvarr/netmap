@@ -167,7 +167,7 @@ describe('persisted base template review', () => {
     const user = userEvent.setup();
     const trigger = screen.getByRole('button', { name: 'Открыть инспектор' });
     expect(trigger).toHaveClass('secondary-action');
-    screen.getByRole('button', { name: 'Обновить совместимые объекты' }).focus();
+    screen.getByRole('button', { name: 'Обновить все совместимые объекты' }).focus();
     await user.tab();
     expect(trigger).toHaveFocus();
     await user.keyboard('{Enter}');
@@ -212,7 +212,7 @@ describe('persisted base template review', () => {
   it('runs reconciliation explicitly, reports each outcome and restores actual state and reasons after reload', async () => {
     const { source, mount } = setup(outdated());
     let view = mount();
-    const run = await screen.findByRole('button', { name: 'Обновить совместимые объекты' });
+    const run = await screen.findByRole('button', { name: 'Обновить все совместимые объекты' });
     fireEvent.click(within(openInspector()).getByRole('button', { name: 'Закрыть' }));
     expect(source.reconcileObjects).not.toHaveBeenCalled();
     fireEvent.click(run);
@@ -239,7 +239,7 @@ describe('persisted base template review', () => {
     source.reconcileObjects.mockRejectedValueOnce(new Error('Update unavailable'));
     mount();
     fireEvent.change(await screen.findByDisplayValue('Сохранённый черновик'), { target: { value: 'Keep unsaved draft' } });
-    const run = screen.getByRole('button', { name: 'Обновить совместимые объекты' });
+    const run = screen.getByRole('button', { name: 'Обновить все совместимые объекты' });
     fireEvent.click(run);
     expect(await screen.findByRole('alert')).toHaveTextContent('Update unavailable');
     expect(screen.getByDisplayValue('Keep unsaved draft')).toBeInTheDocument();
@@ -257,7 +257,7 @@ describe('persisted base template review', () => {
     fireEvent.change(await screen.findByDisplayValue('Сохранённый черновик'), { target: { value: 'Local edits' } });
     source.loadDraft.mockResolvedValueOnce({ ...document, generation: document.generation + 1,
       definition: { ...document.definition, name: 'Other author edits' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Обновить совместимые объекты' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Обновить все совместимые объекты' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Черновик изменён в другой сессии');
     expect(screen.getByDisplayValue('Local edits')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
