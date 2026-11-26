@@ -34,7 +34,8 @@ import {
 } from "../components/PresentationAuthoringPanel";
 import { perfMark } from "../perfMarks";
 import { ViewState } from "../components/ViewState";
-import { physicalTraceOverlayFor } from "../topology/interfacePhysicalTraceOverlay";
+import type { ExactMemberTrace } from '../topology/exactMemberTrace';
+import { exactTraceOverlayFor, physicalTraceOverlayFor } from "../topology/interfacePhysicalTraceOverlay";
 import {
   footprintDimensionsForProjectionNode,
   centeredPositionForFootprint,
@@ -269,6 +270,8 @@ function MapPageContent({
     useState<TopologyProjectionDocument | null>(null);
   const [traceArtifact, setTraceArtifact] =
     useState<PhysicalObjectL1TraceArtifact | null>(null);
+  const [exactTrace, setExactTrace] = useState<Pick<ExactMemberTrace, 'edges'> | null>(null);
+  const [exactScopeRevision, setExactScopeRevision] = useState(0);
   const [selectedTraceBranchId, setSelectedTraceBranchId] = useState<string | null>(null);
   const [traceViewNotice, setTraceViewNotice] = useState<string | null>(null);
   const [selection, setSelection] = useState<TopologySelection>(null);
@@ -276,6 +279,8 @@ function MapPageContent({
   const currentTraceScope = useRef(traceScope);
   currentTraceScope.current = traceScope;
   const clearTrace = useCallback(() => {
+    setExactTrace(null);
+    setExactScopeRevision(current => current + 1);
     setTraceArtifact(null);
     setSelectedTraceBranchId(null);
     setTraceViewNotice(null);
@@ -389,6 +394,7 @@ function MapPageContent({
   const hasLoadedMap = legacy || Boolean(activeMap);
   const textAnnotationOperationActive = Boolean(textAnnotationEdit || textAnnotationDeletion);
   const physicalAnnotationMode = annotationMode && !legacy && Boolean(activeMap) && viewMode === "physical";
+  useLayoutEffect(() => { if (physicalAnnotationMode) clearTrace(); }, [physicalAnnotationMode, clearTrace]);
   useEffect(() => {
     let active = true;
     setCatalogInventory(null);
@@ -980,6 +986,7 @@ function MapPageContent({
       }
       setWiring({ ...operation, status: "creating", error: null });
       await physicalEndpointConnectionWriteDataSource.createPhysicalEndpointConnection(request);
+      clearTrace();
     } catch (reason) {
       if (selectedMapId.current === operation.mapId && viewMode === "physical") {
         setWiring({ ...operation, error: reason instanceof PhysicalCompatibilityError ? reason.message : t("map.connectFailed") });
@@ -1553,13 +1560,14 @@ function MapPageContent({
   const disconnectPort = async (connectionId: string, label: string) => {
     if (!physicalEndpointConnectionWriteDataSource?.deleteExternalPhysicalConnection || contextBusy || !window.confirm(t("map.context.disconnectConfirm", { name: label }))) return;
     await physicalEndpointConnectionWriteDataSource.deleteExternalPhysicalConnection(connectionId);
+    clearTrace();
     if (mapId) { await reloadMap(mapId); setCanonicalDeleteRevision((revision) => revision + 1); }
   };
   const deletePhysicalObject = async (id: string) => {
     if (!physicalObjectDeleteDataSource || !mapId) return;
     const targetMapId = mapId;
     setMapOperation({ kind: "delete", id, mapId: targetMapId, status: "pending" });
-    try { await physicalObjectDeleteDataSource.deletePhysicalObject(id); }
+    try { await physicalObjectDeleteDataSource.deletePhysicalObject(id); if (selectedMapId.current === targetMapId) clearTrace(); }
     catch (reason) { if (selectedMapId.current === targetMapId) setMapOperation(null); throw reason; }
     try {
       await reloadMap(targetMapId);
@@ -1572,7 +1580,7 @@ function MapPageContent({
     if (!cableDeleteDataSource || !mapId) return;
     const targetMapId = mapId;
     setMapOperation({ kind: "delete", id, mapId: targetMapId, status: "pending" });
-    try { await cableDeleteDataSource.deleteCable(id); }
+    try { await cableDeleteDataSource.deleteCable(id); if (selectedMapId.current === targetMapId) clearTrace(); }
     catch (reason) { if (selectedMapId.current === targetMapId) setMapOperation(null); throw reason; }
     try {
       await reloadMap(targetMapId);
@@ -1597,13 +1605,13 @@ function MapPageContent({
   };
   const activeVariant = activeMap?.variants.find((item) => item.variant_ref.entity_id === activeMap.active_variant_ref.entity_id);
   const traceOverlay = useMemo(
-    () => physicalTraceOverlayFor(traceArtifact, document, selectedTraceBranchId),
-    [traceArtifact, document, selectedTraceBranchId],
+    () => exactTrace ? exactTraceOverlayFor(exactTrace, document) : physicalTraceOverlayFor(traceArtifact, document, selectedTraceBranchId),
+    [exactTrace, traceArtifact, document, selectedTraceBranchId],
   );
   const traceOwnsFaces = !physicalAnnotationMode &&
-    traceArtifact?.verdict === "REACHABLE" &&
+    (Boolean(exactTrace?.edges.length) || (traceArtifact?.verdict === "REACHABLE" &&
     selectedTraceBranchId !== null &&
-    traceArtifact.branches.some(branch => branch.branch_id === selectedTraceBranchId);
+    traceArtifact.branches.some(branch => branch.branch_id === selectedTraceBranchId)));
   const defaultFace = activeVariant?.default_face;
   const faceViews = useMemo(() => defaultFace && activeMap && locations
     ? resolveFaces(defaultFace, locations, activeMap.location_states ?? [], activeMap.placements)
@@ -1967,6 +1975,20 @@ function MapPageContent({
             catalogInventoryDataSource={catalogInventoryDataSource}
             physicalObjectDetailsDataSource={physicalObjectDetailsDataSource}
             traceDataSource={traceDataSource}
+            exactScope={`${mapId}/${variantId}/${exactScopeRevision}`}
+            onExactEvidence={(artifact) => {
+              if (currentTraceScope.current !== traceScope) return;
+              setExactTrace(artifact);
+              if (!artifact) setTraceViewNotice(null);
+              if (artifact && viewMode === "logical") {
+                setTraceViewNotice(t("map.tracePhysical"));
+                setParams(current => {
+                  const next = new URLSearchParams(current);
+                  next.set("view", "physical");
+                  return next;
+                });
+              }
+            }}
             traceArtifact={traceArtifact}
             selectedBranchId={selectedTraceBranchId}
             onSelectedBranchId={(id) => {

@@ -200,7 +200,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
   const selectedCableId = selectedCableIdFor(selection);
   const temporaryFaces = useMemo(() => objectFaces ? temporaryFacesFor(
     document, objectFaces, selectedCableId,
-    traceOwnsFaces ? traceOverlay?.highlightedConnectionPointIds ?? new Set<string>() : undefined,
+    traceOwnsFaces ? traceOverlay?.faceConnectionPointIds ?? traceOverlay?.highlightedConnectionPointIds ?? new Set<string>() : undefined,
   ) : undefined, [document, objectFaces, selectedCableId, traceOwnsFaces, traceOverlay]);
   const projection = useMemo(() => {
     if (!storedProjection || !objectFaces) return storedProjection;

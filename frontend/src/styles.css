@@ -1246,3 +1246,17 @@ a { color: inherit; }
 .physical-compatibility-dialog .map-dialog__surface, .destructive-confirmation-dialog .map-dialog__surface { box-sizing: border-box; width: 100%; }
 .physical-compatibility-dialog ul { max-height: min(40vh, 22rem); overflow: auto; margin: 0; padding-left: 24px; }
 .physical-compatibility-dialog button:focus-visible, .destructive-confirmation-dialog button:focus-visible { outline: 2px solid #55e5b5; outline-offset: 2px; }
+.trace-command { max-height: 55%; overflow: auto; }
+.trace-command form > label { min-width: 0; }
+.trace-command__mode { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 7px; font-size: 10px; }
+.trace-command__mode select { padding: 5px; }
+.trace-command :is(select, button, summary):focus-visible { outline: 2px solid #54e3b4; outline-offset: 2px; }
+.trace-pairs { padding-inline-start: 22px; font-size: 11px; }
+.trace-pairs li { margin-block: 4px; overflow-wrap: anywhere; }
+.trace-pairs button { margin-inline-start: 7px; }
+.trace-pairs button[aria-pressed="true"] { border-color: #f0bd66; }
+.trace-result { overflow-wrap: anywhere; }
+.trace-result p, .trace-result ol { margin-block: 3px; }
+.trace-command__group-verdict { margin-block: 7px 0; font-size: 11px; }
+.trace-pairs { margin-block: 6px; }
+.trace-pairs button { padding-block: 5px; }

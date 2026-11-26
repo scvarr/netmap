@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { physicalTraceOverlayFor } from './interfacePhysicalTraceOverlay';
+import { exactTraceOverlayFor, physicalTraceOverlayFor } from './interfacePhysicalTraceOverlay';
 import type { PhysicalObjectL1TraceArtifact } from './physicalObjectL1TraceTypes';
 import type { TopologyProjectionDocument } from './types';
 const ref = (entity_type: string, entity_id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type, entity_id });
@@ -77,4 +77,34 @@ describe('physicalTraceOverlayFor', () => {
     expect(physicalTraceOverlayFor(result, document, 'first').highlightedCableIds)
       .toEqual(new Set(['cable-one']));
   });
+});
+
+
+it('projects one DIRECT_CONNECTION member and reveals faces without coloring shared point markers', () => {
+  const first = {
+    from_connection_point_id: 'rear', from_member_index: 1, to_connection_point_id: 'front', to_member_index: 2,
+    connection_id: 'direct', connection_member_id: 'first',
+  };
+  const second = { ...first, from_member_index: 2, to_member_index: 1, connection_member_id: 'second' };
+  const document = {
+    ...physical,
+    edges: [{
+      ...physical.edges[0],
+      source_refs: [ref('Connection', 'direct'), ref('ConnectionMember', 'first'), ref('ConnectionMember', 'second')],
+      attributes: { endpoint_pairs: [first, second] },
+    }],
+  };
+  const result = {
+    edges: [{
+      id: 'proven', from_node_id: 'actual-from', to_node_id: 'actual-to',
+      evidence_refs: [ref('Connection', 'direct'), ref('ConnectionMember', 'first'),
+        ref('ConnectionPoint', 'rear'), ref('ConnectionPoint', 'front')],
+    }],
+  };
+  const overlay = exactTraceOverlayFor(result, document);
+  expect(overlay.highlightedConnectionMemberIds).toEqual(new Set(['first']));
+  expect(overlay.highlightedCableIds.size).toBe(0);
+  expect(overlay.faceConnectionPointIds).toEqual(new Set(['rear', 'front']));
+  expect(overlay.highlightedConnectionPointIds.size).toBe(0);
+  expect(exactTraceOverlayFor({ edges: [] }, document).highlightedEdgeIds.size).toBe(0);
 });
