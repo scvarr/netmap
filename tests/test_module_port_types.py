@@ -290,9 +290,11 @@ def test_forward_migration_preserves_installation_and_seed(legacy_database, prev
         assert conn.scalar(sa.text("SELECT version_num FROM alembic_version")) == "mod02a_nested_installations"
         assert conn.scalar(sa.text("SELECT count(*) FROM module_installations WHERE parent_installation_id IS NULL")) == 1
 
-    repeated = upgrade()
+    repeated = upgrade("txlib01_specifications")
     assert repeated.returncode == 0, repeated.stderr
+    before_txlib_downgrade = nested_upgrade_snapshot()
     with db.connect() as conn:
+        assert conn.scalar(sa.text("SELECT version_num FROM alembic_version")) == "txlib01_specifications"
         assert dict(conn.execute(sa.text("SELECT name,id FROM module_port_types")).all()) == names
         assert dict(conn.execute(sa.text("SELECT name,id FROM module_bay_types")).all()) == bays
         assert conn.scalar(sa.text("SELECT count(*) FROM module_template_revisions WHERE transceiver IS NOT NULL")) == 0
@@ -306,8 +308,9 @@ def test_forward_migration_preserves_installation_and_seed(legacy_database, prev
     downgraded = upgrade("mod02a_nested_installations", direction="downgrade")
     assert downgraded.returncode == 0, downgraded.stderr
     assert nested_upgrade_snapshot() == before_nested
-    reupgraded = upgrade()
+    reupgraded = upgrade("txlib01_specifications")
     assert reupgraded.returncode == 0, reupgraded.stderr
+    assert nested_upgrade_snapshot() == before_txlib_downgrade
 
 
 @pytest.mark.parametrize("value", ["sfp", "Legacy"])

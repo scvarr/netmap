@@ -1383,6 +1383,7 @@ function MapPageContent({
     try {
       await reloadMap(operation.mapId);
       if (selectedMapId.current === operation.mapId) {
+        if (operation.kind === "delete") setCanonicalDeleteRevision((revision) => revision + 1);
         setMapOperation(null);
         setSelection(null);
       }

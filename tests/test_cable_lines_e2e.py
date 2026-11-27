@@ -44,7 +44,7 @@ def test_independent_fibers_keep_ids_and_history_after_reconnect_and_import():
     assert len(set(ids)) == len(graph["Cable"]) == len(graph["Connection"]) == len(graph["ConnectionMember"]) == 2
     assert all(member["point_a_member"] == member["point_b_member"] == 1 for member in graph["ConnectionMember"])
     assert {c["label"] for c in graph["Cable"]} == {"CAB01/1/24", "CAB01/2/24"}
-    assert all(set(cable) == {"id", "connection_id", "label"} for cable in graph["Cable"])
+    assert all(set(cable) == {"id", "connection_id", "label", "fiber_type"} for cable in graph["Cable"])
 
     cable_url = f"/v1/cables/{ids[0]}"
     assert client.put(f"{cable_url}/label", json={"label": "CAB01/Renamed/24"}).status_code == 204
