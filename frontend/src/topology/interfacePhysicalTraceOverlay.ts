@@ -5,6 +5,7 @@ import { readOpticalPaths, type OpticalFact } from './opticalDiagnostic';
 import { memberAddressKey } from './exactMemberTrace';
 
 export type OpticalHighlight = 'LOCAL' | 'END_TO_END' | 'UNKNOWN';
+export const opticalHighlightPriority: Record<OpticalHighlight, number> = { UNKNOWN: 1, END_TO_END: 2, LOCAL: 3 };
 export const opticalHighlightColors: Record<OpticalHighlight, string> = {
   LOCAL: '#ff3b48', END_TO_END: '#b46b72', UNKNOWN: '#9da8b0',
 };
@@ -54,7 +55,7 @@ export const physicalTraceOverlayFor = (
       for (const ref of refs) if (ref.entity_type === 'ConnectionPoint') points.add(ref.entity_id);
     }
   }
-  projectOpticalEvidence(document, overlay, [selected.optical_diagnostic], selectedEdges);
+  projectOpticalEvidence(overlay, [selected.optical_diagnostic], selectedEdges);
   return projectTraceEvidence(document, overlay, evidence);
 };
 
@@ -66,12 +67,11 @@ export function exactTraceOverlayFor(trace: Pick<ExactMemberTrace, 'edges' | 'op
     for (const ref of edge.evidence_refs) if (ref.entity_type === 'ConnectionPoint') points.add(ref.entity_id);
   }
   overlay.faceConnectionPointIds = points;
-  projectOpticalEvidence(document, overlay, trace.optical_diagnostics, trace.edges);
+  projectOpticalEvidence(overlay, trace.optical_diagnostics, trace.edges);
   return projectTraceEvidence(document, overlay, trace.edges.flatMap(edge => edge.evidence_refs), true);
 }
 
 function projectOpticalEvidence(
-  document: TopologyProjectionDocument,
   overlay: PhysicalTraceOverlay,
   value: unknown,
   edges: ExactMemberTrace['edges'],
@@ -79,17 +79,12 @@ function projectOpticalEvidence(
   const diagnostics = readOpticalPaths(value).flatMap(item => item ? [item] : []);
   if (!diagnostics.length) return;
   const traceEdges = new Map(edges.map(edge => [edge.id, edge]));
-  const singleMemberPoints = new Set(document.nodes.flatMap(node => [
-    ...(node.attributes.connection_points ?? []),
-    ...(node.attributes.blueprint_presentation?.slots ?? []),
-  ]).filter(point => point.cardinality === 1).map(point => point.connection_point_id));
   const cableHighlights = new Map<string, OpticalHighlight>();
   const memberHighlights = new Map<string, OpticalHighlight>();
   const localPoints = new Set<string>();
-  const priority = { UNKNOWN: 1, END_TO_END: 2, LOCAL: 3 };
   const assign = (map: Map<string, OpticalHighlight>, id: string, kind: OpticalHighlight) => {
     const prior = map.get(id);
-    if (!prior || priority[kind] > priority[prior]) map.set(id, kind);
+    if (!prior || opticalHighlightPriority[kind] > opticalHighlightPriority[prior]) map.set(id, kind);
   };
   const mark = (fact: OpticalFact, kind: OpticalHighlight) => {
     const edge = fact.trace_edge_id && traceEdges.get(fact.trace_edge_id);
@@ -114,11 +109,9 @@ function projectOpticalEvidence(
       for (let index = 1; index < ordered.length; index++) {
         const a = ordered[index - 1].points.at(-1);
         const b = ordered[index].points[0];
-        if (a && b && memberAddressKey(a) === memberAddressKey(b) && a.member_index === 1
-          && singleMemberPoints.has(a.point_id)) localPoints.add(a.point_id);
+        if (a && b && memberAddressKey(a) === memberAddressKey(b)) localPoints.add(a.point_id);
       }
-      // Only the transparent transition itself can receive LOCAL line styling.
-      for (const fact of ordered.slice(1, -1)) if (fact.value === 'NO_FIBER') mark(fact, kind);
+      for (const fact of ordered) mark(fact, kind);
     }
   }
   overlay.opticalCableHighlights = cableHighlights;

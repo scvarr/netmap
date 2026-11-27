@@ -142,7 +142,7 @@ describe('cable route edge interaction', () => {
     });
   });
 
-  it('keeps two member Cables individually selectable at the same marker after refresh', () => {
+  it('keeps exact Cable actions and diagnostic paint on a fully shared route', () => {
     const entry = (id: string, x: number) => {
       const node = blueprintNode(id, x, id, {
         connectionPointId: id + '-port', kind: 'CONNECTION_POINT', renderedX: .25, attachmentX: 0, side: 'LEFT',
@@ -160,15 +160,53 @@ describe('cable route edge interaction', () => {
           from_member_index: index, to_member_index: 3 - index } },
     })) as any;
     const selectCable = vi.fn();
-    withNodes({ left: entry('left', 0), right: entry('right', 300) }, () => {
-      const view = render(<ForegroundCableRoutes edges={cables} virtualChannels onCableSelect={selectCable} />);
+    const contextMenu = vi.fn();
+    const nodes = { left: entry('left', 0), right: entry('right', 300) };
+    withNodes(nodes, () => {
+      const routes = (edges: typeof cables) => <ForegroundCableRoutes edges={edges} zoom={2} virtualChannels onCableSelect={selectCable} onCableContextMenu={contextMenu} />;
+      const view = render(routes(cables));
       expect(view.container.querySelectorAll('.cable-route-port-marker[data-connection-point-id="left-port"]')).toHaveLength(1);
       const reloaded = structuredClone(cables);
-      view.rerender(<ForegroundCableRoutes edges={reloaded} virtualChannels onCableSelect={selectCable} />);
+      view.rerender(routes(reloaded));
       const shared = view.container.querySelector('.cable-route-hit[data-cable-count="2"]')!;
       fireEvent.click(shared);
       fireEvent.click(within(view.getByRole('dialog')).getByRole('button', { name: /left-port · Beta.*right-port · Alpha/ }));
       expect(selectCable).toHaveBeenLastCalledWith(reloaded[1]);
+
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 50 });
+      fireEvent(shared, event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(contextMenu).not.toHaveBeenCalled();
+      const choice = within(view.getByRole('dialog')).getByRole('button', { name: /left-port · Alpha.*right-port · Beta/ });
+      fireEvent.click(choice);
+      expect(contextMenu).toHaveBeenCalledExactlyOnceWith({ x: 80, y: 50 }, reloaded[0]);
+      expect(selectCable).toHaveBeenCalledTimes(1);
+      expect(view.queryByRole('dialog')).toBeNull();
+
+      const diagnosticRoutes = () => [...view.container.querySelectorAll('[data-optical-route]')];
+      const normal = view.container.querySelector('path[data-cable-ids=\'["cable-1","cable-2"]\']')!;
+      const traced = (kind: 'LOCAL' | 'END_TO_END') => reloaded.map((edge: typeof reloaded[number], index: number) =>
+        index === 0 ? { ...edge, data: { ...edge.data, opticalHighlight: kind } } : edge);
+      const baseline = normal.getAttribute('d');
+      for (const [kind, color] of [['END_TO_END', '#b46b72'], ['LOCAL', '#ff3b48']] as const) {
+        view.rerender(routes(traced(kind)));
+        const line = diagnosticRoutes().find(path => path.getAttribute('d') === baseline)!;
+        expect(line).toHaveAttribute('stroke', color);
+        expect(line).toHaveAttribute('stroke-width', '1');
+        expect(normal.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      }
+      Object.assign(nodes.left.data, { opticalLocalPointIds: new Set(['left-port']) });
+      view.rerender(routes(traced('LOCAL')));
+      expect(view.container.querySelector('[data-optical-transition="left-port"]')).toHaveAttribute('stroke', '#ff3b48');
+      Object.assign(nodes.left.data, { opticalLocalPointIds: undefined });
+      view.rerender(routes(reloaded.map((edge: typeof reloaded[number], index: number) =>
+        index === 1 ? { ...edge, data: { ...edge.data, cablePresentationEmphasis: 'traced' } } : edge)));
+      expect(diagnosticRoutes()).toHaveLength(0);
+      expect(view.container.querySelector('[data-optical-transition]')).toBeNull();
+      expect(view.container.querySelector('.cable-route-foreground--traced')).toBeInTheDocument();
+      view.rerender(routes(reloaded));
+      expect(view.container.querySelector('.cable-route-foreground--traced')).toBeNull();
+      expect(normal).toHaveAttribute('d', baseline!);
     });
   });
 
@@ -210,13 +248,13 @@ describe('cable route edge interaction', () => {
       expect(channels().length).toBeLessThan(fullCount);
       expect(channels().filter(p => p.getAttribute('d') === 'M 116 16 L 124 16')).toHaveLength(1);
       expect(view.container.querySelectorAll('.cable-route-foreground')).toHaveLength(1);
-      const opticalB = { ...b, data: { ...b.data, opticalTraceColor: '#b46b72' } };
+      const opticalB = { ...b, data: { ...b.data, opticalHighlight: 'END_TO_END' } };
       view.rerender(<ForegroundCableRoutes edges={[a, opticalB] as any} virtualChannels onCableSelect={onCableSelect} />);
       const routes = [...view.container.querySelectorAll('path[data-cable-ids]')];
-      expect(routes.filter(path => path.getAttribute('data-cable-ids') === '["b"]').some(path =>
-        path.getAttribute('style')?.includes('rgb(180, 107, 114)'))).toBe(true);
-      expect(routes.filter(path => path.getAttribute('data-cable-ids') !== '["b"]').every(path =>
-        !path.getAttribute('style')?.includes('rgb(180, 107, 114)'))).toBe(true);
+      const opticalKeys = new Set([...view.container.querySelectorAll('[data-optical-route]')]
+        .map(path => path.getAttribute('data-optical-route')));
+      expect(opticalKeys).toEqual(new Set(routes.filter(path => JSON.parse(path.getAttribute('data-cable-ids')!).includes('b'))
+        .map(path => path.getAttribute('data-route-segment'))));
       view.rerender(<ForegroundCableRoutes edges={[a, b] as any} virtualChannels onCableSelect={onCableSelect} />);
       const single = view.container.querySelector('.cable-route-hit[data-cable-count="1"][aria-label*="Port B"]')!;
       const shared = view.container.querySelector('.cable-route-hit[data-cable-count="2"]')!;
@@ -412,13 +450,13 @@ describe('cable route edge interaction', () => {
   it('forwards a right click on the foreground Cable to its context menu handler', () => {
     const bare = { id: "cable", source: "source", target: "target", data: {} };
     const edge = { ...bare, data: { ...bare.data, cableNode: { source_refs: [cableRef('cable')], id: 'cable', label: 'Cable' } }, style: { strokeWidth: 2 } };
-    const onCableContextMenu = vi.fn((event: React.MouseEvent<SVGElement>) => event.preventDefault());
+    const onCableContextMenu = vi.fn();
     const onAncestorContextMenu = vi.fn();
     const { container } = render(<div onContextMenu={onAncestorContextMenu}><ForegroundCableRoutes edges={[edge] as any} onCableContextMenu={onCableContextMenu} /></div>);
     const path = container.querySelector('.cable-route-hit')!;
     const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: 120, clientY: 50 });
     fireEvent(path, event);
-    expect(onCableContextMenu).toHaveBeenCalledWith(expect.anything(), edge);
+    expect(onCableContextMenu).toHaveBeenCalledWith({ x: 120, y: 50 }, edge);
     expect(event.defaultPrevented).toBe(true);
     expect(onAncestorContextMenu).not.toHaveBeenCalled();
   });

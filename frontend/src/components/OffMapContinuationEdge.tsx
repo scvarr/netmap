@@ -4,6 +4,7 @@ import {
   useInternalNode,
   type EdgeProps,
 } from '@xyflow/react';
+import { opticalHighlightColors } from '../topology/interfacePhysicalTraceOverlay';
 import type { DeviceFlowNode, LogicalFlowEdge } from '../topology/layout';
 import { absoluteNodeRectangle, getConnectionPointEndpoint, hiddenFaceEndpoint } from './FloatingTopologyEdge';
 
@@ -30,7 +31,8 @@ export function OffMapContinuationEdge({ id, source, data, selected }: EdgeProps
     sourceNode.data.facePresentation?.visibleBlueprint,
   );
   if (!endpoint) return null;
-  const color = data?.opticalTraceColor ?? (selected ? '#54e3b4' : data?.cablePresentationEmphasis === 'traced' ? '#f0bd66' : '#d7a960');
+  const color = selected ? '#54e3b4' : data?.cablePresentationEmphasis === 'traced' ? '#f0bd66' : '#d7a960';
+  const optical = data?.opticalHighlight;
   const vector = vectorFor(endpoint.side);
   const markerX = endpoint.x + vector.x * 34;
   const markerY = endpoint.y + vector.y * 34;
@@ -41,6 +43,7 @@ export function OffMapContinuationEdge({ id, source, data, selected }: EdgeProps
       <BaseEdge id={id} path={`M ${endpoint.x},${endpoint.y} L ${markerX},${markerY}`} style={{ stroke: color, strokeWidth: selected ? 3 : 2, strokeDasharray: '5 3' }} interactionWidth={18} />
       <circle cx={markerX} cy={markerY} r={7} fill="#0d1b1e" stroke={color} strokeWidth={2} />
       <path d={`M ${markerX - 2},${markerY} L ${markerX + 2},${markerY}`} stroke={color} strokeWidth={2} />
+      {optical && <path className="optical-trace-line" d={`M ${endpoint.x},${endpoint.y} L ${markerX},${markerY}`} stroke={opticalHighlightColors[optical]} />}
       <text x={labelX} y={labelY} fill={selected ? '#dff7ef' : '#d7a960'} fontSize="10" fontWeight="700" textAnchor={vector.x < 0 ? 'end' : 'start'}>вне карты</text>
     </g>
   );

@@ -69,7 +69,7 @@ interface Anchor {
   trigger: SVGPathElement;
   x: number;
   y: number;
-  chooser: boolean;
+  mode: 'hover' | 'select' | 'context';
 }
 
 export function CableRouteInteraction({ targets, clip, selectedMarkers, labelFor, onHover, onSelect, onContextMenu }: {
@@ -79,13 +79,14 @@ export function CableRouteInteraction({ targets, clip, selectedMarkers, labelFor
   labelFor: (edge: LogicalFlowEdge) => { name: string; endpoints: string };
   onHover: (cableId: string | null) => void;
   onSelect?: (edge: LogicalFlowEdge) => void;
-  onContextMenu?: (event: React.MouseEvent<SVGElement>, edge: LogicalFlowEdge) => void;
+  onContextMenu?: (position: XYPosition, edge: LogicalFlowEdge) => void;
 }) {
   const { t, locale } = useI18n();
   const { zoom } = useViewport();
   const clipId = useId();
   const popup = useRef<HTMLDivElement>(null);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
+  const chooser = Boolean(anchor && anchor.mode !== 'hover');
   const active = anchor ? targets.find(target => target.key === anchor.key) : undefined;
   const activeSingle = active?.cables.size === 1 ? labelFor(active.cables.values().next().value!) : undefined;
   const [position, setPosition] = useState<XYPosition>({ x: 0, y: 0 });
@@ -105,7 +106,7 @@ export function CableRouteInteraction({ targets, clip, selectedMarkers, labelFor
       if (event.key !== 'Escape') return;
       event.preventDefault();
       event.stopPropagation();
-      close(anchor.chooser);
+      close(chooser);
     };
     const resize = () => close();
     window.addEventListener('pointerdown', dismiss, true);
@@ -118,7 +119,7 @@ export function CableRouteInteraction({ targets, clip, selectedMarkers, labelFor
       window.removeEventListener('keydown', escape, true);
       window.removeEventListener('resize', resize);
     };
-  }, [anchor, onHover]);
+  }, [anchor, chooser, onHover]);
 
   useEffect(() => { if (anchor && !active) close(); }, [anchor, active]);
   useLayoutEffect(() => {
@@ -134,8 +135,8 @@ export function CableRouteInteraction({ targets, clip, selectedMarkers, labelFor
     });
   }, [anchor, active, locale]);
   useLayoutEffect(() => {
-    if (anchor?.chooser) popup.current?.querySelector('button')?.focus({ preventScroll: true });
-  }, [anchor]);
+    if (chooser) popup.current?.querySelector('button')?.focus({ preventScroll: true });
+  }, [anchor, chooser]);
 
   const countLabel = (count: number) => t('map.cableSegment.count', { count });
   const tabs = new Set<string>();
@@ -154,35 +155,35 @@ export function CableRouteInteraction({ targets, clip, selectedMarkers, labelFor
         const tabKey = JSON.stringify(ids);
         const tabbable = Boolean(onSelect && !tabs.has(tabKey));
         tabs.add(tabKey);
-        const show = (trigger: SVGPathElement, x: number, y: number, chooser = false) => {
-          setAnchor({ key, trigger, x, y, chooser });
-          onHover(!chooser && single ? ids[0] : null);
+        const show = (trigger: SVGPathElement, x: number, y: number, mode: Anchor['mode'] = 'hover') => {
+          setAnchor({ key, trigger, x, y, mode });
+          onHover(mode === 'hover' && single ? ids[0] : null);
         };
         const activate = (trigger: SVGPathElement, x: number, y: number) => {
           if (single) {
             close();
             onSelect?.(single);
-          } else show(trigger, x, y, true);
+          } else show(trigger, x, y, 'select');
         };
         const keyboardAnchor = (trigger: SVGPathElement) => {
           const box = trigger.getBoundingClientRect();
           return { x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 };
         };
         const leave = () => {
-          if (anchor?.key === key && !anchor.chooser) close();
+          if (anchor?.key === key && !chooser) close();
         };
         return <path key={key} className="cable-route-hit" d={`M ${from.x} ${from.y} L ${to.x} ${to.y}`}
           data-cable-count={ids.length} strokeWidth={Math.min(12 / zoom, maxHitWidth ?? Infinity)}
           role={onSelect ? 'button' : undefined} tabIndex={onSelect ? (tabbable ? 0 : -1) : undefined}
           aria-label={label ? [label.name, label.endpoints].filter(Boolean).join(' · ') : countLabel(ids.length)}
           aria-haspopup={onSelect && !single ? 'dialog' : undefined}
-          aria-expanded={onSelect && !single ? anchor?.key === key && anchor.chooser : undefined}
+          aria-expanded={onSelect && !single ? anchor?.key === key && chooser : undefined}
           onPointerEnter={event => {
-            if (!anchor?.chooser && !event.buttons) show(event.currentTarget, event.clientX, event.clientY);
+            if (!chooser && !event.buttons) show(event.currentTarget, event.clientX, event.clientY);
           }}
           onPointerLeave={leave}
           onFocus={event => {
-            if (!event.currentTarget.matches(':focus-visible') || anchor?.chooser) return;
+            if (!event.currentTarget.matches(':focus-visible') || chooser) return;
             const { x, y } = keyboardAnchor(event.currentTarget);
             show(event.currentTarget, x, y);
           }}
@@ -198,27 +199,32 @@ export function CableRouteInteraction({ targets, clip, selectedMarkers, labelFor
             event.stopPropagation();
             activate(event.currentTarget, event.clientX, event.clientY);
           } : undefined}
-          onContextMenu={single && onContextMenu ? event => {
+          onContextMenu={event => {
+            event.preventDefault();
             event.stopPropagation();
-            close();
-            onContextMenu(event, single);
-          } : undefined} />;
+            if (!onContextMenu) return;
+            if (single) {
+              close();
+              onContextMenu({ x: event.clientX, y: event.clientY }, single);
+            } else show(event.currentTarget, event.clientX, event.clientY, 'context');
+          }} />;
       })}
     </g>
     {selectedMarkers.map(target => marker(target, target.key, false))}
     {active && marker(active, 'hover', true)}
     {active && anchor && createPortal(
-      <div ref={popup} role={anchor.chooser ? 'dialog' : 'tooltip'}
-        aria-label={anchor.chooser ? t('map.cableSegment.choose') : undefined}
-        className={`map-context-menu cable-route-popup${anchor.chooser ? '' : ' cable-route-popup--tooltip'}`}
+      <div ref={popup} role={chooser ? 'dialog' : 'tooltip'}
+        aria-label={chooser ? t('map.cableSegment.choose') : undefined}
+        className={`map-context-menu cable-route-popup${chooser ? '' : ' cable-route-popup--tooltip'}`}
         style={{ left: position.x, top: position.y }}>
-        {anchor.chooser
+        {chooser
           ? [...active.cables].map(([id, edge]) => ({ id, edge, ...labelFor(edge) }))
             .sort((a, b) => a.name.localeCompare(b.name, locale) || a.endpoints.localeCompare(b.endpoints, locale) || a.id.localeCompare(b.id))
             .map(({ id, edge, name, endpoints }, _, items) => <button key={id} type="button" onClick={event => {
               event.stopPropagation();
               close(true);
-              onSelect?.(edge);
+              if (anchor.mode === 'context') onContextMenu?.({ x: anchor.x, y: anchor.y }, edge);
+              else onSelect?.(edge);
             }}><strong>{name}</strong>{endpoints && <small>{endpoints}</small>}
               {items.some(other => other.id !== id && other.name === name && other.endpoints === endpoints) && <small>{id}</small>}
             </button>)

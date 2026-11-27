@@ -1,5 +1,5 @@
 import type { InternalL1Segment } from '../topology/internalL1Presentation';
-import { opticalHighlightColors, type OpticalHighlight } from '../topology/interfacePhysicalTraceOverlay';
+import { opticalHighlightColors, opticalHighlightPriority, type OpticalHighlight } from '../topology/interfacePhysicalTraceOverlay';
 
 interface InternalL1ContinuityProps {
   width: number;
@@ -8,16 +8,12 @@ interface InternalL1ContinuityProps {
   opticalHighlights?: ReadonlyMap<string, OpticalHighlight>;
 }
 
-const geometryKey = ({ from, to }: InternalL1Segment) =>
-  [`${from.x},${from.y}`, `${to.x},${to.y}`].sort().join('/');
-
 export function InternalL1Continuity({ width, height, segments, opticalHighlights }: InternalL1ContinuityProps) {
   if (segments.length === 0) return null;
-  const counts = new Map<string, number>();
-  for (const segment of segments) {
-    const key = geometryKey(segment);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
+  const opticalSegments = segments.flatMap(segment => {
+    const highlight = opticalHighlights?.get(segment.connectionMemberId);
+    return highlight ? [{ segment, highlight }] : [];
+  }).sort((a, b) => opticalHighlightPriority[a.highlight] - opticalHighlightPriority[b.highlight]);
   return (
     <svg
       className="internal-l1-continuity"
@@ -26,20 +22,20 @@ export function InternalL1Continuity({ width, height, segments, opticalHighlight
       viewBox={`0 0 ${width} ${height}`}
       aria-hidden="true"
     >
-      {segments.map(segment => {
-        const highlight = counts.get(geometryKey(segment)) === 1 && opticalHighlights?.get(segment.connectionMemberId);
-        return <line
+      {segments.map(segment => <line
           key={segment.connectionMemberId}
           className={`internal-l1-continuity__line internal-l1-continuity__line--${segment.state}`}
           data-testid={`internal-l1-line-${segment.connectionMemberId}`}
           data-connection-member-id={segment.connectionMemberId}
-          style={highlight ? { stroke: opticalHighlightColors[highlight], opacity: 1 } : undefined}
           x1={segment.from.x}
           y1={segment.from.y}
           x2={segment.to.x}
           y2={segment.to.y}
-        />;
-      })}
+      />)}
+      {opticalSegments.map(({ segment, highlight }) => <line key={segment.connectionMemberId}
+        className="optical-trace-line" data-optical-member={segment.connectionMemberId}
+        x1={segment.from.x} y1={segment.from.y} x2={segment.to.x} y2={segment.to.y}
+        stroke={opticalHighlightColors[highlight]} />)}
     </svg>
   );
 }

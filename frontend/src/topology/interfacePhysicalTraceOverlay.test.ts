@@ -115,7 +115,7 @@ it('marks the exact interval and local transition, and removes optical evidence 
   const point = (point_id: string, member_index = 1) => ({ point_id, member_index });
   const document = structuredClone(physical);
   document.nodes[0].attributes.connection_points = [
-    { connection_point_id: 'junction', display_name: 'J', cardinality: 1, external_connection_count: 1 },
+    { connection_point_id: 'junction', display_name: 'J', cardinality: 2, external_connection_count: 1 },
     { connection_point_id: 'shared', display_name: 'S', cardinality: 2, external_connection_count: 1 },
   ];
   result.edges[0].evidence_refs.push(ref('Cable', 'first-cable'));
@@ -125,8 +125,8 @@ it('marks the exact interval and local transition, and removes optical evidence 
   const diagnostic: OpticalDiagnostic = {
     status: 'CONFLICT',
     facts: [
-      fact('SM', [point('junction')]),
-      fact('MM', [point('junction'), point('shared', 2)], result.edges[0]),
+      fact('SM', [point('junction', 2)]),
+      fact('MM', [point('junction', 2), point('shared', 2)], result.edges[0]),
       fact(null, [point('shared', 2), point('end')], result.edges[1]),
       fact('SM', [point('end')]),
     ],
@@ -140,7 +140,7 @@ it('marks the exact interval and local transition, and removes optical evidence 
   result.branches[1].optical_diagnostic = { status: 'CONSISTENT', facts: [fact('MM', [point('shared', 1)], result.edges[1])], conflicts: [] };
   const selected = physicalTraceOverlayFor(result, document, 'first');
   expect(selected.opticalLocalPointIds).toEqual(new Set(['junction']));
-  expect(selected.opticalCableHighlights).toEqual(new Map([['first-cable', 'END_TO_END'], ['second-cable', 'END_TO_END']]));
+  expect(selected.opticalCableHighlights).toEqual(new Map([['first-cable', 'LOCAL'], ['second-cable', 'END_TO_END']]));
   expect(physicalTraceOverlayFor(result, document, 'second').opticalCableHighlights?.size).toBe(0);
   const incomplete = exactTraceOverlayFor({
     edges: [result.edges[0]], optical_diagnostics: [{ ...diagnostic, reason: 'INCOMPLETE_PATH' }],

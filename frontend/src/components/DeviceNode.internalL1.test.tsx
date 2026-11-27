@@ -219,6 +219,28 @@ describe('DeviceNode internal L1 overlay', () => {
     expect(onObjectClick).not.toHaveBeenCalled();
   });
 
+  it('paints exact optical members above coincident internal lines and clears paint on reset', () => {
+    const projected = structuredClone(projection);
+    projected.attributes.internal_l1_links.push({
+      ...projected.attributes.internal_l1_links[0], connection_member_id: 'member-2', from_member_index: 2, to_member_index: 2,
+    });
+    const node = (opticalMemberHighlights?: Map<string, 'LOCAL' | 'END_TO_END'>) =>
+      <DeviceNode {...({ data: { projection: projected, opticalMemberHighlights }, selected: false, width: 252 } as any)} />;
+    const view = render(node(new Map([['member-1', 'LOCAL']])));
+    const paint = () => view.container.querySelector('[data-optical-member]');
+    const sibling = screen.getByTestId('internal-l1-line-member-2');
+    expect(paint()).toHaveAttribute('data-optical-member', 'member-1');
+    expect(paint()).toHaveAttribute('stroke', '#ff3b48');
+    expect(paint()).toHaveAttribute('y2', sibling.getAttribute('y2'));
+    expect(sibling.compareDocumentPosition(paint()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    view.rerender(node(new Map([['member-2', 'END_TO_END']])));
+    expect(paint()).toHaveAttribute('data-optical-member', 'member-2');
+    expect(paint()).toHaveAttribute('stroke', '#b46b72');
+    view.rerender(node());
+    expect(paint()).toBeNull();
+    expect(sibling).toHaveClass('internal-l1-continuity__line--normal');
+  });
+
   it('keeps a wiring-highlighted cross-face line in the object layer while ports remain above it', () => {
     render(<DeviceNode {...({ data: { compositionDisplayWidth: 160, projection, wiringHighlightedConnectionMemberIds: new Set(['member-1']) }, selected: false, width: 252 } as any)} />);
     const line = screen.getByTestId('internal-l1-line-member-1');

@@ -54,7 +54,7 @@ export interface LogicalEdgeData extends Record<string, unknown> {
   projection?: TopologyProjectionEdge;
   endpointPair?: PhysicalEndpointPair;
   renderCableInForegroundOnly?: boolean;
-  opticalTraceColor?: string;
+  opticalHighlight?: import('./interfacePhysicalTraceOverlay').OpticalHighlight;
   cableNode?: TopologyProjectionNode;
   supportingEdgeIds?: string[];
   continuation?: L1OffMapContinuation;

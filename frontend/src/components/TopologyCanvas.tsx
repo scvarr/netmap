@@ -39,7 +39,7 @@ import {
 import { DeviceNode } from "./DeviceNode";
 import { FloatingTopologyEdge, ForegroundCableRoutes } from "./FloatingTopologyEdge";
 import { OffMapContinuationEdge } from "./OffMapContinuationEdge";
-import { opticalHighlightColors, type PhysicalTraceOverlay } from "../topology/interfacePhysicalTraceOverlay";
+import { opticalHighlightPriority, type PhysicalTraceOverlay } from "../topology/interfacePhysicalTraceOverlay";
 import { physicalObjectIdForNode } from "../topology/projection";
 import { perfMark, perfMeasure } from "../perfMarks";
 import type { XYPosition } from "@xyflow/react";
@@ -499,12 +499,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
     draggable: false, selectable: false,
     data: { projection: null as unknown as TopologyProjectionNode, locationProxy: { resolvedFace: faceViews?.locationFaces.get(proxy.locationId), arrangementSelected: arrangement.selected === proxy.locationId, onSelectLocation: arrangement.preview && !proxy.partial ? () => arrangement.select(proxy.locationId) : undefined, partial: proxy.partial, boundaryPointId: locationFrameInput?.states?.find(s => s.location_ref.entity_id === proxy.locationId)?.boundary_point_id, boundaryEdge: baseFrameGeometries.get(proxy.locationId)?.edge, boundaryOffset: baseFrameGeometries.get(proxy.locationId)?.offset, locationId: proxy.locationId, label: proxy.label, hiddenObjectCount: proxy.hiddenObjectCount, traced: [...hiddenNodeProxies].some(([nodeId, targetId]) => targetId === proxyNodeId(proxy.locationId) && traceOverlay?.highlightedNodeIds.has(nodeId)), expandLabel: t('map.locationExpand', { name: proxy.label }), configureLabel: t('map.locationConfigureCollapse', { name: proxy.label }), onExpand: locationFrameInput?.onCollapse ? () => locationFrameInput.onCollapse?.(proxy.locationId, false) : undefined, onConfigure: locationFrameInput?.onConfigure ? () => locationFrameInput.onConfigure?.(proxy.locationId) : undefined } },
   });
-  const visibleEdges = projectCollapsedEdges(annotationMode ? [] : projection.edges, hiddenNodeProxies);
-  const continuationCounts = new Map<string, number>();
-  for (const edge of visibleEdges) if (edge.data?.continuation) {
-    continuationCounts.set(edge.source, (continuationCounts.get(edge.source) ?? 0) + 1);
-  }
-  const edges = visibleEdges.map((edge) => {
+  const edges = projectCollapsedEdges(annotationMode ? [] : projection.edges, hiddenNodeProxies).map((edge) => {
     const tracedCableId = edge.data?.cableNode
       ? cableIdForNode(edge.data.cableNode)
       : edge.data?.continuation?.cable_ref.entity_id ?? null;
@@ -523,9 +518,10 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
             edge.data.endpointPair.connection_member_id,
           ) ?? false)
         : (traceOverlay?.highlightedEdgeIds.has(edge.id) ?? false);
-    const uniqueContinuation = !edge.data?.continuation || continuationCounts.get(edge.source) === 1;
-    const optical = tracedCableId && uniqueContinuation ? traceOverlay?.opticalCableHighlights?.get(tracedCableId) : undefined;
-    const opticalTraceColor = optical && opticalHighlightColors[optical];
+    const memberId = edge.data?.endpointPair?.connection_member_id;
+    const opticalHighlight = tracedCableId
+      ? traceOverlay?.opticalCableHighlights?.get(tracedCableId)
+      : memberId ? traceOverlay?.opticalMemberHighlights?.get(memberId) : undefined;
     const isDirectlyAttached = tracedCableId !== null &&
       (directlyAttachedCableIds?.has(tracedCableId) ?? false);
     const cablePresentationEmphasis: NonNullable<LogicalFlowEdge['data']>['cablePresentationEmphasis'] = isSelected
@@ -535,7 +531,8 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
         : isDirectlyAttached ? 'attached' : 'normal';
     return {
       ...edge,
-      data: edge.data ? { ...edge.data, cablePresentationEmphasis, opticalTraceColor, renderCableInForegroundOnly: Boolean(edge.data.cableNode) } : edge.data,
+      data: edge.data ? { ...edge.data, cablePresentationEmphasis, opticalHighlight, renderCableInForegroundOnly: Boolean(edge.data.cableNode) } : edge.data,
+      zIndex: opticalHighlight && !edge.data?.cableNode ? 10 + opticalHighlightPriority[opticalHighlight] : edge.zIndex,
       selected: isSelected,
       focusable: edge.data?.cableNode ? false : edge.focusable,
       animated: isSelected || isTraced || isDirectlyAttached,
@@ -622,6 +619,9 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
     if (cableIdForNode(projectionNode)) onPhysicalCableContextMenu?.(projectionNode, { x: event.clientX, y: event.clientY });
     else onPhysicalNodeContextMenu?.(projectionNode, { x: event.clientX, y: event.clientY });
   };
+  const openCableContextMenu = (position: XYPosition, edge: LogicalFlowEdge) => {
+    if (!annotationMode && edge.data?.cableNode) onPhysicalCableContextMenu?.(edge.data.cableNode, position);
+  };
   const onEdgeContextMenu: EdgeMouseHandler<LogicalFlowEdge> = (event, edge) => {
     if (annotationMode) {
       event.preventDefault();
@@ -629,7 +629,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
     }
     if (!edge.data?.cableNode) return;
     event.preventDefault();
-    onPhysicalCableContextMenu?.(edge.data.cableNode, { x: event.clientX, y: event.clientY });
+    openCableContextMenu({ x: event.clientX, y: event.clientY }, edge);
   };
   const onNodesChange: OnNodesChange<DeviceFlowNode> = (changes) => {
     if (annotationMode) return;
@@ -697,7 +697,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
   return (
     <div
       className={`topology-canvas${showChannelTerminals ? '' : ' topology-canvas--reduced-terminals'}`}
-      style={{ '--location-terminal-scale': Math.min(1, 1 / frameUiZoom) } as CSSProperties}
+      style={{ '--location-terminal-scale': Math.min(1, 1 / frameUiZoom), '--optical-trace-stroke-width': `${2 / frameUiZoom}px` } as CSSProperties}
       aria-label={
         document.layer === "L1"
           ? t("canvas.physical")
@@ -821,7 +821,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
         {!annotationMode && <ForegroundCableRoutes edges={edges} virtualChannels={useVirtualChannels}
           locationInputs={showLocationPresentation || (physicalObjectView && requireLocationChannels) ? [...locationChannels.values()] : undefined}
           zoom={frameUiZoom} showChannelTerminals={showChannelTerminals}
-          showAllVirtualChannels={showAllVirtualChannels} physicalPortStates={physicalPortStates} wiringRoute={wiringRoute} traceActive={cableTraceActive} onCableSelect={selectCable} onCableContextMenu={(event, edge) => onEdgeContextMenu(event, edge)} />}
+          showAllVirtualChannels={showAllVirtualChannels} physicalPortStates={physicalPortStates} wiringRoute={wiringRoute} traceActive={cableTraceActive} onCableSelect={selectCable} onCableContextMenu={onPhysicalCableContextMenu ? openCableContextMenu : undefined} />}
       </ReactFlow>
     </div>
   );

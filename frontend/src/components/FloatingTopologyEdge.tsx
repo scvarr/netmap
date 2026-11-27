@@ -1,4 +1,4 @@
-import { opticalHighlightColors } from '../topology/interfacePhysicalTraceOverlay';
+import { opticalHighlightColors, opticalHighlightPriority, type OpticalHighlight } from '../topology/interfacePhysicalTraceOverlay';
 import { physicalMemberLabel } from '../topology/physicalPortAvailability';
 import { useRuntimePortTypes } from './RuntimePortTypes';
 import {
@@ -12,7 +12,7 @@ import {
   type InternalNode,
   type XYPosition,
 } from '@xyflow/react';
-import { useEffect, useId, useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useId, useMemo, useState, type CSSProperties } from 'react';
 import {
   type DeviceFlowNode,
   type LogicalFlowEdge,
@@ -164,7 +164,11 @@ export function FloatingTopologyEdge({
     targetX: endpoints.target.x,
     targetY: endpoints.target.y,
   });
-  return <BaseEdge id={id} path={straightPath} style={style} markerStart={markerStart} markerEnd={markerEnd} interactionWidth={data?.cableNode ? Number(style?.strokeWidth) || 2 : interactionWidth} />;
+  const optical = data?.opticalHighlight;
+  return <>
+    <BaseEdge id={id} path={straightPath} style={style} markerStart={markerStart} markerEnd={markerEnd} interactionWidth={data?.cableNode ? Number(style?.strokeWidth) || 2 : interactionWidth} />
+    {optical && <path className="optical-trace-line" d={straightPath} stroke={opticalHighlightColors[optical]} />}
+  </>;
 }
 
 export type ForegroundPortState = 'eligible' | 'source' | 'destination' | 'unavailable';
@@ -213,9 +217,7 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates, endpointEmphasi
       const { fill, outline } = physicalPortPaint(portTypes?.find(type => type.id === port.portTypeId)?.color,
         occupied, tracedPorts.has(port.id) || Boolean(node.data.traceHighlightedConnectionPointIds?.has(port.id)), state);
       const className = `cable-route-port-marker${blueprint ? ' cable-route-port-marker--blueprint' : ''}${port.square ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`;
-      const local = node.data.opticalLocalPointIds?.has(port.id) && !visiblePorts.some(other => other.id !== port.id
-        && other.endpoint.x === endpoint.x && other.endpoint.y === endpoint.y);
-      const style = { fill: port.transceiver && !occupied ? 'none' : fill, stroke: local ? opticalHighlightColors.LOCAL : outline, strokeWidth: local ? 2 * unit : blueprint ? BLUEPRINT_PORT_STROKE : undefined };
+      const style = { fill: port.transceiver && !occupied ? 'none' : fill, stroke: outline, strokeWidth: blueprint ? BLUEPRINT_PORT_STROKE : undefined };
       const emphasis = state === 'source' || state === 'destination' ? undefined : endpointEmphasis.get(port.id);
       const neighbours = emphasis ? visiblePorts.filter(other => other !== port &&
         Math.abs(other.endpoint.x - endpoint.x) < haloBounds + exclusionRadius &&
@@ -244,6 +246,10 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates, endpointEmphasi
           : <circle className={className} style={style} data-connection-point-id={port.id} cx={endpoint.x} cy={endpoint.y} r={radius} pointerEvents="none" />}
       </g>;
     })}
+    {visiblePorts.filter(port => node.data.opticalLocalPointIds?.has(port.id)).map(({ id, endpoint }) =>
+      <circle key={id} className="optical-trace-line" data-optical-transition={id}
+        cx={endpoint.x} cy={endpoint.y} r={haloRadius + unit} stroke={opticalHighlightColors.LOCAL} strokeWidth={2 * unit} />
+    )}
   </g>;
 }
 
@@ -302,7 +308,7 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
   wiringRoute?: WiringRouteDraft;
   traceActive?: boolean;
   onCableSelect?: (edge: LogicalFlowEdge) => void;
-  onCableContextMenu?: (event: MouseEvent<SVGElement>, edge: LogicalFlowEdge) => void;
+  onCableContextMenu?: (position: XYPosition, edge: LogicalFlowEdge) => void;
 }) {
   const nodes = useNodes<DeviceFlowNode>();
   const { locale, t } = useI18n();
@@ -564,7 +570,6 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
     return <path key={segment.key} d={`M ${segment.from.x} ${segment.from.y} L ${segment.to.x} ${segment.to.y}`} fill="none"
       className={`${channel ? 'object-virtual-channel' : 'cable-route-foreground'} ${preview ? 'wiring-route-preview' : `cable-route-foreground--${emphasis}`}${hover ? ' cable-route-foreground--hovered' : ''}`}
       data-route-segment={segment.key} data-cable-ids={JSON.stringify([...segment.cables.keys()].sort())}
-      style={segment.cables.size === 1 && edge?.data?.opticalTraceColor ? { stroke: edge.data.opticalTraceColor } : undefined}
       data-preview={segment.preview || undefined}
       pointerEvents="none" />;
   };
@@ -617,6 +622,14 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
 
   const markers = new Map<string, RouteSegment>();
   const visibleSegments = [...connectorSegments, ...locationSegments.values(), ...channels];
+  const opticalSegments = visibleSegments.flatMap(segment => {
+    let highlight: OpticalHighlight | undefined;
+    for (const edge of segment.cables.values()) {
+      const candidate = edge.data?.opticalHighlight;
+      if (candidate && (!highlight || opticalHighlightPriority[candidate] > opticalHighlightPriority[highlight])) highlight = candidate;
+    }
+    return highlight ? [{ segment, highlight }] : [];
+  }).sort((a, b) => opticalHighlightPriority[a.highlight] - opticalHighlightPriority[b.highlight]);
   for (const segment of visibleSegments) {
     for (const [id, edge] of segment.cables) {
       if (cableEmphasis(edge) !== 'selected') continue;
@@ -638,12 +651,15 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
       <ul>{failures.map(({ id, reason }, index) => <li key={index}>{id} · {reason}</li>)}</ul>
     </details>}
     <ViewportPortal>
-    <svg className="cable-routes-foreground" style={{ '--location-channel-unit': `${1 / zoom}px` } as CSSProperties}>
+    <svg className="cable-routes-foreground" style={{ '--location-channel-unit': `${1 / zoom}px`, '--optical-trace-stroke-width': `${2 / zoom}px` } as CSSProperties}>
       {visibleSegments.sort((a, b) => paintPriority(a) - paintPriority(b)).map(segment => {
         if (!segment.key.startsWith('connector:')) return visiblePath(segment, !locationSegments.has(segment.key));
         const edge = emphasisFor(segment)!;
         return <g key={segment.key} data-testid={`foreground-cable-${edge.id}`} data-emphasis={cableEmphasis(edge)}>{visiblePath(segment, false)}</g>;
       })}
+      {opticalSegments.map(({ segment, highlight }) => <path key={segment.key} className="optical-trace-line"
+        data-optical-route={segment.key} d={`M ${segment.from.x} ${segment.from.y} L ${segment.to.x} ${segment.to.y}`}
+        stroke={opticalHighlightColors[highlight]} strokeWidth={2 / zoom} />)}
       {showChannelTerminals && [...occupiedOutlets].map(([id, point]) => <circle key={id} className="location-channel-outlet" cx={point.x} cy={point.y} />)}
       {showChannelTerminals && boundaries.map(([id, { x, y }]) => terminalPoints.has(`${x},${y}`) &&
         <circle key={id} cx={x} cy={y} r={6 * boundaryScale} fill="var(--location-terminal-fill)" aria-hidden="true" />)}

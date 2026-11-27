@@ -114,6 +114,7 @@ button { font: inherit; }
 .blueprint-map-node__port--wiring-continuation { box-shadow: 0 0 0 3px #8d7aff; }
 .cable-routes-foreground { position: absolute; z-index: 1001; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
 .cable-routes-foreground [data-route-segment], .wiring-route-preview { stroke-width: var(--location-channel-unit); }
+.optical-trace-line { fill: none; pointer-events: none; stroke-width: var(--optical-trace-stroke-width, 2px); }
 .cable-route-foreground--normal { stroke: #49e5a7; }
 .cable-route-foreground--attached { stroke: #49e5a7; filter: drop-shadow(0 0 2px #49e5a7); }
 .cable-route-foreground--selected { stroke: #ffe600; }
