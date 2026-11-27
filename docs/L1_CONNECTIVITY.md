@@ -299,7 +299,7 @@ TEST-CASSETTE-01. У IN-1 / OUT-1 проверена перекрёстная р
 Неблокирующие замечания по области выбора оборудования и визуальной
 различимости физических ветвей отложены до UX v2. Задержка объектной
 трассировки устранена в [L1-TRACE-PERF-01](L1_TRACE_PERF_01.md).
-[G1 остаётся OPEN](BACKLOG.md#g1--l1-connectivity-complete).
+[Итоговая инженерная приёмка G1](#итоговая-инженерная-приёмка-g1).
 QSFP breakout, смена аппаратного режима и её lifecycle имеют отдельный scope.
 
 ### Справочники и совместимость
@@ -657,7 +657,7 @@ docker compose up -d
 аппаратного режима, оставшиеся возможности пассивной continuity,
 многоканальный authoring внутренних mappings, пользовательский exact member
 trace, групповая трассировка, диагностика полноты многоканальной коммутации
-и G1 остаются открытыми.
+и G1 оставались открытыми.
 
 ## Ручная функциональная приёмка MOD-03C
 
@@ -704,6 +704,55 @@ Connection и ConnectionMember. Операция атомарна, а при н�
   атомарно. Точный lifecycle для ещё открытых операций проверяется после
   согласования их контракта.
 
+## Итоговая инженерная приёмка G1
+
+**ACCEPTED** в границах существующего implicit workspace. Координатор
+подтвердил выполнение обязательных инженерных условий.
+[Статус формального закрытия](BACKLOG.md#g1--l1-connectivity-complete).
+
+- Медная и оптическая связность, защищённые структурные определения PortType,
+  раздельные модульные справочники и три серверных исхода ALLOW/DENY/UNKNOWN.
+  Адресное внешнее ревью CAT-D-SIMPLIFY-01 и CAT-D-05 по историческим
+  изменениям и актуальным потребителям завершилось без блокирующих нарушений.
+- Независимые Cable между выбранными members, subset, permutation и резерв,
+  атомарный внешний Cable lifecycle, явная пассивная continuity BaseTemplate
+  и ModuleTemplate. Точная трассировка оценивает полноту по ожидаемым парам
+  и возвращает разрешимое canonical evidence после reload.
+- Поддерживаемая модульная сборка и lifecycle установки, замены и удаления,
+  независимые волокна LC Duplex с явным binding к NetworkInterface.
+  Допустимый reconcile сохраняет identity, конфликты и отказы атомарны.
+- Оптические характеристики дают неблокирующую диагностику.
+  После подтверждённой записи представление можно восстановить без повтора записи.
+
+Основания приёмки — десять [ручных сценариев C-CAP-01-04A/B](#ручная-инженерная-приёмка-c-cap-01-04ab)
+от 26 ноября 2026 года, принятый lifecycle [MOD-03B](#ручная-функциональная-приёмка-mod-03b)
+и [MOD-03C](#ручная-функциональная-приёмка-mod-03c),
+[L1-OPTICAL-01A/B/C](#ручная-приёмка-l1-optical-01) на SHA
+`e3a2df5760619ab49f08118cb4488bb40b806076` и принятый
+[L1-TRACE-PERF-01](L1_TRACE_PERF_01.md).
+
+[G1-VERIFY-01](audits/g1-verify-01.md) (`8ee1040238fe214e3ebc2a39ef967218f1feed86`)
+зафиксировал 108 PASS и 3 FAIL серверных сценариев, а также 8 FAIL клиентских
+сценариев FN-058. Принятый внешним ревью [G1-CORRECTIVE-01](https://github.com/scvarr/netmap/commit/57a44fe33a6ba08e6ac5001400165e7e35b763e9)
+дал 111/111 PASS адресных серверных сценариев, 15/15 MapPage.mutationLifecycle,
+14/14 TraceCommandBar и 14/14 дополнительных адресных клиентских сценариев.
+Подтверждены RED/GREEN восстановления проекции и отсутствие повторного DELETE.
+Production build прошёл. FN-058 закрыт координатором после merge.
+Это адресные прогоны, клиентские результаты получены в jsdom. Ручная приёмка
+ограничена сценариями, перечисленными в соответствующих разделах.
+
+**CURRENT.** SavedMap, placements и варианты задают представление общей
+canonical topology. Канонический resolver работает в пределах implicit
+workspace независимо от состава SavedMap.
+
+**DECIDED TARGET.** Самостоятельные физические сети и persisted NetworkWorkspace
+сохраняются как [архитектурные требования](ARCHITECTURE.md#savedmap-варианты-и-spatial-isolation).
+
+**OPEN.** Реализация изоляции, ownership boundaries, schema/FK, стратегия
+миграции, auth, ACL, sharing и activity остаются будущей работой.
+QSFP breakout, смена аппаратного режима и остальные
+[открытые решения](OPEN_DECISIONS.md) сохраняют статус. G2 остаётся OPEN.
+
 ## C-CAP-01 — реализованные физические возможности
 
 **IMPLEMENTED, ACCEPTED в подтверждённых границах.** C-CAP-01-01 реализует
@@ -714,7 +763,7 @@ MOD-03B-2A/B/C для независимых Cable. C-CAP-01-03 включает
 26 ноября 2026 года. Пассивная continuity ModuleTemplate реализована
 отдельным контрактом C-CAP-MOD-01.
 
-[Оставшиеся условия G1](BACKLOG.md#g1--l1-connectivity-complete).
+[Итоговая инженерная приёмка G1](#итоговая-инженерная-приёмка-g1).
 
 ## C-CAP-01-01 — definitions и materialization
 
@@ -804,37 +853,37 @@ Workspace сохраняет определения, черновики, кан�
 
 ### Чистая тестовая БД для CAT-D-SIMPLIFY-01
 
-Вперёд применяется ревизия `catd_end_types_01`. На чистой БД миграции
-добавляют RJ45, LC Simplex, LC Duplex, SC и 12-канальное оптическое окончание.
-Для первых четырёх включён режим «Только такой же тип», для 12-канального —
-«Не определено». Режим волокна задаётся в шаблоне модели трансивера.
+Историческая граница CAT-D проходит через `catd_simplify_01` и
+`catd_end_types_01`. На чистой БД миграции добавляют RJ45, LC Simplex,
+LC Duplex, SC и 12-канальное оптическое окончание. Для первых четырёх
+включён режим «Только такой же тип», для 12-канального — «Не определено».
+Режим волокна задаётся в шаблоне модели трансивера.
 
-Чтобы поднять чистый тестовый экземпляр, используйте новый Compose-проект.
-Пример предполагает локальный стек `netmap`, стандартный `compose.yaml` и
-встроенную БД Compose. Проверьте, что имя нового проекта и его том
-`netmap-catd-end-types-fresh_postgres_data` ещё не заняты. Проверьте также, что
-`DATABASE_URL` в окружении и `.env` не указывает на внешнюю БД.
-Если на 5173 или 8000 работает старый стек, остановите его. Команда `stop`
-сохраняет контейнеры и данные.
+Исторические проверки используют явную конечную ревизию проверяемого
+контракта. Сценарий сохранения данных CAT-D-05 с историческими Cable
+проверяет переход до `catd05_split_mount_types` и `mod02a_nested_installations`.
+Защита `catd_simplify_01` останавливает переход при существующих Cable,
+пользовательских строках в проверяемых справочниках или изменённой структуре
+seed-типов Cable. Для прогона до текущего head используйте отдельную чистую БД.
 
-```powershell
-docker compose -f compose.yaml -p netmap stop
-docker compose -f compose.yaml -p netmap-catd-end-types-fresh up -d --build --wait
-docker compose -f compose.yaml -p netmap-catd-end-types-fresh exec backend alembic current
+Текущий head — `l1_optical_01a`, после `ccap_mod01_internal_links` и
+`catd_end_types_01`. В Windows cmd.exe используйте свободное имя Compose-проекта
+и `compose.test.yaml`. PostgreSQL использует tmpfs, порты не публикуются.
+`test-backend` применяет миграции при старте. Основной проект может продолжать работу.
+
+```cmd
+docker compose -f compose.test.yaml -p netmap-catd-end-types-test up -d --build --wait test-backend
+docker compose -f compose.test.yaml -p netmap-catd-end-types-test exec -T test-backend alembic current
 ```
 
-Убедитесь, что текущая ревизия — `catd_end_types_01 (head)`, и откройте
-[NetMap на 5173](http://localhost:5173). Для повторного чистого запуска
-используйте другое свободное имя проекта. Импорт принимает Workspace v17
-в пустой набор данных. Стартовые справочники считаются данными, поэтому
-сброс для импорта выполняется пользователем отдельно через Workspace.
+После подтверждения `l1_optical_01a (head)` выполните адресный прогон и
+остановите только тестовый проект.
 
-Для изолированного прогона серверных тестов используйте новое имя проекта
-и `compose.test.yaml`. В нём PostgreSQL работает с tmpfs. Команды ниже
-запускают тесты только в изолированной БД `netmap_test`.
-
-```powershell
-docker compose -f compose.test.yaml -p netmap-catd-end-types-test run --build --rm test-runner pytest -q tests/test_physical_compatibility_e2e.py tests/test_cable_lines_e2e.py tests/test_transceiver_library.py tests/test_transceiver_binding.py tests/test_workspace_portability.py
+```cmd
+docker compose -f compose.test.yaml -p netmap-catd-end-types-test run --build --rm test-runner pytest -q ^
+  tests/test_physical_compatibility_e2e.py tests/test_cable_lines_e2e.py ^
+  tests/test_transceiver_library.py tests/test_transceiver_binding.py tests/test_workspace_portability.py
+docker compose -f compose.test.yaml -p netmap-catd-end-types-test stop
 ```
 
 ## L1-OPTICAL-01A — характеристики волокон
@@ -1008,6 +1057,6 @@ FN-050 закрыт.
 PASS, доступ к reconnect — PASS. Подтверждение reconnect ограничено доступом
 к действию. Выполнение операции с оптическим противоречием вручную не подтверждено.
 
-FN-048 закрыт частично. Доступ к действиям конкретного Cable через общий
-маршрут реализован и принят. Действия непосредственно от многоканального
-окончания и reconnect из списка кабелей остаются вне принятого объёма.
+FN-048 закрыт частично. Доступ к выбору конкретного Cable через общий маршрут и к reconnect
+реализован и принят. Действия непосредственно от многоканального окончания
+и reconnect из списка кабелей остаются OPEN для UX v2 и не блокируют G1.

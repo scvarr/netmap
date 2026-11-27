@@ -138,7 +138,8 @@ ConnectionMember и удаляет старое окончание перед co
 
 **CURRENT.** SavedMap — presentation scope над общей canonical topology
 implicit workspace. Placement задаёт membership объекта в карте, все canonical
-Locations доступны каждой SavedMap. MapPresentationVariant принадлежит одной
+Locations доступны каждой SavedMap. Канонический resolver работает в пределах
+implicit workspace независимо от placements и выбранного варианта. MapPresentationVariant принадлежит одной
 карте и хранит именованную компоновку, позиции по view, locks и Location state.
 Варианты разделяют membership, topology и Location assignment. Physical и
 Logical scene coordinates независимы. Copy variant копирует настройки и
